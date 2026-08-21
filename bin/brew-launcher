@@ -1,9 +1,23 @@
 #!/bin/zsh
 
+# ============================================================
+# brew-launcher
+#
+# Interactive launcher for installed Homebrew CLI applications.
+#
+# macOS + Homebrew + fzf + Ghostty
+#
+# Usage:
+#   brew-launcher
+#   brew-launcher --refresh
+#   brew-launcher --version
+#   brew-launcher --help
+# ============================================================
+
 setopt pipefail
 setopt null_glob
 
-VERSION="0.1.0"
+VERSION="0.1.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -35,6 +49,13 @@ Requirements:
   Homebrew
   fzf
   Ghostty
+
+Behavior:
+  • Applications are discovered automatically from Homebrew.
+  • The launcher maintains a local cache for fast startup.
+  • Selecting an application opens it in a new Ghostty tab.
+  • If Ghostty is not running, it is launched automatically.
+  • The launcher remains available after launching an app.
 EOF
     exit 0
 fi
@@ -56,20 +77,16 @@ for dependency in brew fzf python3 osascript; do
     fi
 done
 
-# Ghostty must be running.
-if ! pgrep -x Ghostty >/dev/null 2>&1; then
-    echo "Error: Ghostty is not running."
-    echo
-    echo "Start Ghostty and run brew-launcher again."
-    exit 1
-fi
+# Ghostty itself doesn't need to be on PATH, because it is
+# launched through macOS's application system.
 
 mkdir -p "$CACHE_DIR"
 
 # ------------------------------------------------------------
 # Homebrew state
 #
-# Used to determine whether the cache needs rebuilding.
+# Two relatively cheap Homebrew calls are used to determine
+# whether the cached application list is still current.
 # ------------------------------------------------------------
 
 get_state() {
@@ -81,21 +98,32 @@ get_state() {
 
 CURRENT_STATE="$(get_state)"
 
+if [[ -z "$CURRENT_STATE" ]]; then
+    echo "Error: unable to determine installed Homebrew formulae."
+    exit 1
+fi
+
 # ------------------------------------------------------------
 # Build cache
 # ------------------------------------------------------------
 
 rebuild_cache() {
+
     local tmp_json="$CACHE_DIR/formulae.json"
     local tmp_entries="$CACHE_DIR/entries.tmp"
 
+    # One Homebrew call for all installed metadata.
     if ! brew info --json=v1 --installed > "$tmp_json" 2>/dev/null; then
         rm -f "$tmp_json"
         return 1
     fi
 
+    # Determine the Homebrew prefix.
     local brew_prefix
-    brew_prefix="$(brew --prefix 2>/dev/null)" || return 1
+    brew_prefix="$(brew --prefix 2>/dev/null)" || {
+        rm -f "$tmp_json"
+        return 1
+    }
 
     python3 - "$tmp_json" "$brew_prefix" "$tmp_entries" <<'PY'
 import json
@@ -107,8 +135,16 @@ json_file = sys.argv[1]
 brew_prefix = sys.argv[2]
 output_file = sys.argv[3]
 
+# ------------------------------------------------------------
+# Read Homebrew metadata
+# ------------------------------------------------------------
+
 with open(json_file, "r", encoding="utf-8") as f:
     formulae = json.load(f)
+
+# ------------------------------------------------------------
+# Get formulae explicitly installed by the user.
+# ------------------------------------------------------------
 
 try:
     leaves = subprocess.check_output(
@@ -123,11 +159,19 @@ leaves = {x.strip() for x in leaves if x.strip()}
 
 entries = []
 
+# ------------------------------------------------------------
+# Discover executable commands.
+# ------------------------------------------------------------
+
 for formula in formulae:
+
     name = formula.get("name", "")
     full_name = formula.get("full_name", name)
 
-    # Only formulae explicitly installed by the user.
+    if not name:
+        continue
+
+    # Only include formulae explicitly installed by the user.
     if name not in leaves and full_name not in leaves:
         continue
 
@@ -136,6 +180,7 @@ for formula in formulae:
         or "Homebrew CLI application"
     )
 
+    # Homebrew's opt path remains stable across upgrades.
     opt_bin = os.path.join(
         brew_prefix,
         "opt",
@@ -152,15 +197,18 @@ for formula in formulae:
         continue
 
     for command in commands:
+
         path = os.path.join(opt_bin, command)
 
+        # Must be a regular file.
         if not os.path.isfile(path):
             continue
 
+        # Must be executable.
         if not os.access(path, os.X_OK):
             continue
 
-        # Ignore helper/configuration binaries.
+        # Ignore common helper/configuration binaries.
         if (
             command.endswith("-config")
             or command.endswith("-build")
@@ -170,29 +218,36 @@ for formula in formulae:
         ):
             continue
 
-        # Make sure the executable is actually reachable.
-        found = False
+        # Make sure the command is actually reachable through PATH.
+        found_on_path = False
 
         for directory in os.environ.get("PATH", "").split(os.pathsep):
-            if os.access(
-                os.path.join(directory, command),
-                os.X_OK
-            ):
-                found = True
+
+            if not directory:
+                continue
+
+            candidate = os.path.join(directory, command)
+
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                found_on_path = True
                 break
 
-        if not found:
+        if not found_on_path:
             continue
 
         entries.append(
             f"{command}\t{description}\t{full_name}"
         )
 
-# One command should only appear once.
+# ------------------------------------------------------------
+# Remove duplicate command names.
+# ------------------------------------------------------------
+
 seen = set()
 unique = []
 
 for entry in sorted(entries, key=str.lower):
+
     command = entry.split("\t", 1)[0]
 
     if command in seen:
@@ -201,24 +256,36 @@ for entry in sorted(entries, key=str.lower):
     seen.add(command)
     unique.append(entry)
 
+# ------------------------------------------------------------
+# Write cache.
+# ------------------------------------------------------------
+
 with open(output_file, "w", encoding="utf-8") as f:
     f.write("\n".join(unique))
 
 PY
 
     if [[ -s "$tmp_entries" ]]; then
+
         mv "$tmp_entries" "$CACHE_FILE"
+
         printf '%s\n' "$CURRENT_STATE" > "$STATE_FILE"
+
     else
+
         rm -f "$tmp_entries"
+        rm -f "$tmp_json"
+
         return 1
     fi
 
     rm -f "$tmp_json"
+
+    return 0
 }
 
 # ------------------------------------------------------------
-# Cache validation
+# Validate cache
 # ------------------------------------------------------------
 
 CACHE_VALID=false
@@ -235,23 +302,41 @@ if [[ "$FORCE_REFRESH" == false &&
 fi
 
 if [[ "$CACHE_VALID" == false ]]; then
+
     rebuild_cache || {
         echo "Error: unable to build Homebrew application cache."
         exit 1
     }
+
 fi
 
 # ------------------------------------------------------------
-# Calculate command column width
+# Make sure we actually have applications.
+# ------------------------------------------------------------
+
+if [[ ! -s "$CACHE_FILE" ]]; then
+    echo "No Homebrew CLI applications were found."
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# Calculate command column width.
 # ------------------------------------------------------------
 
 max_command=$(
     cut -f1 "$CACHE_FILE" |
-    awk '{ if (length > max) max = length } END { print max + 3 }'
+    awk '
+        {
+            if (length > max)
+                max = length
+        }
+        END {
+            print max + 3
+    }'
 )
 
 # ------------------------------------------------------------
-# Build fzf entries
+# Build fzf display entries.
 #
 # Field 1 = actual executable
 # Field 2 = display text
@@ -271,10 +356,10 @@ while IFS=$'\t' read -r command description formula; do
 done < "$CACHE_FILE"
 
 # ------------------------------------------------------------
-# Colors
+# fzf colors
 # ------------------------------------------------------------
 
-FZF_COLORS=' 
+FZF_COLORS='
 fg:#cdd6f4,
 bg:#1e1e2e,
 fg+:#f5e0e6,
@@ -293,7 +378,58 @@ query:#f5e0e6
 '
 
 # ------------------------------------------------------------
-# Launch loop
+# Launch application in Ghostty
+#
+# The command path is passed as an AppleScript argument.
+# This avoids shell/AppleScript quoting problems.
+# ------------------------------------------------------------
+
+launch_in_ghostty() {
+
+    local command_path="$1"
+
+    osascript - "$command_path" <<'APPLESCRIPT'
+on run argv
+
+    set commandPath to item 1 of argv
+
+    tell application "Ghostty"
+
+        activate
+
+        if (count of windows) = 0 then
+
+            -- Ghostty isn't currently showing a window.
+            -- Create a new window.
+
+            set newWindow to new window
+            set newTerminal to focused terminal of newWindow
+
+        else
+
+            -- Ghostty is already running.
+            -- Create a new tab in the front window.
+
+            set newTab to new tab in front window
+            set newTerminal to focused terminal of newTab
+
+        end if
+
+        -- Use the terminal's shell to execute the application.
+        input text ("exec " & quoted form of commandPath) to newTerminal
+
+        send key "enter" to newTerminal
+
+    end tell
+
+end run
+APPLESCRIPT
+
+    return $?
+}
+
+# ------------------------------------------------------------
+# Launcher loop
 # ------------------------------------------------------------
 
 while true; do
@@ -318,38 +454,46 @@ while true; do
             --color="$FZF_COLORS"
     )
 
-    # Esc exits the launcher.
+    # --------------------------------------------------------
+    # Esc / empty selection = quit.
+    # --------------------------------------------------------
+
     [[ -z "$selection" ]] && break
 
-    # The first field is always the real executable.
+    # --------------------------------------------------------
+    # Extract the actual executable name.
+    # --------------------------------------------------------
+
     command="${selection%%$'\t'*}"
+
+    # --------------------------------------------------------
+    # Resolve the executable.
+    # --------------------------------------------------------
 
     command_path="$(command -v "$command" 2>/dev/null)"
 
     if [[ -z "$command_path" ]]; then
+
+        printf '\n'
+        printf 'Unable to find command: %s\n' "$command"
+        sleep 1
+
         continue
     fi
 
-    # Escape the path for AppleScript.
-    escaped_path="${command_path//\\/\\\\}"
-    escaped_path="${escaped_path//\"/\\\"}"
-
     # --------------------------------------------------------
-    # Create a new Ghostty tab.
-    #
-    # We intentionally create the tab first and then send
-    # the command to its terminal. This avoids relying on
-    # Ghostty's command-prefix parsing.
+    # Launch it in Ghostty.
     # --------------------------------------------------------
 
-    osascript >/dev/null <<EOF
-tell application "Ghostty"
-    set newTab to new tab in front window
-    set newTerminal to focused terminal of newTab
-    input text "exec $escaped_path" to newTerminal
-    send key "enter" to newTerminal
-end tell
-EOF
+    if ! launch_in_ghostty "$command_path"; then
+
+        printf '\n'
+        printf 'Unable to launch: %s\n' "$command"
+        printf 'Make sure Ghostty is installed and macOS allows\n'
+        printf 'brew-launcher to control Ghostty.\n'
+
+        sleep 2
+    fi
 
 done
 
