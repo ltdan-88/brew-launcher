@@ -1,0 +1,356 @@
+#!/bin/zsh
+
+setopt pipefail
+setopt null_glob
+
+VERSION="0.1.0"
+
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
+CACHE_FILE="$CACHE_DIR/entries"
+STATE_FILE="$CACHE_DIR/state"
+
+# ------------------------------------------------------------
+# Help / version
+# ------------------------------------------------------------
+
+if [[ "$1" == "--version" || "$1" == "-v" ]]; then
+    echo "brew-launcher $VERSION"
+    exit 0
+fi
+
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+    cat <<EOF
+brew-launcher $VERSION
+
+Interactive launcher for installed Homebrew CLI applications.
+
+Usage:
+  brew-launcher           Launch the application picker
+  brew-launcher --refresh Rebuild the application cache
+  brew-launcher --version Show version
+  brew-launcher --help    Show this help
+
+Requirements:
+  macOS
+  Homebrew
+  fzf
+  Ghostty
+EOF
+    exit 0
+fi
+
+FORCE_REFRESH=false
+
+if [[ "$1" == "--refresh" || "$1" == "-r" ]]; then
+    FORCE_REFRESH=true
+fi
+
+# ------------------------------------------------------------
+# Requirements
+# ------------------------------------------------------------
+
+for dependency in brew fzf python3 osascript; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+        echo "Error: '$dependency' is required."
+        exit 1
+    fi
+done
+
+# Ghostty must be running.
+if ! pgrep -x Ghostty >/dev/null 2>&1; then
+    echo "Error: Ghostty is not running."
+    echo
+    echo "Start Ghostty and run brew-launcher again."
+    exit 1
+fi
+
+mkdir -p "$CACHE_DIR"
+
+# ------------------------------------------------------------
+# Homebrew state
+#
+# Used to determine whether the cache needs rebuilding.
+# ------------------------------------------------------------
+
+get_state() {
+    {
+        brew leaves --installed-on-request 2>/dev/null
+        brew list --formula --versions 2>/dev/null
+    } | LC_ALL=C sort
+}
+
+CURRENT_STATE="$(get_state)"
+
+# ------------------------------------------------------------
+# Build cache
+# ------------------------------------------------------------
+
+rebuild_cache() {
+    local tmp_json="$CACHE_DIR/formulae.json"
+    local tmp_entries="$CACHE_DIR/entries.tmp"
+
+    if ! brew info --json=v1 --installed > "$tmp_json" 2>/dev/null; then
+        rm -f "$tmp_json"
+        return 1
+    fi
+
+    local brew_prefix
+    brew_prefix="$(brew --prefix 2>/dev/null)" || return 1
+
+    python3 - "$tmp_json" "$brew_prefix" "$tmp_entries" <<'PY'
+import json
+import os
+import subprocess
+import sys
+
+json_file = sys.argv[1]
+brew_prefix = sys.argv[2]
+output_file = sys.argv[3]
+
+with open(json_file, "r", encoding="utf-8") as f:
+    formulae = json.load(f)
+
+try:
+    leaves = subprocess.check_output(
+        ["brew", "leaves", "--installed-on-request"],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    ).splitlines()
+except Exception:
+    leaves = []
+
+leaves = {x.strip() for x in leaves if x.strip()}
+
+entries = []
+
+for formula in formulae:
+    name = formula.get("name", "")
+    full_name = formula.get("full_name", name)
+
+    # Only formulae explicitly installed by the user.
+    if name not in leaves and full_name not in leaves:
+        continue
+
+    description = (
+        formula.get("desc", "")
+        or "Homebrew CLI application"
+    )
+
+    opt_bin = os.path.join(
+        brew_prefix,
+        "opt",
+        name,
+        "bin",
+    )
+
+    if not os.path.isdir(opt_bin):
+        continue
+
+    try:
+        commands = os.listdir(opt_bin)
+    except OSError:
+        continue
+
+    for command in commands:
+        path = os.path.join(opt_bin, command)
+
+        if not os.path.isfile(path):
+            continue
+
+        if not os.access(path, os.X_OK):
+            continue
+
+        # Ignore helper/configuration binaries.
+        if (
+            command.endswith("-config")
+            or command.endswith("-build")
+            or command.endswith("-cmake")
+            or command.endswith("-test")
+            or command.endswith("-tests")
+        ):
+            continue
+
+        # Make sure the executable is actually reachable.
+        found = False
+
+        for directory in os.environ.get("PATH", "").split(os.pathsep):
+            if os.access(
+                os.path.join(directory, command),
+                os.X_OK
+            ):
+                found = True
+                break
+
+        if not found:
+            continue
+
+        entries.append(
+            f"{command}\t{description}\t{full_name}"
+        )
+
+# One command should only appear once.
+seen = set()
+unique = []
+
+for entry in sorted(entries, key=str.lower):
+    command = entry.split("\t", 1)[0]
+
+    if command in seen:
+        continue
+
+    seen.add(command)
+    unique.append(entry)
+
+with open(output_file, "w", encoding="utf-8") as f:
+    f.write("\n".join(unique))
+
+PY
+
+    if [[ -s "$tmp_entries" ]]; then
+        mv "$tmp_entries" "$CACHE_FILE"
+        printf '%s\n' "$CURRENT_STATE" > "$STATE_FILE"
+    else
+        rm -f "$tmp_entries"
+        return 1
+    fi
+
+    rm -f "$tmp_json"
+}
+
+# ------------------------------------------------------------
+# Cache validation
+# ------------------------------------------------------------
+
+CACHE_VALID=false
+
+if [[ "$FORCE_REFRESH" == false &&
+      -s "$CACHE_FILE" &&
+      -s "$STATE_FILE" ]]; then
+
+    CACHED_STATE="$(cat "$STATE_FILE")"
+
+    if [[ "$CURRENT_STATE" == "$CACHED_STATE" ]]; then
+        CACHE_VALID=true
+    fi
+fi
+
+if [[ "$CACHE_VALID" == false ]]; then
+    rebuild_cache || {
+        echo "Error: unable to build Homebrew application cache."
+        exit 1
+    }
+fi
+
+# ------------------------------------------------------------
+# Calculate command column width
+# ------------------------------------------------------------
+
+max_command=$(
+    cut -f1 "$CACHE_FILE" |
+    awk '{ if (length > max) max = length } END { print max + 3 }'
+)
+
+# ------------------------------------------------------------
+# Build fzf entries
+#
+# Field 1 = actual executable
+# Field 2 = display text
+# Field 3 = formula
+# ------------------------------------------------------------
+
+entries=()
+
+while IFS=$'\t' read -r command description formula; do
+
+    command_fmt="$(printf "%-${max_command}s" "$command")"
+
+    entries+=(
+        "$command"$'\t'"$command_fmt$description"$'\t'"$formula"
+    )
+
+done < "$CACHE_FILE"
+
+# ------------------------------------------------------------
+# Colors
+# ------------------------------------------------------------
+
+FZF_COLORS=' 
+fg:#cdd6f4,
+bg:#1e1e2e,
+fg+:#f5e0e6,
+bg+:#313244,
+hl:#89b4fa,
+hl+:#89b4fa,
+info:#a6adc8,
+prompt:#89b4fa,
+pointer:#f38ba8,
+marker:#a6e3a1,
+spinner:#f5c2e7,
+header:#a6adc8,
+border:#45475a,
+label:#89b4fa,
+query:#f5e0e6
+'
+
+# ------------------------------------------------------------
+# Launch loop
+# ------------------------------------------------------------
+
+while true; do
+
+    selection=$(
+        printf '%s\n' "${entries[@]}" |
+        fzf \
+            --height=100% \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' 󰣇  Homebrew CLI ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --marker='●' \
+            --header='  ↑ ↓  Navigate    Type  Search    Enter  Launch    Esc  Quit' \
+            --info=inline \
+            --no-scrollbar \
+            --delimiter=$'\t' \
+            --with-nth=2 \
+            --nth=1,2,3 \
+            --color="$FZF_COLORS"
+    )
+
+    # Esc exits the launcher.
+    [[ -z "$selection" ]] && break
+
+    # The first field is always the real executable.
+    command="${selection%%$'\t'*}"
+
+    command_path="$(command -v "$command" 2>/dev/null)"
+
+    if [[ -z "$command_path" ]]; then
+        continue
+    fi
+
+    # Escape the path for AppleScript.
+    escaped_path="${command_path//\\/\\\\}"
+    escaped_path="${escaped_path//\"/\\\"}"
+
+    # --------------------------------------------------------
+    # Create a new Ghostty tab.
+    #
+    # We intentionally create the tab first and then send
+    # the command to its terminal. This avoids relying on
+    # Ghostty's command-prefix parsing.
+    # --------------------------------------------------------
+
+    osascript >/dev/null <<EOF
+tell application "Ghostty"
+    set newTab to new tab in front window
+    set newTerminal to focused terminal of newTab
+    input text "exec $escaped_path" to newTerminal
+    send key "enter" to newTerminal
+end tell
+EOF
+
+done
+
+exit 0
