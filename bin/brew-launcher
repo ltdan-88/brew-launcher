@@ -116,9 +116,6 @@ mkdir -p "$CACHE_DIR"
 
 # ------------------------------------------------------------
 # Homebrew state
-#
-# Two relatively cheap Homebrew calls are used to determine
-# whether the cached application list is still current.
 # ------------------------------------------------------------
 
 get_state() {
@@ -142,33 +139,71 @@ fi
 rebuild_cache() {
 
     local tmp_json="$CACHE_DIR/formulae.json"
+    local tmp_sizes="$CACHE_DIR/sizes"
+    local tmp_outdated="$CACHE_DIR/outdated"
     local tmp_entries="$CACHE_DIR/entries.tmp"
 
-    # One Homebrew call for all installed metadata.
+    # --------------------------------------------------------
+    # Get installed formula metadata.
+    # --------------------------------------------------------
+
     if ! brew info --json=v1 --installed > "$tmp_json" 2>/dev/null; then
         rm -f "$tmp_json"
         return 1
     fi
 
-    # Determine the Homebrew prefix.
+    # --------------------------------------------------------
+    # Get installed formula sizes.
+    #
+    # Output format:
+    #
+    #   formula-name    12.4MB
+    #
+    # This is only called during cache rebuild.
+    # --------------------------------------------------------
+
+    if ! brew info --installed --sizes --formula > "$tmp_sizes" 2>/dev/null; then
+        : > "$tmp_sizes"
+    fi
+
+    # --------------------------------------------------------
+    # Get outdated formula names.
+    # --------------------------------------------------------
+
+    if ! brew outdated --formula --quiet > "$tmp_outdated" 2>/dev/null; then
+        : > "$tmp_outdated"
+    fi
+
+    # --------------------------------------------------------
+    # Determine Homebrew prefix.
+    # --------------------------------------------------------
+
     local brew_prefix
     brew_prefix="$(brew --prefix 2>/dev/null)" || {
-        rm -f "$tmp_json"
+        rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated"
         return 1
     }
 
-    python3 - "$tmp_json" "$brew_prefix" "$tmp_entries" <<'PY'
+    python3 - \
+        "$tmp_json" \
+        "$tmp_sizes" \
+        "$tmp_outdated" \
+        "$brew_prefix" \
+        "$tmp_entries" <<'PY'
+
 import json
 import os
 import subprocess
 import sys
 
 json_file = sys.argv[1]
-brew_prefix = sys.argv[2]
-output_file = sys.argv[3]
+sizes_file = sys.argv[2]
+outdated_file = sys.argv[3]
+brew_prefix = sys.argv[4]
+output_file = sys.argv[5]
 
 # ------------------------------------------------------------
-# Read Homebrew metadata
+# Read Homebrew metadata.
 # ------------------------------------------------------------
 
 with open(json_file, "r", encoding="utf-8") as f:
@@ -188,6 +223,55 @@ except Exception:
     leaves = []
 
 leaves = {x.strip() for x in leaves if x.strip()}
+
+# ------------------------------------------------------------
+# Read outdated formula names.
+# ------------------------------------------------------------
+
+try:
+    with open(outdated_file, "r", encoding="utf-8") as f:
+        outdated = {
+            line.strip()
+            for line in f
+            if line.strip()
+        }
+except OSError:
+    outdated = set()
+
+# ------------------------------------------------------------
+# Read installed formula sizes.
+#
+# Current Homebrew output is:
+#
+#   formula-name    12.4MB
+#
+# We only need the first and last whitespace-separated fields.
+# ------------------------------------------------------------
+
+sizes = {}
+
+try:
+    with open(sizes_file, "r", encoding="utf-8") as f:
+
+        for raw_line in f:
+
+            line = raw_line.strip()
+
+            if not line:
+                continue
+
+            parts = line.split()
+
+            if len(parts) < 2:
+                continue
+
+            formula_name = parts[0]
+            size = parts[-1]
+
+            sizes[formula_name] = size
+
+except OSError:
+    pass
 
 entries = []
 
@@ -212,7 +296,30 @@ for formula in formulae:
         or "Homebrew CLI application"
     )
 
-    # Homebrew's opt path remains stable across upgrades.
+    # --------------------------------------------------------
+    # Installed version.
+    # --------------------------------------------------------
+
+    installed_versions = formula.get("installed", [])
+
+    if installed_versions:
+        version = installed_versions[-1].get("version", "")
+    else:
+        version = ""
+
+    # --------------------------------------------------------
+    # Installed size.
+    # --------------------------------------------------------
+
+    size = sizes.get(full_name)
+
+    if size is None:
+        size = sizes.get(name, "")
+
+    # --------------------------------------------------------
+    # Stable Homebrew opt path.
+    # --------------------------------------------------------
+
     opt_bin = os.path.join(
         brew_prefix,
         "opt",
@@ -250,7 +357,7 @@ for formula in formulae:
         ):
             continue
 
-        # Make sure the command is actually reachable through PATH.
+        # Make sure the command is reachable through PATH.
         found_on_path = False
 
         for directory in os.environ.get("PATH", "").split(os.pathsep):
@@ -267,8 +374,20 @@ for formula in formulae:
         if not found_on_path:
             continue
 
+        outdated_flag = "1" if (
+            name in outdated
+            or full_name in outdated
+        ) else "0"
+
         entries.append(
-            f"{command}\t{description}\t{full_name}"
+            "\t".join([
+                command,
+                description,
+                name,
+                version,
+                size,
+                outdated_flag,
+            ])
         )
 
 # ------------------------------------------------------------
@@ -306,12 +425,12 @@ PY
     else
 
         rm -f "$tmp_entries"
-        rm -f "$tmp_json"
+        rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated"
 
         return 1
     fi
 
-    rm -f "$tmp_json"
+    rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated"
 
     return 0
 }
@@ -352,20 +471,38 @@ if [[ ! -s "$CACHE_FILE" ]]; then
 fi
 
 # ------------------------------------------------------------
-# Calculate command column width.
+# Calculate column widths.
 # ------------------------------------------------------------
 
-max_command=$(
-    cut -f1 "$CACHE_FILE" |
-    awk '
-        {
-            if (length > max)
-                max = length
-        }
-        END {
-            print max + 3
-        }'
-)
+max_name=4
+max_version=7
+max_size=4
+
+while IFS=$'\t' read -r command description formula version size outdated; do
+
+    display_name="$formula"
+
+    if [[ "$formula" != "$command" ]]; then
+        display_name="$formula ($command)"
+    fi
+
+    if (( ${#display_name} > max_name )); then
+        max_name=${#display_name}
+    fi
+
+    if (( ${#version} > max_version )); then
+        max_version=${#version}
+    fi
+
+    if (( ${#size} > max_size )); then
+        max_size=${#size}
+    fi
+
+done < "$CACHE_FILE"
+
+max_name=$((max_name + 3))
+max_version=$((max_version + 2))
+max_size=$((max_size + 2))
 
 # ------------------------------------------------------------
 # Build fzf display entries.
@@ -373,19 +510,48 @@ max_command=$(
 # Field 1 = actual executable
 # Field 2 = display text
 # Field 3 = formula
+# Field 4 = description
 # ------------------------------------------------------------
 
 entries=()
 
-while IFS=$'\t' read -r command description formula; do
+while IFS=$'\t' read -r command description formula version size outdated; do
 
-    command_fmt="$(printf "%-${max_command}s" "$command")"
+    display_name="$formula"
+
+    if [[ "$formula" != "$command" ]]; then
+        display_name="$formula ($command)"
+    fi
+
+    name_fmt="$(printf "%-${max_name}s" "$display_name")"
+    version_fmt="$(printf "%-${max_version}s" "$version")"
+    size_fmt="$(printf "%-${max_size}s" "$size")"
+
+    indicator=""
+
+    if [[ "$outdated" == "1" ]]; then
+        indicator=" ↑"
+    fi
+
+    display="$name_fmt$version_fmt$size_fmt$description$indicator"
 
     entries+=(
-        "$command"$'\t'"$command_fmt$description"$'\t'"$formula"
+        "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
     )
 
 done < "$CACHE_FILE"
+
+# ------------------------------------------------------------
+# Column header
+# ------------------------------------------------------------
+
+FZF_HEADER="$(
+    printf "%-${max_name}s%-${max_version}s%-${max_size}s%s" \
+        "NAME" \
+        "VERSION" \
+        "SIZE" \
+        "DESCRIPTION"
+)"
 
 # ------------------------------------------------------------
 # fzf colors
@@ -420,9 +586,6 @@ launch_in_current_terminal() {
 
 # ------------------------------------------------------------
 # Launch application in Ghostty
-#
-# The command path is passed as an AppleScript argument.
-# This avoids shell/AppleScript quoting problems.
 # ------------------------------------------------------------
 
 launch_in_ghostty() {
@@ -440,23 +603,16 @@ on run argv
 
         if (count of windows) = 0 then
 
-            -- Ghostty isn't currently showing a window.
-            -- Create a new window.
-
             set newWindow to new window
             set newTerminal to focused terminal of newWindow
 
         else
-
-            -- Ghostty is already running.
-            -- Create a new tab in the front window.
 
             set newTab to new tab in front window
             set newTerminal to focused terminal of newTab
 
         end if
 
-        -- Use the terminal's shell to execute the application.
         input text ("exec " & quoted form of commandPath) to newTerminal
 
         send key "enter" to newTerminal
@@ -486,12 +642,13 @@ while true; do
             --prompt=' 󰣇  ' \
             --pointer='▌' \
             --marker='●' \
-            --header='  ↑ ↓  Navigate    Type  Search    Enter  Launch    Esc  Quit' \
+            --header="$FZF_HEADER" \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  Launch    Esc  Quit' \
             --info=inline \
             --no-scrollbar \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --nth=1,2,3 \
+            --nth=1,2,3,4 \
             --color="$FZF_COLORS"
     )
 
@@ -502,13 +659,13 @@ while true; do
     [[ -z "$selection" ]] && break
 
     # --------------------------------------------------------
-    # Extract the actual executable name.
+    # Extract actual executable name.
     # --------------------------------------------------------
 
     command="${selection%%$'\t'*}"
 
     # --------------------------------------------------------
-    # Resolve the executable.
+    # Resolve executable.
     # --------------------------------------------------------
 
     command_path="$(command -v "$command" 2>/dev/null)"
@@ -523,7 +680,7 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # Launch it using the selected terminal backend.
+    # Launch using selected terminal backend.
     # --------------------------------------------------------
 
     if [[ "$TERMINAL" == "current" ]]; then
@@ -533,10 +690,12 @@ while true; do
     elif [[ "$TERMINAL" == "ghostty" ]]; then
 
         if ! launch_in_ghostty "$command_path"; then
+
             printf '\n'
             printf 'Unable to launch: %s\n' "$command"
             printf 'Make sure Ghostty is installed and macOS allows\n'
             printf 'brew-launcher to control Ghostty.\n'
+
             sleep 2
         fi
 
