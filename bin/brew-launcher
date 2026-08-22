@@ -523,7 +523,6 @@ while IFS=$'\t' read -r command description formula version size outdated; do
     fi
 
 	if [[ -n "${hidden_commands[$command]-}" ]]; then
-	    echo "FILTERED: $command"
 	    continue
 	fi
 
