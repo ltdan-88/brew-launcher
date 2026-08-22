@@ -125,11 +125,6 @@ get_state() {
     {
         brew leaves --installed-on-request 2>/dev/null
         brew list --formula --versions 2>/dev/null
-
-        if [[ -f "$IGNORE_FILE" ]]; then
-            printf '\n[ignore]\n'
-            shasum "$IGNORE_FILE" 2>/dev/null | awk '{print $1}'
-        fi
     } | LC_ALL=C sort
 }
 
@@ -193,12 +188,11 @@ rebuild_cache() {
     }
 
     python3 - \
-            "$tmp_json" \
-            "$tmp_sizes" \
-            "$tmp_outdated" \
-            "$brew_prefix" \
-            "$tmp_entries" \
-            "$IGNORE_FILE" <<'PY'
+        "$tmp_json" \
+        "$tmp_sizes" \
+        "$tmp_outdated" \
+        "$brew_prefix" \
+        "$tmp_entries" <<'PY'
 
 import json
 import os
@@ -210,7 +204,6 @@ sizes_file = sys.argv[2]
 outdated_file = sys.argv[3]
 brew_prefix = sys.argv[4]
 output_file = sys.argv[5]
-ignore_file = sys.argv[6]
 
 # ------------------------------------------------------------
 # Read Homebrew metadata.
@@ -247,24 +240,6 @@ try:
         }
 except OSError:
     outdated = set()
-
-ignore_commands = set()
-
-try:
-    with open(ignore_file, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-
-            if not line:
-                continue
-
-            if line.startswith("#"):
-                continue
-
-            ignore_commands.add(line)
-
-except OSError:
-    pass
 
 # ------------------------------------------------------------
 # Read installed formula sizes.
@@ -362,12 +337,9 @@ for formula in formulae:
         commands = os.listdir(opt_bin)
     except OSError:
         continue
-
+    
     for command in commands:
-
-        if command in ignore_commands:
-            continue
-
+    
         path = os.path.join(opt_bin, command)
 
         # Must be a regular file.
@@ -502,6 +474,27 @@ if [[ ! -s "$CACHE_FILE" ]]; then
 fi
 
 # ------------------------------------------------------------
+# Load hidden command names
+# ------------------------------------------------------------
+
+typeset -A hidden_commands
+
+if [[ -f "$IGNORE_FILE" ]]; then
+    while IFS= read -r hidden_command; do
+
+        # Remove leading and trailing whitespace.
+        hidden_command="${hidden_command#"${hidden_command%%[![:space:]]*}"}"
+        hidden_command="${hidden_command%"${hidden_command##*[![:space:]]}"}"
+
+        [[ -z "$hidden_command" ]] && continue
+        [[ "$hidden_command" == \#* ]] && continue
+
+        hidden_commands[$hidden_command]=1
+
+    done < "$IGNORE_FILE"
+fi
+
+# ------------------------------------------------------------
 # Calculate column widths.
 # ------------------------------------------------------------
 
@@ -529,6 +522,11 @@ while IFS=$'\t' read -r command description formula version size outdated; do
         max_size=${#size}
     fi
 
+	if [[ -n "${hidden_commands[$command]-}" ]]; then
+	    echo "FILTERED: $command"
+	    continue
+	fi
+
 done < "$CACHE_FILE"
 
 max_name=$((max_name + 3))
@@ -547,6 +545,10 @@ max_size=$((max_size + 2))
 entries=()
 
 while IFS=$'\t' read -r command description formula version size outdated; do
+
+	if [[ -n "${hidden_commands[$command]-}" ]]; then
+		continue
+	fi
 
     display_name="$formula"
 
@@ -657,12 +659,240 @@ APPLESCRIPT
 }
 
 # ------------------------------------------------------------
+# Create macOS .command shortcut
+# ------------------------------------------------------------
+
+create_shortcut() {
+
+    local command="$1"
+    local formula="$2"
+
+    local shortcut_dir="/Applications/TUIs"
+
+    if ! mkdir -p "$shortcut_dir" 2>/dev/null; then
+        printf '\n'
+        printf 'Unable to create shortcut directory:\n'
+        printf '%s\n' "$shortcut_dir"
+        printf 'Check that you have permission to write to /Applications.\n'
+        sleep 2
+        return 1
+    fi
+
+    local filename
+
+    if [[ "$formula" == "$command" ]]; then
+        filename="${formula}.command"
+    else
+        filename="${formula}-${command}.command"
+    fi
+
+    local shortcut_path="${shortcut_dir}/${filename}"
+
+    if [[ -e "$shortcut_path" ]]; then
+        printf '\n'
+        printf 'Shortcut already exists:\n'
+        printf '%s\n' "$shortcut_path"
+        sleep 2
+        return 0
+    fi
+
+    local command_path
+    command_path="$(command -v "$command" 2>/dev/null)"
+
+    if [[ -z "$command_path" ]]; then
+        printf '\n'
+        printf 'Unable to find command: %s\n' "$command"
+        sleep 2
+        return 1
+    fi
+
+    if ! cat > "$shortcut_path" <<EOF
+#!/bin/zsh
+exec "$command_path"
+EOF
+    then
+        printf '\n'
+        printf 'Unable to create shortcut:\n'
+        printf '%s\n' "$shortcut_path"
+        sleep 2
+        return 1
+    fi
+    
+    if ! chmod +x "$shortcut_path"; then
+        rm -f "$shortcut_path"
+    
+        printf '\n'
+        printf 'Unable to make shortcut executable:\n'
+        printf '%s\n' "$shortcut_path"
+        sleep 2
+        return 1
+    fi
+
+    printf '\n'
+    printf 'Created shortcut:\n'
+    printf '%s\n' "$shortcut_path"
+    sleep 2
+}
+
+# ------------------------------------------------------------
+# Hide an application entry
+# ------------------------------------------------------------
+
+hide_entry() {
+
+    local command="$1"
+
+    mkdir -p "$CONFIG_DIR"
+
+    # Do not add the same command more than once.
+    if [[ -f "$IGNORE_FILE" ]] &&
+       grep -Fqx "$command" "$IGNORE_FILE" 2>/dev/null; then
+
+        printf '\n'
+        printf 'Entry is already hidden: %s\n' "$command"
+        sleep 1
+
+        return 0
+    fi
+
+    printf '%s\n' "$command" >> "$IGNORE_FILE"
+
+    printf '\n'
+    printf 'Hidden entry: %s\n' "$command"
+    sleep 1
+}
+
+
+# ------------------------------------------------------------
+# Restore a hidden application entry
+# ------------------------------------------------------------
+
+unhide_entry() {
+
+    local command="$1"
+    local tmp_ignore="$CACHE_DIR/ignore.tmp"
+
+    if [[ ! -f "$IGNORE_FILE" ]]; then
+        return 0
+    fi
+
+    python3 - "$IGNORE_FILE" "$tmp_ignore" "$command" <<'PY'
+import sys
+
+ignore_file = sys.argv[1]
+output_file = sys.argv[2]
+target = sys.argv[3]
+
+with open(ignore_file, "r", encoding="utf-8") as f:
+    lines = f.readlines()
+
+with open(output_file, "w", encoding="utf-8") as f:
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped == target:
+            continue
+
+        f.write(line)
+PY
+
+    mv "$tmp_ignore" "$IGNORE_FILE"
+
+    printf '\n'
+    printf 'Restored entry: %s\n' "$command"
+    sleep 1
+}
+
+
+# ------------------------------------------------------------
+# Show hidden application entries
+# ------------------------------------------------------------
+
+show_hidden_entries() {
+
+    local hidden_display_entries=()
+    local hidden_result
+    local hidden_command
+
+    while IFS=$'\t' read -r command description formula version size outdated; do
+
+        if [[ -z "${hidden_commands[$command]-}" ]]; then
+            continue
+        fi
+
+        local display_name="$formula"
+        local name_fmt
+        local version_fmt
+        local size_fmt
+        local indicator=""
+        local display
+
+        if [[ "$formula" != "$command" ]]; then
+            display_name="$formula ($command)"
+        fi
+
+        name_fmt="$(printf "%-${max_name}s" "$display_name")"
+        version_fmt="$(printf "%-${max_version}s" "$version")"
+        size_fmt="$(printf "%-${max_size}s" "$size")"
+
+        if [[ "$outdated" == "1" ]]; then
+            indicator=" ↑"
+        fi
+
+        display="$name_fmt$version_fmt$size_fmt$description$indicator"
+
+        hidden_display_entries+=(
+            "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
+        )
+
+    done < "$CACHE_FILE"
+
+    if (( ${#hidden_display_entries[@]} == 0 )); then
+        printf '\n'
+        printf 'No hidden entries.\n'
+        sleep 1
+        return 1
+    fi
+
+    hidden_result="$(
+        printf '%s\n' "${hidden_display_entries[@]}" |
+        fzf \
+            --height=100% \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' 󰣇  Hidden Entries ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --marker='●' \
+            --header="$FZF_HEADER" \
+            --footer='  Enter  Restore    Esc  Back' \
+            --info=inline \
+            --no-scrollbar \
+            --delimiter=$'\t' \
+            --with-nth=2 \
+            --nth=1,2,3,4 \
+            --color="$FZF_COLORS"
+    )"
+
+    if [[ -z "$hidden_result" ]]; then
+        return 1
+    fi
+
+    hidden_command="${hidden_result%%$'\t'*}"
+
+    unhide_entry "$hidden_command"
+
+    return 0
+}
+
+# ------------------------------------------------------------
 # Launcher loop
 # ------------------------------------------------------------
 
 while true; do
 
-    selection=$(
+    fzf_result="$(
         printf '%s\n' "${entries[@]}" |
         fzf \
             --height=100% \
@@ -674,29 +904,89 @@ while true; do
             --pointer='▌' \
             --marker='●' \
             --header="$FZF_HEADER" \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  Launch    Esc  Quit' \
+            --footer='  Enter  Launch    F2  Hide    F3  Hidden    F4  Shortcut    Esc  Quit' \
             --info=inline \
             --no-scrollbar \
             --delimiter=$'\t' \
             --with-nth=2 \
             --nth=1,2,3,4 \
+            --expect=enter,f2,f3,f4 \
             --color="$FZF_COLORS"
-    )
+    )"
 
     # --------------------------------------------------------
-    # Esc / empty selection = quit.
+    # Esc / empty result = quit.
     # --------------------------------------------------------
 
-    [[ -z "$selection" ]] && break
+    [[ -z "$fzf_result" ]] && break
 
     # --------------------------------------------------------
-    # Extract actual executable name.
+    # First line = pressed key.
+    # Second line = selected entry.
+    # --------------------------------------------------------
+
+    result_lines=("${(@f)fzf_result}")
+
+    action="${result_lines[1]}"
+    selection="${result_lines[2]}"
+
+    # --------------------------------------------------------
+    # F3 does not require a selected visible entry.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f3" ]]; then
+
+        if show_hidden_entries; then
+            exec "$0"
+        fi
+
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # Ignore actions without a selection.
+    # --------------------------------------------------------
+
+    [[ -z "$selection" ]] && continue
+
+    # --------------------------------------------------------
+    # Extract fields from the selected entry.
+    #
+    # Field 1 = executable
+    # Field 2 = display text
+    # Field 3 = formula
+    # Field 4 = description
     # --------------------------------------------------------
 
     command="${selection%%$'\t'*}"
 
+    remaining="${selection#*$'\t'}"
+    remaining="${remaining#*$'\t'}"
+
+    formula="${remaining%%$'\t'*}"
+
     # --------------------------------------------------------
-    # Resolve executable.
+    # F2 = hide selected entry.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f2" ]]; then
+
+        hide_entry "$command"
+        exec "$0"
+    fi
+
+    # --------------------------------------------------------
+    # F4 = create macOS .command shortcut.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f4" ]]; then
+
+        create_shortcut "$command" "$formula"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # Enter = launch selected entry.
     # --------------------------------------------------------
 
     command_path="$(command -v "$command" 2>/dev/null)"
@@ -709,10 +999,6 @@ while true; do
 
         continue
     fi
-
-    # --------------------------------------------------------
-    # Launch using selected terminal backend.
-    # --------------------------------------------------------
 
     if [[ "$TERMINAL" == "current" ]]; then
 
