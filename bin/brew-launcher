@@ -17,7 +17,7 @@
 setopt pipefail
 setopt null_glob
 
-VERSION="0.1.1"
+VERSION="0.2.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
