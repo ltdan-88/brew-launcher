@@ -807,6 +807,38 @@ PY
 # Show hidden application entries
 # ------------------------------------------------------------
 
+run_fzf() {
+
+    local border_label="$1"
+    local footer="$2"
+    local expected_keys="$3"
+
+    local options=(
+        --height=100%
+        --layout=reverse
+        --border=rounded
+        --border-label="$border_label"
+        --border-label-pos=2
+        --prompt=' 󰣇  '
+        --pointer='▌'
+        --marker='●'
+        --header="$FZF_HEADER"
+        --footer="$footer"
+        --info=inline
+        --no-scrollbar
+        --delimiter=$'\t'
+        --with-nth=2
+        --nth=1,2,3,4
+        --color="$FZF_COLORS"
+    )
+
+    if [[ -n "$expected_keys" ]]; then
+        options+=(--expect="$expected_keys")
+    fi
+
+    fzf "${options[@]}"
+}
+
 show_hidden_entries() {
 
     local hidden_display_entries=()
@@ -855,23 +887,10 @@ show_hidden_entries() {
 
     hidden_result="$(
         printf '%s\n' "${hidden_display_entries[@]}" |
-        fzf \
-            --height=100% \
-            --layout=reverse \
-            --border=rounded \
-            --border-label=' 󰣇  Hidden Entries ' \
-            --border-label-pos=2 \
-            --prompt=' 󰣇  ' \
-            --pointer='▌' \
-            --marker='●' \
-            --header="$FZF_HEADER" \
-            --footer='  Enter  Restore    Esc  Back' \
-            --info=inline \
-            --no-scrollbar \
-            --delimiter=$'\t' \
-            --with-nth=2 \
-            --nth=1,2,3,4 \
-            --color="$FZF_COLORS"
+        run_fzf \
+            ' 󰣇  Hidden TUIs ' \
+            '  ↑ ↓  Navigate    Type  Search    Enter  Restore    Esc  Back' \
+            ''
     )"
 
     if [[ -z "$hidden_result" ]]; then
@@ -893,24 +912,10 @@ while true; do
 
     fzf_result="$(
         printf '%s\n' "${entries[@]}" |
-        fzf \
-            --height=100% \
-            --layout=reverse \
-            --border=rounded \
-            --border-label=' 󰣇  Homebrew CLI ' \
-            --border-label-pos=2 \
-            --prompt=' 󰣇  ' \
-            --pointer='▌' \
-            --marker='●' \
-            --header="$FZF_HEADER" \
-            --footer='  Enter  Launch    F2  Hide    F3  Hidden    F4  Shortcut    Esc  Quit' \
-            --info=inline \
-            --no-scrollbar \
-            --delimiter=$'\t' \
-            --with-nth=2 \
-            --nth=1,2,3,4 \
-            --expect=enter,f2,f3,f4 \
-            --color="$FZF_COLORS"
+        run_fzf \
+            ' 󰣇  Homebrew CLI ' \
+            '  ↑ ↓  Navigate    Type  Search    Enter  Launch    F2  Hide    F3  Hidden    F4  Shortcut    Esc  Quit' \
+            'enter,f2,f3,f4'
     )"
 
     # --------------------------------------------------------
