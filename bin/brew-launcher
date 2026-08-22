@@ -22,6 +22,8 @@ VERSION="0.1.1"
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
 STATE_FILE="$CACHE_DIR/state"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
+IGNORE_FILE="$CONFIG_DIR/ignore"
 
 # ------------------------------------------------------------
 # Help / version
@@ -99,7 +101,8 @@ esac
 
 if [[ "$TERMINAL" == "auto" ]]; then
     if [[ "$(uname -s)" == "Darwin" ]] &&
-       command -v osascript >/dev/null 2>&1; then
+       command -v osascript >/dev/null 2>&1 &&
+       [[ -d "/Applications/Ghostty.app" ]]; then
         TERMINAL="ghostty"
     else
         TERMINAL="current"
@@ -122,6 +125,11 @@ get_state() {
     {
         brew leaves --installed-on-request 2>/dev/null
         brew list --formula --versions 2>/dev/null
+
+        if [[ -f "$IGNORE_FILE" ]]; then
+            printf '\n[ignore]\n'
+            shasum "$IGNORE_FILE" 2>/dev/null | awk '{print $1}'
+        fi
     } | LC_ALL=C sort
 }
 
@@ -185,11 +193,12 @@ rebuild_cache() {
     }
 
     python3 - \
-        "$tmp_json" \
-        "$tmp_sizes" \
-        "$tmp_outdated" \
-        "$brew_prefix" \
-        "$tmp_entries" <<'PY'
+            "$tmp_json" \
+            "$tmp_sizes" \
+            "$tmp_outdated" \
+            "$brew_prefix" \
+            "$tmp_entries" \
+            "$IGNORE_FILE" <<'PY'
 
 import json
 import os
@@ -201,6 +210,7 @@ sizes_file = sys.argv[2]
 outdated_file = sys.argv[3]
 brew_prefix = sys.argv[4]
 output_file = sys.argv[5]
+ignore_file = sys.argv[6]
 
 # ------------------------------------------------------------
 # Read Homebrew metadata.
@@ -237,6 +247,24 @@ try:
         }
 except OSError:
     outdated = set()
+
+ignore_commands = set()
+
+try:
+    with open(ignore_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+
+            if not line:
+                continue
+
+            if line.startswith("#"):
+                continue
+
+            ignore_commands.add(line)
+
+except OSError:
+    pass
 
 # ------------------------------------------------------------
 # Read installed formula sizes.
@@ -336,6 +364,9 @@ for formula in formulae:
         continue
 
     for command in commands:
+
+        if command in ignore_commands:
+            continue
 
         path = os.path.join(opt_bin, command)
 
