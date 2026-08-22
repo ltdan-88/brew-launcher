@@ -3,7 +3,7 @@
 A fast, interactive launcher for your installed Homebrew CLI applications.
 
 <p align="center">
-  assets/demo.gif
+  <img src="assets/demo.gif">
 </p>
 
 Built for macOS + Ghostty + fzf.
