@@ -5,7 +5,7 @@
 #
 # Interactive launcher for installed Homebrew CLI applications.
 #
-# macOS + Homebrew + fzf + Ghostty
+# Homebrew + fzf
 #
 # Usage:
 #   brew-launcher
@@ -45,17 +45,21 @@ Usage:
   brew-launcher --help    Show this help
 
 Requirements:
-  macOS
   Homebrew
   fzf
-  Ghostty
+  python3
+
+Terminal:
+  BREW_LAUNCHER_TERMINAL=auto     Default behavior
+  BREW_LAUNCHER_TERMINAL=current  Run in the current terminal
+  BREW_LAUNCHER_TERMINAL=ghostty  Launch in a new Ghostty tab
 
 Behavior:
   • Applications are discovered automatically from Homebrew.
   • The launcher maintains a local cache for fast startup.
-  • Selecting an application opens it in a new Ghostty tab.
-  • If Ghostty is not running, it is launched automatically.
-  • The launcher remains available after launching an app.
+  • On macOS, 'auto' prefers Ghostty when available.
+  • On Linux, 'auto' uses the current terminal.
+  • The launcher remains available after launching an app in Ghostty.
 EOF
     exit 0
 fi
@@ -70,15 +74,43 @@ fi
 # Requirements
 # ------------------------------------------------------------
 
-for dependency in brew fzf python3 osascript; do
+for dependency in brew fzf python3; do
     if ! command -v "$dependency" >/dev/null 2>&1; then
         echo "Error: '$dependency' is required."
         exit 1
     fi
 done
 
-# Ghostty itself doesn't need to be on PATH, because it is
-# launched through macOS's application system.
+# ------------------------------------------------------------
+# Terminal configuration
+# ------------------------------------------------------------
+
+TERMINAL="${BREW_LAUNCHER_TERMINAL:-auto}"
+
+case "$TERMINAL" in
+    auto|current|ghostty)
+        ;;
+    *)
+        echo "Error: unsupported terminal '$TERMINAL'."
+        echo "Supported values: auto, current, ghostty."
+        exit 1
+        ;;
+esac
+
+if [[ "$TERMINAL" == "auto" ]]; then
+    if [[ "$(uname -s)" == "Darwin" ]] &&
+       command -v osascript >/dev/null 2>&1; then
+        TERMINAL="ghostty"
+    else
+        TERMINAL="current"
+    fi
+fi
+
+if [[ "$TERMINAL" == "ghostty" ]] &&
+   ! command -v osascript >/dev/null 2>&1; then
+    echo "Error: osascript is required when using Ghostty."
+    exit 1
+fi
 
 mkdir -p "$CACHE_DIR"
 
@@ -332,7 +364,7 @@ max_command=$(
         }
         END {
             print max + 3
-    }'
+        }'
 )
 
 # ------------------------------------------------------------
@@ -376,6 +408,15 @@ border:#45475a,
 label:#89b4fa,
 query:#f5e0e6
 '
+
+# ------------------------------------------------------------
+# Launch application in the current terminal
+# ------------------------------------------------------------
+
+launch_in_current_terminal() {
+    local command_path="$1"
+    exec "$command_path"
+}
 
 # ------------------------------------------------------------
 # Launch application in Ghostty
@@ -482,17 +523,23 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # Launch it in Ghostty.
+    # Launch it using the selected terminal backend.
     # --------------------------------------------------------
 
-    if ! launch_in_ghostty "$command_path"; then
+    if [[ "$TERMINAL" == "current" ]]; then
 
-        printf '\n'
-        printf 'Unable to launch: %s\n' "$command"
-        printf 'Make sure Ghostty is installed and macOS allows\n'
-        printf 'brew-launcher to control Ghostty.\n'
+        launch_in_current_terminal "$command_path"
 
-        sleep 2
+    elif [[ "$TERMINAL" == "ghostty" ]]; then
+
+        if ! launch_in_ghostty "$command_path"; then
+            printf '\n'
+            printf 'Unable to launch: %s\n' "$command"
+            printf 'Make sure Ghostty is installed and macOS allows\n'
+            printf 'brew-launcher to control Ghostty.\n'
+            sleep 2
+        fi
+
     fi
 
 done
