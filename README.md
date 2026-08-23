@@ -58,6 +58,12 @@ Refresh the application cache:
 brew-launcher --refresh
 ```
 
+Print entries as plain tab-separated text (for scripting or shell completion, not for humans) — `command  formula  version  size  outdated  description`:
+
+```bash
+brew-launcher --list
+```
+
 View version and help:
 
 ```bash
