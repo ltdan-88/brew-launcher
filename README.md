@@ -70,10 +70,14 @@ brew-launcher --help
 | Key | Action |
 |------|---------|
 | **Enter** | Launch selected application |
-| **F2** | Hide selected entry |
-| **F3** | View and restore hidden entries |
-| **F4** | Create macOS shortcut |
+| **F2** / **⌥H** | Hide selected entry |
+| **F3** / **⌥V** | View and restore hidden entries |
+| **F4** / **⌥S** | Create macOS shortcut |
 | **Esc** | Quit or go back |
+
+The ⌥ (Option) aliases work if F-keys need Fn on your keyboard. In stock Terminal.app, enable "Use Option as Meta Key" in the profile's Keyboard settings first; Ghostty supports it by default.
+
+An entry with an update available is marked with `*`.
 
 ## Terminal Backends
 
