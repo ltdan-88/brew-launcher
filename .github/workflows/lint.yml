@@ -1,0 +1,24 @@
+name: Lint
+
+# Syntax-checks bin/brew-launcher on every push/PR. Note: ShellCheck is
+# intentionally not used here — it doesn't support zsh (only
+# sh/bash/dash/ksh), and forcing it to treat this script as bash produces
+# false positives on legitimate zsh-only syntax (e.g. ${(@f)var} flag
+# expansion, multi-line array literals). zsh -n gives real signal for the
+# language actually in use.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  zsh-syntax-check:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: zsh -n bin/brew-launcher
+        run: zsh -n bin/brew-launcher
