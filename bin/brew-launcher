@@ -10,6 +10,7 @@
 # Usage:
 #   brew-launcher
 #   brew-launcher --refresh
+#   brew-launcher --list
 #   brew-launcher --version
 #   brew-launcher --help
 # ============================================================
@@ -49,6 +50,7 @@ Interactive launcher for installed Homebrew CLI applications.
 Usage:
   brew-launcher           Launch the application picker
   brew-launcher --refresh Rebuild the application cache
+  brew-launcher --list    Print entries as tab-separated plain text
   brew-launcher --version Show version
   brew-launcher --help    Show this help
 
@@ -81,9 +83,12 @@ EOF
 fi
 
 FORCE_REFRESH=false
+LIST_MODE=false
 
 if [[ "$1" == "--refresh" || "$1" == "-r" ]]; then
     FORCE_REFRESH=true
+elif [[ "$1" == "--list" || "$1" == "-l" ]]; then
+    LIST_MODE=true
 elif [[ -n "$1" ]]; then
     echo "Error: unrecognized argument '$1'."
     echo "Run 'brew-launcher --help' for usage."
@@ -579,6 +584,38 @@ load_hidden_commands() {
 }
 
 load_hidden_commands
+
+# ------------------------------------------------------------
+# --list: plain tab-separated output, no fzf.
+#
+# Fields: command, formula, version, size, outdated (0/1), description
+#
+# For scripting/shell-completion use, not for humans — the padded,
+# aligned columns fzf shows are built further below and only used
+# for the interactive picker.
+# ------------------------------------------------------------
+
+if [[ "$LIST_MODE" == true ]]; then
+
+    while IFS=$'\t' read -r command description formula version size outdated full_name; do
+
+        if [[ -n "${hidden_commands[$command]-}" ]]; then
+            continue
+        fi
+
+        outdated_flag="0"
+
+        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
+            outdated_flag="1"
+        fi
+
+        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+            "$command" "$formula" "$version" "$size" "$outdated_flag" "$description"
+
+    done < "$CACHE_FILE"
+
+    exit 0
+fi
 
 # ------------------------------------------------------------
 # Calculate column widths.
