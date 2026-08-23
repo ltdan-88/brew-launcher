@@ -18,13 +18,31 @@
 setopt pipefail
 setopt null_glob
 
+# Resolved once, used to re-invoke this same script for the footer
+# mouse-click handler below (${0:A} follows symlinks to the real
+# path — needed since Homebrew installs this via a symlink chain).
+SCRIPT_PATH="${0:A}"
+
 VERSION="0.3.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
 STATE_FILE="$CACHE_DIR/state"
+
+# Side-channel for the footer mouse-click handler: which word was
+# clicked, and which footer line it was on (for words that mean
+# different things depending on context — see --internal-footer-click
+# below). Cleared before every fzf call in run_fzf().
+FOOTER_CLICK_FILE="$CACHE_DIR/footer-click"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
+
+# One file per category, one command per line — same convention as
+# IGNORE_FILE above. Created/edited in-picker via F6 (Favorites only)
+# and F7 (any category), or by hand. "Favorites" is just an ordinary
+# category file with a name the picker order treats specially (see
+# load_category_names).
+CATEGORIES_DIR="$CONFIG_DIR/categories"
 
 # Outdated-formula snapshot. Refreshed independently of the full cache
 # (see refresh_outdated_if_stale below) so the outdated indicator doesn't
@@ -68,9 +86,39 @@ Keyboard shortcuts:
   F2 / ⌥H   Hide selected entry
   F3 / ⌥V   Show hidden entries
   F4 / ⌥S   Create a macOS shortcut
+  F5 / ⌥C   Jump to a category filter (All, Favorites, ...)
+  F6 / ⌥F   Toggle Favorites for selected entry
+  F7 / ⌥A   Categorize selected entry (adds or removes, any category)
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
+
+Categories:
+  F5/⌥C opens a picker to jump to a filtered view: All, Favorites,
+  then your other categories alphabetically. Ctrl-D there deletes the
+  highlighted category entirely (except All and Favorites, which
+  can't be deleted — Favorites has its own dedicated F6 toggle) and
+  reopens the picker so you can keep managing categories. F6/⌥F
+  toggles Favorites for the selected entry directly. F7/⌥A toggles
+  the selected entry in and out of any category — type a new name to
+  create one on the spot, or pick/type an existing one to add or
+  remove it. Adding opens the picker so you can jump straight to it;
+  removing just refreshes in place, same as F2 hiding an entry.
+  Esc goes up one level at a time: a filtered view -> this picker
+  -> All -> quit.
+  No manual file editing needed for any of this. Categories match on
+  command name (use --list to find it), not formula name.
+  "*" suffixed on the version (e.g. "1.4.7*") means an update is
+  available. Before the name: "+" means favorited, "#" means the
+  entry belongs to some other category — both can show together
+  (e.g. "+#").
+
+Mouse:
+  Click a row to select it, double-click to launch it. Footer words
+  shown in [brackets] are also clickable and do exactly what the key
+  next to them does (e.g. clicking [Hide] is the same as pressing
+  F2). Plain, unbracketed footer text — like the "+"/"*" legend or
+  "Navigate" — isn't clickable; it's there to explain, not to act on.
 
 Behavior:
   • Applications are discovered automatically from Homebrew.
@@ -79,6 +127,55 @@ Behavior:
   • On Linux, 'auto' uses the current terminal.
   • The launcher remains available after launching an app in Ghostty.
 EOF
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# Footer mouse-click handler (internal use only)
+#
+# Invoked by run_fzf()'s click-footer bind as a fresh subprocess of
+# this same script — not by a user. fzf sets FZF_CLICK_FOOTER_WORD
+# (and _LINE) in that subprocess's environment for the duration of
+# the click; there's no way to hand that back to the *original*
+# fzf-invoking process directly, so this writes it to a small file
+# (FOOTER_CLICK_FILE) that the main loop reads after fzf exits.
+#
+# Placed this early specifically so it skips all the normal startup
+# work (dependency checks, cache validation) — a mouse click needs to
+# feel instant, not pay the cost of a full launch.
+#
+# Recognized words fall into two groups:
+#   - print "accept": same as pressing Enter on the highlighted item,
+#     but first records which word was clicked so the main loop can
+#     override $action to match (e.g. "Hide" behaves like F2).
+#   - print "abort": same as pressing Esc — for words whose meaning
+#     is "go back", where there's nothing to record.
+# Anything else (decorative words like "Navigate" or the "+"/"*"
+# legend) prints "ignore" — the click does nothing, deliberately, so
+# an unrecognized or purely-informational click can't accidentally
+# launch whatever happens to be highlighted.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-footer-click" ]]; then
+
+    case "$FZF_CLICK_FOOTER_WORD" in
+        '[Hide]'|Hide|F2/⌥H|'[Hidden]'|Hidden|F3/⌥V|'[Shortcut]'|Shortcut|F4/⌥S| \
+        '[Favorite]'|Favorite|F6/⌥F|'[Categorize]'|Categorize|F7/⌥A|F5/⌥C| \
+        '[Category]'|Category|'[Quit]'|Quit|'[All]'|All| \
+        '[Restore]'|Restore|Enter|'[Launch]'|Launch| \
+        '[View]'|View|'[Delete]'|Delete)
+            mkdir -p "$CACHE_DIR"
+            printf '%s\n%s\n' "$FZF_CLICK_FOOTER_WORD" "$FZF_CLICK_FOOTER_LINE" > "$FOOTER_CLICK_FILE"
+            printf 'accept'
+            ;;
+        '[Back]'|Back|'[Cancel]'|Cancel)
+            printf 'abort'
+            ;;
+        *)
+            printf 'ignore'
+            ;;
+    esac
+
     exit 0
 fi
 
@@ -586,6 +683,238 @@ load_hidden_commands() {
 load_hidden_commands
 
 # ------------------------------------------------------------
+# Categories
+#
+# CATEGORY_NAMES is the picker order: index 0 always means "All" (no
+# filter). "Favorites" sorts first if it exists; everything else is
+# alphabetical. The *list* of category names is discovered once at
+# startup; F7 (toggle_category) explicitly reloads it afterward since
+# it can create a brand-new category file.
+#
+# category_members holds only the *currently active* category's
+# membership, reloaded whenever the active category changes — not
+# all categories at once.
+# ------------------------------------------------------------
+
+typeset -a CATEGORY_NAMES
+CURRENT_CATEGORY_INDEX=0
+typeset -A category_members
+
+load_category_names() {
+
+    CATEGORY_NAMES=()
+
+    [[ -d "$CATEGORIES_DIR" ]] || return
+
+    local file name has_favorites=false
+    local -a others
+
+    for file in "$CATEGORIES_DIR"/*; do
+
+        [[ -f "$file" ]] || continue
+
+        name="${file:t}"
+
+        if [[ "$name" == "Favorites" ]]; then
+            has_favorites=true
+            continue
+        fi
+
+        others+=("$name")
+    done
+
+    others=("${(@o)others}")
+
+    if [[ "$has_favorites" == true ]]; then
+        CATEGORY_NAMES=("Favorites" "${others[@]}")
+    else
+        CATEGORY_NAMES=("${others[@]}")
+    fi
+}
+
+load_category_names
+
+load_category_members() {
+
+    category_members=()
+
+    (( CURRENT_CATEGORY_INDEX == 0 )) && return
+
+    local category_file="$CATEGORIES_DIR/${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]}"
+    local member
+
+    [[ -f "$category_file" ]] || return
+
+    while IFS= read -r member; do
+
+        # Remove leading and trailing whitespace.
+        member="${member#"${member%%[![:space:]]*}"}"
+        member="${member%"${member##*[![:space:]]}"}"
+
+        [[ -z "$member" ]] && continue
+        [[ "$member" == \#* ]] && continue
+
+        category_members[$member]=1
+
+    done < "$category_file"
+}
+
+# Lets you jump directly to any category by name (fuzzy-searchable),
+# instead of blindly cycling through them one keypress at a time.
+# Ctrl-D deletes the highlighted category file entirely (not "All",
+# which isn't a real category) — the only in-picker way to remove a
+# whole category, as opposed to toggle_category removing one entry
+# from it. No confirmation prompt, matching every other action in
+# this launcher (F2 hide, F6/F7 toggle); the file itself is trivial
+# to recreate if that turns out to be a mistake.
+# Esc inside the picker (empty result) resets to "All" — a
+# consistent "Esc always goes up one level" model: Games -> [Esc] ->
+# picker -> [Esc] -> All -> [Esc] -> quit, rather than leaving you
+# wherever you happened to be when you opened the picker.
+pick_category() {
+
+    local choices result result_lines pick_action picked i clicked_word
+
+    choices=("All" "${CATEGORY_NAMES[@]}")
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    result="$(
+        printf '%s\n' "${choices[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' View category ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --expect=enter,ctrl-d \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    if [[ -z "$result" ]]; then
+        CURRENT_CATEGORY_INDEX=0
+        load_category_members
+        return 1
+    fi
+
+    result_lines=("${(@f)result}")
+    pick_action="${result_lines[1]}"
+    picked="${result_lines[2]}"
+
+    if [[ -f "$FOOTER_CLICK_FILE" ]]; then
+        clicked_word="$(sed -n '1p' "$FOOTER_CLICK_FILE")"
+        rm -f "$FOOTER_CLICK_FILE"
+
+        case "$clicked_word" in
+            '[Delete]'|Delete) pick_action="ctrl-d" ;;
+            '[View]'|View) pick_action="enter" ;;
+        esac
+    fi
+
+    [[ -z "$picked" ]] && return 1
+
+    if [[ "$pick_action" == "ctrl-d" ]]; then
+
+        # "All" isn't a real category, and "Favorites" is protected —
+        # it has its own dedicated F6 toggle, and deleting it out from
+        # under that would leave F6 silently unable to get it back
+        # into this picker's list until CATEGORY_NAMES next refreshes.
+        #
+        # Explicit message on refusal, not a silent no-op: otherwise
+        # this just falls through to rebuilding with whatever category
+        # was active before the picker opened, which looks like the
+        # refused delete "navigated" somewhere on its own.
+        if [[ "$picked" == "All" || "$picked" == "Favorites" ]]; then
+            printf '\n'
+            printf '"%s" can'"'"'t be deleted.\n' "$picked"
+            sleep 1
+        else
+            rm -f "$CATEGORIES_DIR/$picked"
+            load_category_names
+            load_categorized_commands
+        fi
+
+        # Stay in the picker rather than dropping back to "All" —
+        # deleting a category is a "still managing categories" action,
+        # not a "done, take me back to the list" one.
+        pick_category
+        return $?
+    fi
+
+    if [[ "$picked" == "All" ]]; then
+        CURRENT_CATEGORY_INDEX=0
+    else
+        for (( i = 1; i <= ${#CATEGORY_NAMES[@]}; i++ )); do
+            if [[ "${CATEGORY_NAMES[$i]}" == "$picked" ]]; then
+                CURRENT_CATEGORY_INDEX=$i
+                break
+            fi
+        done
+    fi
+
+    load_category_members
+}
+
+# Separate from category_members above: this tracks Favorites
+# membership regardless of which category is currently active, since
+# the favorite marker (see FAVORITE_MARKER_TEXT) needs to show in
+# every view, not just while filtered to Favorites.
+typeset -A favorite_commands
+
+load_favorite_commands() {
+
+    favorite_commands=()
+
+    local favorites_file="$CATEGORIES_DIR/Favorites"
+    local member
+
+    [[ -f "$favorites_file" ]] || return
+
+    while IFS= read -r member; do
+        [[ -z "$member" ]] && continue
+        favorite_commands[$member]=1
+    done < "$favorites_file"
+}
+
+load_favorite_commands
+
+# Union of every category's membership except Favorites (which has
+# its own tracking above) — powers the "#" marker. Scans all category
+# files, not just the currently active one, since like the favorite
+# marker this needs to show regardless of which view is active.
+typeset -A categorized_commands
+
+load_categorized_commands() {
+
+    categorized_commands=()
+
+    local name category_file member i
+
+    for (( i = 1; i <= ${#CATEGORY_NAMES[@]}; i++ )); do
+
+        name="${CATEGORY_NAMES[$i]}"
+
+        [[ "$name" == "Favorites" ]] && continue
+
+        category_file="$CATEGORIES_DIR/$name"
+
+        [[ -f "$category_file" ]] || continue
+
+        while IFS= read -r member; do
+            [[ -z "$member" ]] && continue
+            categorized_commands[$member]=1
+        done < "$category_file"
+    done
+}
+
+load_categorized_commands
+
+# ------------------------------------------------------------
 # --list: plain tab-separated output, no fzf.
 #
 # Fields: command, formula, version, size, outdated (0/1), description
@@ -621,13 +950,28 @@ fi
 # Calculate column widths.
 # ------------------------------------------------------------
 
-# Sits right after the version number, not at the end of the line, so
-# it's clear at a glance which tool it refers to. A plain "*" rather
-# than an arrow, since the footer already uses "↑ ↓" to mean
-# "navigate" — reusing that glyph for "update available" would be
-# confusing. What it means is spelled out in the footer instead.
+# Update indicator is a suffix directly on the version number itself
+# (e.g. "1.4.7*") rather than a separate column — a trailing asterisk
+# is a familiar "there's a footnote on this" convention (price tags,
+# citations), and ties it visually to exactly what it's flagging.
+#
+# Favorite ("+") and "in some category" ("#") markers share one slot
+# at the very start of the line, before the name — both are about the
+# tool's organizational identity, not its version, so they sit apart
+# from the version-attached update indicator. "#" means "belongs to
+# at least one category other than Favorites" — Favorites membership
+# already has its own "+", so repeating that as "#" too would just
+# be re-showing the same fact. Plain ASCII throughout rather than
+# fancier glyphs like "★" or an arrow — "★" didn't render distinctly
+# from "*" in testing (font fallback), and "↑" would collide in
+# meaning with the footer's own "↑ ↓ Navigate" hint. What each symbol
+# means is spelled out in the footer instead. Both markers are shown
+# in every view, not just their own filtered one, since toggling from
+# the "All" view otherwise gives no visible feedback at all.
 UPDATE_INDICATOR_TEXT="*"
-UPDATE_INDICATOR_WIDTH=$(( ${#UPDATE_INDICATOR_TEXT} + 2 ))
+FAVORITE_MARKER_TEXT="+"
+CATEGORIZED_MARKER_TEXT="#"
+LEFT_MARKER_WIDTH=$(( ${#FAVORITE_MARKER_TEXT} + ${#CATEGORIZED_MARKER_TEXT} + 2 ))
 
 max_name=4
 max_version=7
@@ -656,7 +1000,10 @@ while IFS=$'\t' read -r command description formula version size outdated full_n
 done < "$CACHE_FILE"
 
 max_name=$((max_name + 3))
-max_version=$((max_version + 2))
+# +2 gap, +1 more so the update-indicator suffix (e.g. "1.4.7*") on
+# the single longest version string still leaves a full gap, not a
+# squeezed one, before the next column.
+max_version=$((max_version + 2 + ${#UPDATE_INDICATOR_TEXT}))
 max_size=$((max_size + 2))
 
 # ------------------------------------------------------------
@@ -681,23 +1028,40 @@ build_entries() {
             continue
         fi
 
+        if (( CURRENT_CATEGORY_INDEX > 0 )) && [[ -z "${category_members[$command]-}" ]]; then
+            continue
+        fi
+
         display_name="$formula"
 
         if [[ "$formula" != "$command" ]]; then
             display_name="$formula ($command)"
         fi
 
-        name_fmt="$(printf "%-${max_name}s" "$display_name")"
-        version_fmt="$(printf "%-${max_version}s" "$version")"
-        size_fmt="$(printf "%-${max_size}s" "$size")"
+        left_marker=" "
 
-        indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "")"
-
-        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
-            indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "$UPDATE_INDICATOR_TEXT")"
+        if [[ -n "${favorite_commands[$command]-}" ]]; then
+            left_marker="$FAVORITE_MARKER_TEXT"
         fi
 
-        display="$name_fmt$version_fmt$indicator$size_fmt$description"
+        if [[ -n "${categorized_commands[$command]-}" ]]; then
+            left_marker="${left_marker}${CATEGORIZED_MARKER_TEXT}"
+        fi
+
+        left_marker_fmt="$(printf "%-${LEFT_MARKER_WIDTH}s" "$left_marker")"
+
+        name_fmt="$(printf "%-${max_name}s" "$display_name")"
+
+        version_text="$version"
+
+        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
+            version_text="${version}${UPDATE_INDICATOR_TEXT}"
+        fi
+
+        version_fmt="$(printf "%-${max_version}s" "$version_text")"
+        size_fmt="$(printf "%-${max_size}s" "$size")"
+
+        display="$left_marker_fmt$name_fmt$version_fmt$size_fmt$description"
 
         entries+=(
             "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
@@ -709,14 +1073,39 @@ build_entries() {
 build_entries
 
 # ------------------------------------------------------------
+# Find an entry's 1-based line number in the current entries array,
+# so an action that doesn't remove the highlighted item (favoriting,
+# assigning a category, creating a shortcut) can restore the cursor
+# to it via run_fzf's initial_position, instead of always jumping
+# back to the top of the list on every fzf restart.
+# ------------------------------------------------------------
+
+find_entry_position() {
+
+    local target="$1"
+    local i entry_command
+
+    for (( i = 1; i <= ${#entries[@]}; i++ )); do
+        entry_command="${entries[$i]%%$'\t'*}"
+
+        if [[ "$entry_command" == "$target" ]]; then
+            echo "$i"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# ------------------------------------------------------------
 # Column header
 # ------------------------------------------------------------
 
 FZF_HEADER="$(
-    printf "%-${max_name}s%-${max_version}s%-${UPDATE_INDICATOR_WIDTH}s%-${max_size}s%s" \
+    printf "%-${LEFT_MARKER_WIDTH}s%-${max_name}s%-${max_version}s%-${max_size}s%s" \
+        "" \
         "NAME" \
         "VERSION" \
-        "" \
         "SIZE" \
         "DESCRIPTION"
 )"
@@ -934,6 +1323,144 @@ PY
     mv "$tmp_ignore" "$IGNORE_FILE"
 }
 
+# ------------------------------------------------------------
+# Toggle an entry's Favorites membership
+#
+# Favorites is an ordinary category file (see load_category_names),
+# so this just edits that one file directly — no separate mechanism.
+# ------------------------------------------------------------
+
+toggle_favorite() {
+
+    local command="$1"
+    local favorites_file="$CATEGORIES_DIR/Favorites"
+    local tmp_favorites
+
+    mkdir -p "$CATEGORIES_DIR"
+
+    if [[ -f "$favorites_file" ]] &&
+       grep -Fqx "$command" "$favorites_file" 2>/dev/null; then
+
+        tmp_favorites="$(mktemp "$CATEGORIES_DIR/Favorites.XXXXXX")" || return 1
+        grep -Fvx "$command" "$favorites_file" > "$tmp_favorites" 2>/dev/null
+        mv "$tmp_favorites" "$favorites_file"
+
+    else
+
+        printf '%s\n' "$command" >> "$favorites_file"
+    fi
+}
+
+# Same shape as toggle_favorite above, generalized to an arbitrary
+# named category — the instant, no-prompt toggle F7 uses when a
+# specific category is already active, so it behaves exactly like F6
+# does for Favorites instead of always opening the picker/prompt.
+toggle_category_direct() {
+
+    local command="$1"
+    local category_name="$2"
+    local category_file="$CATEGORIES_DIR/$category_name"
+    local tmp_category
+
+    mkdir -p "$CATEGORIES_DIR"
+
+    if [[ -f "$category_file" ]] &&
+       grep -Fqx "$command" "$category_file" 2>/dev/null; then
+
+        tmp_category="$(mktemp "$CATEGORIES_DIR/${category_name}.XXXXXX")" || return 1
+        grep -Fvx "$command" "$category_file" > "$tmp_category" 2>/dev/null
+        mv "$tmp_category" "$category_file"
+
+    else
+
+        printf '%s\n' "$command" >> "$category_file"
+    fi
+}
+
+# ------------------------------------------------------------
+# Toggle an entry's membership in a category by name, typed or picked
+#
+# Same add/remove toggle as toggle_favorite, generalized to any
+# category — picking or typing a category the entry is already in
+# removes it instead of being a no-op. That's how you unassign a
+# category: press F7/⌥A again and pick/type the same one.
+#
+# Uses fzf's own --print-query: if the typed text matches an existing
+# category it's selected normally; if it matches nothing, Enter still
+# exits and --print-query reports the typed text, which is treated as
+# a brand-new category name and created on the spot.
+#
+# Return code notes what happened: 0 = added, 2 = removed, 1 =
+# cancelled (no category chosen). Not currently used by the caller —
+# F7 always just refreshes in place regardless of which happened —
+# kept for whoever's debugging next.
+# ------------------------------------------------------------
+
+toggle_category() {
+
+    local command="$1"
+    local category_name
+    local tmp_category
+    local default_query=""
+    local name
+    local choices=()
+
+    # Favorites is excluded from this list entirely — F6 is the only
+    # key allowed to touch Favorites membership. This prompt is only
+    # ever reached while on "All" or while viewing Favorites itself
+    # (see the F7 dispatch above), and in neither case is there a
+    # non-Favorites category to default to, so default_query is left
+    # blank rather than pointed at a category that isn't even a
+    # choice anymore.
+    for name in "${CATEGORY_NAMES[@]}"; do
+        [[ "$name" == "Favorites" ]] && continue
+        choices+=("$name")
+    done
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    category_name="$(
+        printf '%s\n' "${choices[@]}" |
+        fzf \
+            --print-query \
+            --query="$default_query" \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' Categorize ' \
+            --border-label-pos=2 \
+            --prompt=' New or existing: ' \
+            --footer='  ↑ ↓  Navigate    Type  New name or pick one    Enter  [Categorize]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --pointer='▌' \
+            --color="$FZF_COLORS" |
+        tail -n1
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$category_name" ]] && return 1
+
+    mkdir -p "$CATEGORIES_DIR"
+
+    local category_file="$CATEGORIES_DIR/$category_name"
+
+    if [[ -f "$category_file" ]] &&
+       grep -Fqx "$command" "$category_file" 2>/dev/null; then
+
+        tmp_category="$(mktemp "$CATEGORIES_DIR/${category_name}.XXXXXX")" || return 1
+        grep -Fvx "$command" "$category_file" > "$tmp_category" 2>/dev/null
+        mv "$tmp_category" "$category_file"
+        return 2
+
+    else
+
+        printf '%s\n' "$command" >> "$category_file"
+        return 0
+    fi
+}
+
 
 # ------------------------------------------------------------
 # Show hidden application entries
@@ -944,6 +1471,7 @@ run_fzf() {
     local border_label="$1"
     local footer="$2"
     local expected_keys="$3"
+    local initial_position="$4"
 
     local options=(
         --height=100%
@@ -969,14 +1497,32 @@ run_fzf() {
         options+=(--expect="$expected_keys")
     fi
 
+    if [[ -n "$initial_position" ]]; then
+        # "load", not "start" — fzf consumes the input list
+        # asynchronously, so "start" fires before it's actually
+        # available to move the cursor onto.
+        options+=(--bind "load:pos($initial_position)")
+    fi
+
+    # Cleared before every call so a stale click from a previous
+    # screen/iteration can never leak into this one. See
+    # --internal-footer-click above for what actually writes to it.
+    rm -f "$FOOTER_CLICK_FILE"
+    options+=(--bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click")
+
     fzf "${options[@]}"
 }
 
 show_hidden_entries() {
 
-    local hidden_display_entries=()
+    local hidden_display_entries
     local hidden_result
     local hidden_command
+    local restored_anything=false
+
+    while true; do
+
+    hidden_display_entries=()
 
     while IFS=$'\t' read -r command description formula version size outdated full_name; do
 
@@ -986,26 +1532,41 @@ show_hidden_entries() {
 
         local display_name="$formula"
         local name_fmt
+        local version_text
         local version_fmt
         local size_fmt
-        local indicator=""
+        local left_marker
+        local left_marker_fmt
         local display
 
         if [[ "$formula" != "$command" ]]; then
             display_name="$formula ($command)"
         fi
 
-        name_fmt="$(printf "%-${max_name}s" "$display_name")"
-        version_fmt="$(printf "%-${max_version}s" "$version")"
-        size_fmt="$(printf "%-${max_size}s" "$size")"
+        left_marker=" "
 
-        indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "")"
-
-        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
-            indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "$UPDATE_INDICATOR_TEXT")"
+        if [[ -n "${favorite_commands[$command]-}" ]]; then
+            left_marker="$FAVORITE_MARKER_TEXT"
         fi
 
-        display="$name_fmt$version_fmt$indicator$size_fmt$description"
+        if [[ -n "${categorized_commands[$command]-}" ]]; then
+            left_marker="${left_marker}${CATEGORIZED_MARKER_TEXT}"
+        fi
+
+        left_marker_fmt="$(printf "%-${LEFT_MARKER_WIDTH}s" "$left_marker")"
+
+        name_fmt="$(printf "%-${max_name}s" "$display_name")"
+
+        version_text="$version"
+
+        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
+            version_text="${version}${UPDATE_INDICATOR_TEXT}"
+        fi
+
+        version_fmt="$(printf "%-${max_version}s" "$version_text")"
+        size_fmt="$(printf "%-${max_size}s" "$size")"
+
+        display="$left_marker_fmt$name_fmt$version_fmt$size_fmt$description"
 
         hidden_display_entries+=(
             "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
@@ -1014,6 +1575,11 @@ show_hidden_entries() {
     done < "$CACHE_FILE"
 
     if (( ${#hidden_display_entries[@]} == 0 )); then
+        if [[ "$restored_anything" == true ]]; then
+            # Nothing left because we just restored the last one —
+            # that's success, not the "you have nothing hidden" case.
+            return 0
+        fi
         printf '\n'
         printf 'No hidden entries.\n'
         sleep 1
@@ -1024,19 +1590,28 @@ show_hidden_entries() {
         printf '%s\n' "${hidden_display_entries[@]}" |
         run_fzf \
             ' 󰣇  Hidden TUIs ' \
-            '  ↑ ↓  Navigate    Type  Search    Enter  Restore    Esc  Back    *  Update available' \
+            '  ↑ ↓  Navigate    Type  Search    Enter  [Restore]    Esc  [Back]    +  Fav    *  Update' \
             ''
     )"
 
     if [[ -z "$hidden_result" ]]; then
+        if [[ "$restored_anything" == true ]]; then
+            return 0
+        fi
         return 1
     fi
 
     hidden_command="${hidden_result%%$'\t'*}"
 
     unhide_entry "$hidden_command"
+    load_hidden_commands
+    restored_anything=true
 
-    return 0
+    # Loop back and re-show the (now smaller) hidden list instead of
+    # exiting — restoring one entry shouldn't kick you out of the
+    # screen if there are more you want to restore.
+
+    done
 }
 
 # ------------------------------------------------------------
@@ -1045,13 +1620,44 @@ show_hidden_entries() {
 
 while true; do
 
+    # A category filter that's become empty (e.g. F6/F7 just removed
+    # the last member) is never handed to fzf at all — open the
+    # category picker instead of forcing "All" specifically, so you
+    # can choose where to go next (including deleting the now-empty
+    # category right there via Ctrl-D). Whatever fzf's exact behavior
+    # is with zero candidates plus a keypress, not relying on it is
+    # safer than finding out the hard way.
+    if (( ${#entries[@]} == 0 )) && (( CURRENT_CATEGORY_INDEX > 0 )); then
+        printf '\n'
+        printf 'No entries in "%s".\n' "${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]}"
+        sleep 1
+        pick_category
+        build_entries
+        continue
+    fi
+
+    border_label=" 󰣇  Homebrew CLI v$VERSION "
+    esc_hint="Quit"
+
+    if (( CURRENT_CATEGORY_INDEX > 0 )); then
+        border_label=" 󰣇  Homebrew CLI v$VERSION · ${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]} "
+        esc_hint="Category"
+    fi
+
     fzf_result="$(
         printf '%s\n' "${entries[@]}" |
         run_fzf \
-            " 󰣇  Homebrew CLI v$VERSION " \
-            '  ↑ ↓  Navigate    Type  Search    Enter  Launch    F2/⌥H  Hide    F3/⌥V  Hidden    F4/⌥S  Shortcut    Esc  Quit    *  Update available' \
-            'enter,f2,f3,f4,alt-h,alt-v,alt-s'
+            "$border_label" \
+            "  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]
+  F2/⌥H  [Hide]    F3/⌥V  [Hidden]    F4/⌥S  [Shortcut]    F5/⌥C  [Category]    F6/⌥F  [Favorite]    F7/⌥A  [Categorize]    +  Fav    *  Update" \
+            'enter,f2,f3,f4,f5,f6,f7,alt-h,alt-v,alt-s,alt-c,alt-f,alt-a,esc' \
+            "$restore_position"
     )"
+
+    # Only applies to the run_fzf call just made — actions below that
+    # want to keep the cursor on the same item (F4, F6, F7) set this
+    # again themselves before their own "continue".
+    restore_position=""
 
     # --------------------------------------------------------
     # Esc / empty result = quit.
@@ -1070,17 +1676,120 @@ while true; do
     selection="${result_lines[2]}"
 
     # --------------------------------------------------------
-    # F3 / ⌥V does not require a selected visible entry.
+    # A footer click reports as a plain "enter" above (see
+    # run_fzf/--internal-footer-click) — override $action to match
+    # whichever key that word stands in for. "Category" means
+    # different things on different footer lines (the Esc hint on
+    # line 1 vs. F5's own label on line 2), so the clicked line
+    # number breaks the tie.
+    # --------------------------------------------------------
+
+    if [[ -f "$FOOTER_CLICK_FILE" ]]; then
+
+        clicked_word="$(sed -n '1p' "$FOOTER_CLICK_FILE")"
+        clicked_line="$(sed -n '2p' "$FOOTER_CLICK_FILE")"
+        rm -f "$FOOTER_CLICK_FILE"
+
+        case "$clicked_word" in
+            '[Hide]'|Hide|F2/⌥H) action="f2" ;;
+            '[Hidden]'|Hidden|F3/⌥V) action="f3" ;;
+            '[Shortcut]'|Shortcut|F4/⌥S) action="f4" ;;
+            F5/⌥C) action="f5" ;;
+            '[Favorite]'|Favorite|F6/⌥F) action="f6" ;;
+            '[Categorize]'|Categorize|F7/⌥A) action="f7" ;;
+            '[Category]'|Category)
+                if [[ "$clicked_line" == "1" ]]; then
+                    action="esc"
+                else
+                    action="f5"
+                fi
+                ;;
+            '[Quit]'|Quit|'[All]'|All) action="esc" ;;
+            Enter|'[Launch]'|Launch) action="enter" ;;
+        esac
+    fi
+
+    # --------------------------------------------------------
+    # F3 / ⌥V does not require a selected visible entry. Restoring
+    # something preserves whatever category you were viewing, same as
+    # F6/F7 — you'd expect the restored entry to show back up in the
+    # context you were already working in, not get bounced away from
+    # it. Cancelling (Esc inside the hidden-entries screen) is
+    # different: nothing was accomplished, so it always lands on
+    # "All" rather than silently returning to wherever you happened
+    # to be.
     # --------------------------------------------------------
 
     if [[ "$action" == "f3" || "$action" == "alt-v" ]]; then
 
-        if show_hidden_entries; then
-            load_hidden_commands
-            build_entries
+        current_category_name=""
+
+        if (( CURRENT_CATEGORY_INDEX > 0 )); then
+            current_category_name="${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]}"
         fi
 
+        if show_hidden_entries; then
+
+            CURRENT_CATEGORY_INDEX=0
+
+            if [[ -n "$current_category_name" ]]; then
+                for (( restore_i = 1; restore_i <= ${#CATEGORY_NAMES[@]}; restore_i++ )); do
+                    if [[ "${CATEGORY_NAMES[$restore_i]}" == "$current_category_name" ]]; then
+                        CURRENT_CATEGORY_INDEX=$restore_i
+                        break
+                    fi
+                done
+            fi
+
+        else
+            CURRENT_CATEGORY_INDEX=0
+        fi
+
+        load_category_members
+        load_hidden_commands
+        build_entries
+
         continue
+    fi
+
+    # --------------------------------------------------------
+    # F5 / ⌥C also does not require a selected visible entry —
+    # opens a small picker to jump straight to a category, refiltering
+    # the same picker in place rather than opening a new screen.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f5" || "$action" == "alt-c" ]]; then
+
+        if (( ${#CATEGORY_NAMES[@]} == 0 )); then
+            printf '\n'
+            printf 'No categories yet — press F7/⌥A on an entry to create one.\n'
+            sleep 1
+            continue
+        fi
+
+        pick_category
+        build_entries
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # Esc: back out of a category filter first, only quit once
+    # already on "All" — same one-step-at-a-time idea as F3's
+    # hidden-entries screen already using Esc to go back. "Back"
+    # while filtered reopens the category picker (same as F5) rather
+    # than jumping straight to "All", so you can switch to a
+    # different category without detouring through the full list.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "esc" ]]; then
+
+        if (( CURRENT_CATEGORY_INDEX > 0 )); then
+            pick_category
+            build_entries
+            continue
+        fi
+
+        break
     fi
 
     # --------------------------------------------------------
@@ -1124,6 +1833,74 @@ while true; do
     if [[ "$action" == "f4" || "$action" == "alt-s" ]]; then
 
         create_shortcut "$command" "$formula"
+        restore_position="$(find_entry_position "$command")"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # F6 / ⌥F = toggle Favorites membership for selected entry.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f6" || "$action" == "alt-f" ]]; then
+
+        current_category_name=""
+
+        if (( CURRENT_CATEGORY_INDEX > 0 )); then
+            current_category_name="${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]}"
+        fi
+
+        toggle_favorite "$command"
+        load_category_names
+        load_categorized_commands
+
+        CURRENT_CATEGORY_INDEX=0
+
+        if [[ -n "$current_category_name" ]]; then
+            for (( restore_i = 1; restore_i <= ${#CATEGORY_NAMES[@]}; restore_i++ )); do
+                if [[ "${CATEGORY_NAMES[$restore_i]}" == "$current_category_name" ]]; then
+                    CURRENT_CATEGORY_INDEX=$restore_i
+                    break
+                fi
+            done
+        fi
+
+        load_favorite_commands
+        load_category_members
+        build_entries
+        restore_position="$(find_entry_position "$command")"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # F7 / ⌥A = toggle selected entry's membership in a category.
+    #
+    # While a specific category *other than Favorites* is active,
+    # this is instant and prompt-free — exactly like F6 for
+    # Favorites, just for whatever category you're currently viewing.
+    # Favorites itself is excluded here (and from toggle_category's
+    # own choices below) on purpose: F6 is the only key that's
+    # allowed to touch Favorites membership, full stop. The
+    # typed/picked prompt otherwise shows up on "All" (or while
+    # viewing Favorites), where there's no non-Favorites "current
+    # category" to default to and you genuinely need to say which
+    # one.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f7" || "$action" == "alt-a" ]]; then
+
+        if (( CURRENT_CATEGORY_INDEX > 0 )) && [[ "${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]}" != "Favorites" ]]; then
+            toggle_category_direct "$command" "${CATEGORY_NAMES[$CURRENT_CATEGORY_INDEX]}"
+        else
+            toggle_category "$command"
+        fi
+
+        load_category_names
+        load_categorized_commands
+        load_favorite_commands
+        load_category_members
+
+        build_entries
+        restore_position="$(find_entry_position "$command")"
         continue
     fi
 

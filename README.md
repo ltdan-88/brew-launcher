@@ -30,6 +30,7 @@ That's it — no configuration needed. Type to search, **Enter** to launch, **Es
 - **Fuzzy Search** – Type to search applications by name or description
 - **Hide Entries** – Temporarily hide applications you don't use
 - **Restore Hidden** – View and restore hidden entries from within the launcher
+- **Categories** – Group tools and jump straight to a filtered view; toggle entries in-picker, no file editing needed
 - **Terminal Backends** – Choose where applications launch (current terminal or Ghostty)
 - **macOS Shortcuts** – Create .command shortcuts for your favorite tools
 - **Keyboard-Driven** – Fully navigable with keyboard shortcuts
@@ -75,11 +76,18 @@ brew-launcher --help
 | **F2** / **⌥H** | Hide selected entry |
 | **F3** / **⌥V** | View and restore hidden entries |
 | **F4** / **⌥S** | Create macOS shortcut |
+| **F5** / **⌥C** | Jump to a category filter |
+| **F6** / **⌥F** | Toggle Favorites for selected entry |
+| **F7** / **⌥A** | Categorize selected entry (adds or removes, any category) |
 | **Esc** | Quit or go back |
 
 The ⌥ (Option) aliases work if F-keys need Fn on your keyboard. In stock Terminal.app, enable "Use Option as Meta Key" in the profile's Keyboard settings first; Ghostty supports it by default.
 
-An entry with an update available is marked with `*`.
+An entry with an update available shows `*` right after its version number (e.g. `1.4.7*`). Before the name: `+` means favorited, `#` means it belongs to some other category — both can show together (e.g. `+#`).
+
+## Mouse
+
+Click a row to select it, double-click to launch it. Footer words shown in **[brackets]** are also clickable and do exactly what the key next to them does — clicking `[Hide]` is the same as pressing F2, `[Category]` the same as F5, and so on, across every screen (the main picker, hidden entries, and the category pickers). Plain, unbracketed footer text — the `+`/`*` legend, "Navigate" — isn't clickable; it's there to explain, not to act on.
 
 ## Terminal Backends
 
@@ -119,6 +127,27 @@ Configuration file location:
 ```
 
 To manually clear all hidden entries, remove this file and restart the launcher.
+
+## Categories
+
+Group your tools into named categories and jump to a filtered view with **F5** (or **⌥C**) — a small picker lists `All`, `Favorites`, and your other categories alphabetically; select one directly instead of cycling through them. The border label shows which one you're viewing.
+
+No file editing needed to use them:
+
+- **F6** (or **⌥F**) toggles the selected entry in and out of **Favorites** directly — the same instant, in-picker action as F2 for hiding an entry.
+- **F7** (or **⌥A**) toggles the selected entry in and out of **any** category — a small prompt lists your existing categories; pick or type one to add the entry, pick/type the same one again to remove it. Typing a name that doesn't exist yet creates it on the spot. Adding opens the F5 picker so you can jump straight to viewing it; removing just refreshes in place, same as F2 hiding an entry — no picker detour when you're staying in the category you're already looking at.
+- **Ctrl-D** inside the F5 category picker deletes the highlighted category entirely — except `All` (not a real category) and `Favorites` (protected, since it has its own dedicated F6 toggle). No confirmation prompt, same as everything else in the launcher — the file is trivial to recreate if that was a mistake. The picker reopens afterward so you can keep managing categories.
+
+**Esc** goes up one level at a time: a filtered view → the F5 picker → `All` → quit — rather than jumping straight to quitting from wherever you are.
+
+An entry with an update available shows `*` right after its version number (e.g. `1.4.7*`). Before the name: `+` means favorited, `#` means it belongs to some other category — both can show together (e.g. `+#`). If you'd rather manage categories by hand, they're just plain files, one command per line, matching the same convention as the ignore file:
+
+```
+~/.config/brew-launcher/categories/Games
+~/.config/brew-launcher/categories/Monitoring
+```
+
+Categories match on **command** name, not formula name — a formula can expose several commands (e.g. `midnight-commander` provides `mc`). Use `brew-launcher --list` if you ever need to look one up while hand-editing.
 
 ## Application Shortcuts
 
