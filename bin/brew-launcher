@@ -70,6 +70,10 @@ FORCE_REFRESH=false
 
 if [[ "$1" == "--refresh" || "$1" == "-r" ]]; then
     FORCE_REFRESH=true
+elif [[ -n "$1" ]]; then
+    echo "Error: unrecognized argument '$1'."
+    echo "Run 'brew-launcher --help' for usage."
+    exit 1
 fi
 
 # ------------------------------------------------------------
@@ -141,10 +145,12 @@ fi
 
 rebuild_cache() {
 
-    local tmp_json="$CACHE_DIR/formulae.json"
-    local tmp_sizes="$CACHE_DIR/sizes"
-    local tmp_outdated="$CACHE_DIR/outdated"
-    local tmp_entries="$CACHE_DIR/entries.tmp"
+    local tmp_json tmp_sizes tmp_outdated tmp_entries
+
+    tmp_json="$(mktemp "$CACHE_DIR/formulae.XXXXXX")" || return 1
+    tmp_sizes="$(mktemp "$CACHE_DIR/sizes.XXXXXX")" || return 1
+    tmp_outdated="$(mktemp "$CACHE_DIR/outdated.XXXXXX")" || return 1
+    tmp_entries="$(mktemp "$CACHE_DIR/entries.XXXXXX")" || return 1
 
     # --------------------------------------------------------
     # Get installed formula metadata.
@@ -399,16 +405,28 @@ for formula in formulae:
 
 seen = set()
 unique = []
+duplicates = []
 
 for entry in sorted(entries, key=str.lower):
 
     command = entry.split("\t", 1)[0]
+    formula = entry.split("\t")[2]
 
     if command in seen:
+        duplicates.append((command, formula))
         continue
 
     seen.add(command)
     unique.append(entry)
+
+if duplicates:
+    print(
+        f"Note: {len(duplicates)} duplicate command name(s) hidden "
+        "(first match kept):",
+        file=sys.stderr,
+    )
+    for command, formula in duplicates:
+        print(f"  {command}  (also provided by {formula})", file=sys.stderr)
 
 # ------------------------------------------------------------
 # Write cache.
@@ -665,6 +683,13 @@ create_shortcut() {
 
     local command="$1"
     local formula="$2"
+
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+        printf '\n'
+        printf 'Shortcuts are only supported on macOS.\n'
+        sleep 1
+        return 1
+    fi
 
     local shortcut_dir="/Applications/TUIs"
 
