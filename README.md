@@ -6,11 +6,20 @@ A fast, interactive launcher for your installed Homebrew CLI applications.
   <img src="assets/demo.gif">
 </p>
 
-Built for macOS + Ghostty + fzf.
+Works on macOS and Linux. Built on fzf, with optional Ghostty integration on macOS.
 
 ## Introduction
 
-If you have dozens of Homebrew CLI applications installed, `brew-launcher` solves the discovery problem. Instead of remembering application names or searching through `brew list`, simply run `brew-launcher` to browse, search, and launch your tools—all with keyboard navigation.
+Homebrew makes it easy to install terminal tools — and just as easy to forget what you've installed and what they're called. `brew-launcher` gives you one command, `brew-launcher`, that lists everything with a description of what it does, so you can search and launch instead of trying to remember whether it was `bottom` or `btop`.
+
+## Quick Start
+
+```bash
+brew install ltdan-88/brew-launcher/brew-launcher
+brew-launcher
+```
+
+That's it — no configuration needed. Type to search, **Enter** to launch, **Esc** to quit.
 
 ## Features
 
@@ -28,29 +37,16 @@ If you have dozens of Homebrew CLI applications installed, `brew-launcher` solve
 
 ## Requirements
 
-- macOS
+- macOS or Linux
 - [Homebrew](https://brew.sh/)
-- [fzf](https://github.com/junegunn/fzf)
-- [python3](https://www.python.org/)
+- [python3](https://www.python.org/) – usually already on your system
 
-Optional:
-- [Ghostty](https://ghostty.org/) – for launching apps in new tabs
+[fzf](https://github.com/junegunn/fzf) is installed automatically as a dependency — no separate step needed.
 
-## Installation
-
-Install with Homebrew:
-
-```bash
-brew install ltdan-88/brew-launcher/brew-launcher
-```
+Optional, macOS only:
+- [Ghostty](https://ghostty.org/) – launches picked apps in a new tab instead of replacing the picker
 
 ## Usage
-
-Launch the interactive picker:
-
-```bash
-brew-launcher
-```
 
 Refresh the application cache:
 
