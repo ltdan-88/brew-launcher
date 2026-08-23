@@ -44,6 +44,22 @@ brew upgrade brew-launcher   # or: brew install ltdan-88/brew-launcher/brew-laun
 brew-launcher --version      # should print vX.Y.Z
 ```
 
+### If `brew upgrade` fails with a formula syntax error
+
+This means the tap repo on GitHub is fine — it's your **local** tap clone
+(`$(brew --prefix)/Library/Taps/ltdan-88/homebrew-brew-launcher`) that's
+gotten into a bad state, usually leftover conflict markers from an old
+`brew update` auto-stash that never got resolved. Fix:
+
+```bash
+cd "$(brew --prefix)/Library/Taps/ltdan-88/homebrew-brew-launcher"
+git status               # confirm it's the local clone that's broken, not origin
+git reset --hard origin/main
+git stash list            # inspect before dropping, in case anything looks intentional
+git stash clear            # only if everything listed is old junk, not real edits
+brew upgrade brew-launcher
+```
+
 ## If the workflow fails
 
 Check the failed step in the [Actions tab](https://github.com/ltdan-88/brew-launcher/actions).
