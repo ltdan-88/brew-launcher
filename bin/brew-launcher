@@ -493,24 +493,34 @@ fi
 
 # ------------------------------------------------------------
 # Load hidden command names
+#
+# Callable again after hiding/restoring an entry, so the picker
+# can refresh in place instead of restarting the whole process.
 # ------------------------------------------------------------
 
 typeset -A hidden_commands
 
-if [[ -f "$IGNORE_FILE" ]]; then
-    while IFS= read -r hidden_command; do
+load_hidden_commands() {
 
-        # Remove leading and trailing whitespace.
-        hidden_command="${hidden_command#"${hidden_command%%[![:space:]]*}"}"
-        hidden_command="${hidden_command%"${hidden_command##*[![:space:]]}"}"
+    hidden_commands=()
 
-        [[ -z "$hidden_command" ]] && continue
-        [[ "$hidden_command" == \#* ]] && continue
+    if [[ -f "$IGNORE_FILE" ]]; then
+        while IFS= read -r hidden_command; do
 
-        hidden_commands[$hidden_command]=1
+            # Remove leading and trailing whitespace.
+            hidden_command="${hidden_command#"${hidden_command%%[![:space:]]*}"}"
+            hidden_command="${hidden_command%"${hidden_command##*[![:space:]]}"}"
 
-    done < "$IGNORE_FILE"
-fi
+            [[ -z "$hidden_command" ]] && continue
+            [[ "$hidden_command" == \#* ]] && continue
+
+            hidden_commands[$hidden_command]=1
+
+        done < "$IGNORE_FILE"
+    fi
+}
+
+load_hidden_commands
 
 # ------------------------------------------------------------
 # Calculate column widths.
@@ -540,10 +550,6 @@ while IFS=$'\t' read -r command description formula version size outdated; do
         max_size=${#size}
     fi
 
-	if [[ -n "${hidden_commands[$command]-}" ]]; then
-	    continue
-	fi
-
 done < "$CACHE_FILE"
 
 max_name=$((max_name + 3))
@@ -557,39 +563,47 @@ max_size=$((max_size + 2))
 # Field 2 = display text
 # Field 3 = formula
 # Field 4 = description
+#
+# Callable again after hiding/restoring an entry. Column widths
+# (computed once above) are reused rather than recalculated.
 # ------------------------------------------------------------
 
-entries=()
+build_entries() {
 
-while IFS=$'\t' read -r command description formula version size outdated; do
+    entries=()
 
-	if [[ -n "${hidden_commands[$command]-}" ]]; then
-		continue
-	fi
+    while IFS=$'\t' read -r command description formula version size outdated; do
 
-    display_name="$formula"
+        if [[ -n "${hidden_commands[$command]-}" ]]; then
+            continue
+        fi
 
-    if [[ "$formula" != "$command" ]]; then
-        display_name="$formula ($command)"
-    fi
+        display_name="$formula"
 
-    name_fmt="$(printf "%-${max_name}s" "$display_name")"
-    version_fmt="$(printf "%-${max_version}s" "$version")"
-    size_fmt="$(printf "%-${max_size}s" "$size")"
+        if [[ "$formula" != "$command" ]]; then
+            display_name="$formula ($command)"
+        fi
 
-    indicator=""
+        name_fmt="$(printf "%-${max_name}s" "$display_name")"
+        version_fmt="$(printf "%-${max_version}s" "$version")"
+        size_fmt="$(printf "%-${max_size}s" "$size")"
 
-    if [[ "$outdated" == "1" ]]; then
-        indicator=" ↑"
-    fi
+        indicator=""
 
-    display="$name_fmt$version_fmt$size_fmt$description$indicator"
+        if [[ "$outdated" == "1" ]]; then
+            indicator=" ↑"
+        fi
 
-    entries+=(
-        "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
-    )
+        display="$name_fmt$version_fmt$size_fmt$description$indicator"
 
-done < "$CACHE_FILE"
+        entries+=(
+            "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
+        )
+
+    done < "$CACHE_FILE"
+}
+
+build_entries
 
 # ------------------------------------------------------------
 # Column header
@@ -771,19 +785,10 @@ hide_entry() {
     # Do not add the same command more than once.
     if [[ -f "$IGNORE_FILE" ]] &&
        grep -Fqx "$command" "$IGNORE_FILE" 2>/dev/null; then
-
-        printf '\n'
-        printf 'Entry is already hidden: %s\n' "$command"
-        sleep 1
-
         return 0
     fi
 
     printf '%s\n' "$command" >> "$IGNORE_FILE"
-
-    printf '\n'
-    printf 'Hidden entry: %s\n' "$command"
-    sleep 1
 }
 
 
@@ -794,11 +799,13 @@ hide_entry() {
 unhide_entry() {
 
     local command="$1"
-    local tmp_ignore="$CACHE_DIR/ignore.tmp"
+    local tmp_ignore
 
     if [[ ! -f "$IGNORE_FILE" ]]; then
         return 0
     fi
+
+    tmp_ignore="$(mktemp "$CACHE_DIR/ignore.XXXXXX")" || return 1
 
     python3 - "$IGNORE_FILE" "$tmp_ignore" "$command" <<'PY'
 import sys
@@ -821,10 +828,6 @@ with open(output_file, "w", encoding="utf-8") as f:
 PY
 
     mv "$tmp_ignore" "$IGNORE_FILE"
-
-    printf '\n'
-    printf 'Restored entry: %s\n' "$command"
-    sleep 1
 }
 
 
@@ -840,6 +843,7 @@ run_fzf() {
 
     local options=(
         --height=100%
+        --no-clear
         --layout=reverse
         --border=rounded
         --border-label="$border_label"
@@ -938,7 +942,7 @@ while true; do
     fzf_result="$(
         printf '%s\n' "${entries[@]}" |
         run_fzf \
-            ' 󰣇  Homebrew CLI ' \
+            " 󰣇  Homebrew CLI v$VERSION " \
             '  ↑ ↓  Navigate    Type  Search    Enter  Launch    F2  Hide    F3  Hidden    F4  Shortcut    Esc  Quit' \
             'enter,f2,f3,f4'
     )"
@@ -966,7 +970,8 @@ while true; do
     if [[ "$action" == "f3" ]]; then
 
         if show_hidden_entries; then
-            exec "$0"
+            load_hidden_commands
+            build_entries
         fi
 
         continue
@@ -1001,7 +1006,9 @@ while true; do
     if [[ "$action" == "f2" ]]; then
 
         hide_entry "$command"
-        exec "$0"
+        load_hidden_commands
+        build_entries
+        continue
     fi
 
     # --------------------------------------------------------
