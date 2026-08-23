@@ -17,7 +17,7 @@ If you have dozens of Homebrew CLI applications installed, `brew-launcher` solve
 - **Automatic Discovery** – Finds installed Homebrew CLI applications automatically
 - **Metadata Display** – Shows application descriptions, installed versions, and disk size
 - **Fast Startup** – Persistent metadata cache automatically refreshes when Homebrew changes
-- **Outdated Indicator** – See which applications have updates available (↑ symbol)
+- **Outdated Indicator** – See which applications have updates available (`*` symbol)
 - **Fuzzy Search** – Type to search applications by name or description
 - **Hide Entries** – Temporarily hide applications you don't use
 - **Restore Hidden** – View and restore hidden entries from within the launcher
@@ -104,11 +104,11 @@ export BREW_LAUNCHER_TERMINAL=ghostty
 
 ## Hidden Entries
 
-Hide applications you don't frequently use with **F2**. Hidden entries:
+Hide applications you don't frequently use with **F2** (or **⌥H**). Hidden entries:
 
 - Are **not removed** from Homebrew
 - **Don't appear** in the launcher by default
-- Can be **restored** by pressing **F3** and selecting "Restore"
+- Can be **restored** by pressing **F3** (or **⌥V**) and selecting "Restore"
 
 Configuration file location:
 
@@ -123,7 +123,7 @@ To manually clear all hidden entries, remove this file and restart the launcher.
 Create macOS .command shortcuts for quick access to your favorite tools:
 
 1. Select an application in the launcher
-2. Press **F4**
+2. Press **F4** (or **⌥S**)
 3. A shortcut is created in `/Applications/TUIs/`
 
 Example shortcuts:
