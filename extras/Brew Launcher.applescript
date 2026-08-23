@@ -9,7 +9,7 @@ on run {input, parameters}
             set t to selected tab of win
         else
             set win to front window
-            set t to selected tab of win
+            set t to new tab in win
         end if
 
         set term to focused terminal of t
