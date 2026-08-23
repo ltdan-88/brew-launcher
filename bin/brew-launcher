@@ -25,6 +25,12 @@ STATE_FILE="$CACHE_DIR/state"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
 
+# Outdated-formula snapshot. Refreshed independently of the full cache
+# (see refresh_outdated_if_stale below) so the outdated indicator doesn't
+# go stale for days just because nothing locally installed has changed.
+OUTDATED_FILE="$CACHE_DIR/outdated"
+OUTDATED_TTL=21600  # 6 hours
+
 # ------------------------------------------------------------
 # Help / version
 # ------------------------------------------------------------
@@ -55,6 +61,14 @@ Terminal:
   BREW_LAUNCHER_TERMINAL=auto     Default behavior
   BREW_LAUNCHER_TERMINAL=current  Run in the current terminal
   BREW_LAUNCHER_TERMINAL=ghostty  Launch in a new Ghostty tab
+
+Keyboard shortcuts:
+  F2 / ⌥H   Hide selected entry
+  F3 / ⌥V   Show hidden entries
+  F4 / ⌥S   Create a macOS shortcut
+  The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
+  In stock Terminal.app, enable "Use Option as Meta Key" in the
+  profile's Keyboard settings first; Ghostty supports it by default.
 
 Behavior:
   • Applications are discovered automatically from Homebrew.
@@ -396,6 +410,7 @@ for formula in formulae:
                 version,
                 size,
                 outdated_flag,
+                full_name,
             ])
         )
 
@@ -443,6 +458,10 @@ PY
 
         printf '%s\n' "$CURRENT_STATE" > "$STATE_FILE"
 
+        # Reuse the outdated snapshot already fetched above instead of
+        # making refresh_outdated_if_stale() fetch it again right after.
+        cp "$tmp_outdated" "$OUTDATED_FILE" 2>/dev/null
+
     else
 
         rm -f "$tmp_entries"
@@ -483,6 +502,36 @@ if [[ "$CACHE_VALID" == false ]]; then
 fi
 
 # ------------------------------------------------------------
+# Refresh outdated-formula snapshot if stale
+#
+# Independent of CACHE_VALID above: a full rebuild already refreshes
+# this (see rebuild_cache), but when the entries cache stays valid for
+# a long time (nothing locally installed changes), the outdated
+# indicator would otherwise never update on its own.
+# ------------------------------------------------------------
+
+refresh_outdated_if_stale() {
+
+    local file_mtime file_age
+
+    if [[ "$FORCE_REFRESH" == true ]]; then
+        :
+    elif [[ -f "$OUTDATED_FILE" ]]; then
+
+        file_mtime="$(stat -f %m "$OUTDATED_FILE" 2>/dev/null || stat -c %Y "$OUTDATED_FILE" 2>/dev/null)"
+        file_age=$(( $(date +%s) - ${file_mtime:-0} ))
+
+        if (( file_age < OUTDATED_TTL )); then
+            return 0
+        fi
+    fi
+
+    brew outdated --formula --quiet > "$OUTDATED_FILE" 2>/dev/null || : > "$OUTDATED_FILE"
+}
+
+refresh_outdated_if_stale
+
+# ------------------------------------------------------------
 # Make sure we actually have applications.
 # ------------------------------------------------------------
 
@@ -497,6 +546,15 @@ fi
 # Callable again after hiding/restoring an entry, so the picker
 # can refresh in place instead of restarting the whole process.
 # ------------------------------------------------------------
+
+typeset -A outdated_formulas
+
+if [[ -f "$OUTDATED_FILE" ]]; then
+    while IFS= read -r outdated_formula; do
+        [[ -z "$outdated_formula" ]] && continue
+        outdated_formulas[$outdated_formula]=1
+    done < "$OUTDATED_FILE"
+fi
 
 typeset -A hidden_commands
 
@@ -526,11 +584,19 @@ load_hidden_commands
 # Calculate column widths.
 # ------------------------------------------------------------
 
+# Sits right after the version number, not at the end of the line, so
+# it's clear at a glance which tool it refers to. A plain "*" rather
+# than an arrow, since the footer already uses "↑ ↓" to mean
+# "navigate" — reusing that glyph for "update available" would be
+# confusing. What it means is spelled out in the footer instead.
+UPDATE_INDICATOR_TEXT="*"
+UPDATE_INDICATOR_WIDTH=$(( ${#UPDATE_INDICATOR_TEXT} + 2 ))
+
 max_name=4
 max_version=7
 max_size=4
 
-while IFS=$'\t' read -r command description formula version size outdated; do
+while IFS=$'\t' read -r command description formula version size outdated full_name; do
 
     display_name="$formula"
 
@@ -572,7 +638,7 @@ build_entries() {
 
     entries=()
 
-    while IFS=$'\t' read -r command description formula version size outdated; do
+    while IFS=$'\t' read -r command description formula version size outdated full_name; do
 
         if [[ -n "${hidden_commands[$command]-}" ]]; then
             continue
@@ -588,13 +654,13 @@ build_entries() {
         version_fmt="$(printf "%-${max_version}s" "$version")"
         size_fmt="$(printf "%-${max_size}s" "$size")"
 
-        indicator=""
+        indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "")"
 
-        if [[ "$outdated" == "1" ]]; then
-            indicator=" ↑"
+        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
+            indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "$UPDATE_INDICATOR_TEXT")"
         fi
 
-        display="$name_fmt$version_fmt$size_fmt$description$indicator"
+        display="$name_fmt$version_fmt$indicator$size_fmt$description"
 
         entries+=(
             "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
@@ -610,9 +676,10 @@ build_entries
 # ------------------------------------------------------------
 
 FZF_HEADER="$(
-    printf "%-${max_name}s%-${max_version}s%-${max_size}s%s" \
+    printf "%-${max_name}s%-${max_version}s%-${UPDATE_INDICATOR_WIDTH}s%-${max_size}s%s" \
         "NAME" \
         "VERSION" \
+        "" \
         "SIZE" \
         "DESCRIPTION"
 )"
@@ -874,7 +941,7 @@ show_hidden_entries() {
     local hidden_result
     local hidden_command
 
-    while IFS=$'\t' read -r command description formula version size outdated; do
+    while IFS=$'\t' read -r command description formula version size outdated full_name; do
 
         if [[ -z "${hidden_commands[$command]-}" ]]; then
             continue
@@ -895,11 +962,13 @@ show_hidden_entries() {
         version_fmt="$(printf "%-${max_version}s" "$version")"
         size_fmt="$(printf "%-${max_size}s" "$size")"
 
-        if [[ "$outdated" == "1" ]]; then
-            indicator=" ↑"
+        indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "")"
+
+        if [[ -n "${outdated_formulas[$formula]-}" || -n "${outdated_formulas[$full_name]-}" ]]; then
+            indicator="$(printf "%-${UPDATE_INDICATOR_WIDTH}s" "$UPDATE_INDICATOR_TEXT")"
         fi
 
-        display="$name_fmt$version_fmt$size_fmt$description$indicator"
+        display="$name_fmt$version_fmt$indicator$size_fmt$description"
 
         hidden_display_entries+=(
             "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
@@ -918,7 +987,7 @@ show_hidden_entries() {
         printf '%s\n' "${hidden_display_entries[@]}" |
         run_fzf \
             ' 󰣇  Hidden TUIs ' \
-            '  ↑ ↓  Navigate    Type  Search    Enter  Restore    Esc  Back' \
+            '  ↑ ↓  Navigate    Type  Search    Enter  Restore    Esc  Back    *  Update available' \
             ''
     )"
 
@@ -943,8 +1012,8 @@ while true; do
         printf '%s\n' "${entries[@]}" |
         run_fzf \
             " 󰣇  Homebrew CLI v$VERSION " \
-            '  ↑ ↓  Navigate    Type  Search    Enter  Launch    F2  Hide    F3  Hidden    F4  Shortcut    Esc  Quit' \
-            'enter,f2,f3,f4'
+            '  ↑ ↓  Navigate    Type  Search    Enter  Launch    F2/⌥H  Hide    F3/⌥V  Hidden    F4/⌥S  Shortcut    Esc  Quit    *  Update available' \
+            'enter,f2,f3,f4,alt-h,alt-v,alt-s'
     )"
 
     # --------------------------------------------------------
@@ -964,10 +1033,10 @@ while true; do
     selection="${result_lines[2]}"
 
     # --------------------------------------------------------
-    # F3 does not require a selected visible entry.
+    # F3 / ⌥V does not require a selected visible entry.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f3" ]]; then
+    if [[ "$action" == "f3" || "$action" == "alt-v" ]]; then
 
         if show_hidden_entries; then
             load_hidden_commands
@@ -1000,10 +1069,10 @@ while true; do
     formula="${remaining%%$'\t'*}"
 
     # --------------------------------------------------------
-    # F2 = hide selected entry.
+    # F2 / ⌥H = hide selected entry.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f2" ]]; then
+    if [[ "$action" == "f2" || "$action" == "alt-h" ]]; then
 
         hide_entry "$command"
         load_hidden_commands
@@ -1012,10 +1081,10 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # F4 = create macOS .command shortcut.
+    # F4 / ⌥S = create macOS .command shortcut.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f4" ]]; then
+    if [[ "$action" == "f4" || "$action" == "alt-s" ]]; then
 
         create_shortcut "$command" "$formula"
         continue
