@@ -244,15 +244,18 @@ to look one up.
 ## How it works
 
 Homebrew is queried once and the result cached, so startup after the first run
-is effectively instant. The cache invalidates itself when your installed
-formulae change; the "update available" check refreshes on its own schedule so
-it can't go stale for days.
+is effectively instant. Whether anything was installed or removed is then only
+re-checked every 60 seconds rather than on every launch — that single check
+was ~0.54s of a ~0.55s startup, so trusting it briefly is most of the speedup.
+A tool installed in the last minute can take up to that long to appear;
+**F5** refreshes immediately if you don't want to wait. The "update available"
+check runs on its own separate schedule so it can't go stale for days.
 
 Discovery walks each formula's `opt/<name>/bin`, keeps executables that are
 actually reachable on your `PATH`, and drops obvious helper binaries. Only
 formulae you installed on purpose are listed.
 
-Roughly 2,000 lines of zsh plus a small Python helper for parsing Homebrew's
+Roughly 2,600 lines of zsh plus a small Python helper for parsing Homebrew's
 JSON — no Node, no Rust, no daemon, no SQLite.
 
 <details>

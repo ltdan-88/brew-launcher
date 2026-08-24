@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `test/list-fixtures.sh` — a second CI test covering hidden-entry
+  filtering and `--list`'s 6-field output shape, built against a cache
+  and state file written directly rather than a real Homebrew install.
+  `test/cache-roundtrip.sh` skips on a bare runner with no formulae
+  installed; this one never does, since it needs no real formulae to
+  begin with.
+- README now documents the 60-second cache-freshness window from
+  0.5.1 and points at `F5` as the way to skip it.
+
 ## [0.8.0] — 2026-08-24
 
 ### Fixed
