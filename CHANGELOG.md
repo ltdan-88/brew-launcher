@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] — 2026-08-24
+
+### Added
+
+- **`F1` / `⌥?` opens an in-app help screen** — every key, both tiers, the
+  marker legend, mouse support, and the 60s cache-freshness note, without
+  leaving the launcher or reaching for the README. Purely informational:
+  every row is inert, and Enter, Esc, or clicking `[Back]` all just return to
+  where you were.
+
+  Deliberately left off the footer and the More menu. `F1` = help is close to
+  universal, so teaching it would spend space on something most people
+  already know to try — the same reasoning that kept it unassigned since
+  0.7.0.
+
 ## [0.7.1] — 2026-08-24
 
 ### Fixed
@@ -329,6 +344,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.7.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.2
 [0.7.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.6.0

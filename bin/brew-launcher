@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.7.1"
+VERSION="0.7.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -128,6 +128,10 @@ Terminal:
 
 Keyboard shortcuts:
 
+  F1 / ⌥?   Help — the same reference shown below, from inside the
+            launcher. Off the footer on purpose: F1 = help is close
+            to universal, so it costs nothing to leave undocumented.
+
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Favorites, Hidden, your categories)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
@@ -142,7 +146,6 @@ Keyboard shortcuts:
             viewing a category, otherwise prompts for which one)
   F9 / ⌥S   Create a macOS shortcut
 
-  F1 is deliberately unassigned: it means "help" nearly everywhere.
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
@@ -1171,6 +1174,72 @@ confirm_delete_category() {
 # and works itself out of a job.
 # ------------------------------------------------------------
 
+# ------------------------------------------------------------
+# F1 — the help screen.
+#
+# F1 = help is close to universal, so it's the one key in this
+# launcher deliberately left off both the footer and the More menu's
+# main listing: teaching it would spend space on something most
+# people already know to try. It's still reachable — the same fzf
+# list idiom as every other screen here, purely informational, so
+# every row is inert and Enter/Esc both just go back.
+# ------------------------------------------------------------
+
+pick_help() {
+
+    local -a rows=()
+
+    rows+=("Markers — shown next to an entry, not things you press")
+    rows+=("  +  Favorited        #  Categorized        *  Outdated")
+    rows+=("")
+    rows+=("First tier — always on screen")
+    rows+=("  F2 / ⌥V   Switch view (All, Favorites, Hidden, categories)")
+    rows+=("  F3 / ⌥D   Show or hide the details pane")
+    rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
+    rows+=("  F5 / ⌥R   Refresh the cache without leaving")
+    rows+=("")
+    rows+=("Second tier — F4, or press directly at any time")
+    rows+=("  F6 / ⌥H   Hide or unhide the selected entry")
+    rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
+    rows+=("  F8 / ⌥C   Categorize the selected entry")
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        rows+=("  F9 / ⌥S   Create a macOS shortcut")
+    fi
+    rows+=("")
+    rows+=("Details pane, once open")
+    rows+=("  Shift-Up / Shift-Down   Scroll it")
+    rows+=("")
+    rows+=("Mouse")
+    rows+=("  Click a row to select, double-click to launch")
+    rows+=("  Click a [bracketed] footer word to run its action")
+    rows+=("")
+    rows+=("Good to know")
+    rows+=("  A just-installed tool can take up to 60s to appear;")
+    rows+=("  F5 shows it immediately")
+    rows+=("  Esc goes back one level at a time rather than quitting")
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    printf '%s\n' "${rows[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' Help ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --footer='  ↑ ↓  Navigate    Enter/Esc  [Back]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS" \
+            > /dev/null
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    return 0
+}
+
 pick_more_action() {
 
     local hide_label="$1"
@@ -2163,7 +2232,7 @@ while true; do
         run_fzf \
             "$border_label" \
             "$(build_footer "$esc_hint")" \
-            'enter,f2,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,alt-m,esc' \
+            'enter,f1,f2,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,alt-m,alt-?,esc' \
             "$restore_position"
     )"
 
@@ -2224,6 +2293,19 @@ while true; do
     # available: even with no categories defined, "All" and "Hidden"
     # are always offered.
     # --------------------------------------------------------
+
+    # --------------------------------------------------------
+    # F1 / ⌥? — help. Purely informational, so unlike F4/More below
+    # it never falls through to another handler; it just redraws
+    # where it was.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f1" || "$action" == "alt-?" ]]; then
+
+        pick_help
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
 
     # --------------------------------------------------------
     # F9 / ⌥M — the [More] menu.
