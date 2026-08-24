@@ -29,11 +29,30 @@ CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
 STATE_FILE="$CACHE_DIR/state"
 
+# Bumped whenever the cache file's format changes in a way that makes
+# an older cache wrong rather than merely stale. Recorded on the first
+# line of STATE_FILE; a mismatch forces a rebuild even when Homebrew
+# itself hasn't changed. Without this, a cache written by an older
+# version stays "valid" indefinitely and format fixes never reach
+# anyone whose installed formulae happen not to change.
+#
+#   2 — entries are newline-terminated (older caches dropped their
+#       last entry when read back), and carry the 7th full_name field
+CACHE_FORMAT_VERSION=2
+
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
 # different things depending on context — see --internal-footer-click
 # below). Cleared before every fzf call in run_fzf().
-FOOTER_CLICK_FILE="$CACHE_DIR/footer-click"
+# PID-suffixed so two launchers running side by side can't consume
+# each other's clicks.
+#
+# Exported, and only defaulted when unset, because the click handler
+# re-runs this same script as a subprocess: computing "$$" fresh there
+# would yield the *child's* PID and point at a different file than the
+# launcher is watching. Inheriting the parent's value keeps both ends
+# of the side-channel pointing at the same path.
+export FOOTER_CLICK_FILE="${FOOTER_CLICK_FILE:-$CACHE_DIR/footer-click.$$}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
 
@@ -88,7 +107,8 @@ Keyboard shortcuts:
   F4 / ⌥S   Create a macOS shortcut
   F5 / ⌥C   Jump to a category filter (All, Favorites, ...)
   F6 / ⌥F   Toggle Favorites for selected entry
-  F7 / ⌥A   Categorize selected entry (adds or removes, any category)
+  F7 / ⌥A   Categorize selected entry (adds or removes; instant while
+            viewing a category, otherwise prompts for which one)
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
@@ -98,12 +118,21 @@ Categories:
   then your other categories alphabetically. Ctrl-D there deletes the
   highlighted category entirely (except All and Favorites, which
   can't be deleted — Favorites has its own dedicated F6 toggle) and
-  reopens the picker so you can keep managing categories. F6/⌥F
-  toggles Favorites for the selected entry directly. F7/⌥A toggles
-  the selected entry in and out of any category — type a new name to
-  create one on the spot, or pick/type an existing one to add or
-  remove it. Adding opens the picker so you can jump straight to it;
-  removing just refreshes in place, same as F2 hiding an entry.
+  reopens the picker so you can keep managing categories.
+
+  F6/⌥F toggles Favorites for the selected entry, instantly. F7/⌥A is
+  the same idea for every other category:
+
+    - While viewing a specific category, it instantly adds or removes
+      the selected entry from that category — no prompt, exactly like
+      F6 does for Favorites.
+    - On "All" (or while viewing Favorites), it asks which category:
+      pick an existing one, or type a new name to create it. Picking
+      one the entry is already in removes it.
+
+  F7 never touches Favorites — F6 owns that exclusively — and it
+  always refreshes in place rather than navigating you elsewhere.
+
   Esc goes up one level at a time: a filtered view -> this picker
   -> All -> quit.
   No manual file editing needed for any of this. Categories match on
@@ -178,6 +207,11 @@ if [[ "$1" == "--internal-footer-click" ]]; then
 
     exit 0
 fi
+
+# Reached only by the launcher itself — the click handler above exits
+# before this line, which matters: if the handler installed this trap
+# too, it would delete the click file it just wrote on its own exit.
+trap 'rm -f "$FOOTER_CLICK_FILE"' EXIT
 
 FORCE_REFRESH=false
 LIST_MODE=false
@@ -268,12 +302,18 @@ rebuild_cache() {
     tmp_outdated="$(mktemp "$CACHE_DIR/outdated.XXXXXX")" || return 1
     tmp_entries="$(mktemp "$CACHE_DIR/entries.XXXXXX")" || return 1
 
+    # Single cleanup path for all four temp files, so an early return
+    # can't leak the ones it didn't know about.
+    cleanup_rebuild_temps() {
+        rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated" "$tmp_entries"
+    }
+
     # --------------------------------------------------------
     # Get installed formula metadata.
     # --------------------------------------------------------
 
     if ! brew info --json=v1 --installed > "$tmp_json" 2>/dev/null; then
-        rm -f "$tmp_json"
+        cleanup_rebuild_temps
         return 1
     fi
 
@@ -305,7 +345,7 @@ rebuild_cache() {
 
     local brew_prefix
     brew_prefix="$(brew --prefix 2>/dev/null)" || {
-        rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated"
+        cleanup_rebuild_temps
         return 1
     }
 
@@ -549,8 +589,13 @@ if duplicates:
 # Write cache.
 # ------------------------------------------------------------
 
+# The trailing newline matters: the shell reads this file with
+# `while IFS=... read`, and a final line without a newline terminator
+# is silently skipped by that loop — which made the alphabetically
+# last entry invisible everywhere in the app.
 with open(output_file, "w", encoding="utf-8") as f:
-    f.write("\n".join(unique))
+    for entry in unique:
+        f.write(entry + "\n")
 
 PY
 
@@ -558,7 +603,8 @@ PY
 
         mv "$tmp_entries" "$CACHE_FILE"
 
-        printf '%s\n' "$CURRENT_STATE" > "$STATE_FILE"
+        # Format version first, then the Homebrew state snapshot.
+        printf '%s\n%s\n' "$CACHE_FORMAT_VERSION" "$CURRENT_STATE" > "$STATE_FILE"
 
         # Reuse the outdated snapshot already fetched above instead of
         # making refresh_outdated_if_stale() fetch it again right after.
@@ -566,13 +612,14 @@ PY
 
     else
 
-        rm -f "$tmp_entries"
-        rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated"
+        cleanup_rebuild_temps
 
         return 1
     fi
 
-    rm -f "$tmp_json" "$tmp_sizes" "$tmp_outdated"
+    # tmp_entries was moved into place above; cleaning it again here is
+    # a harmless no-op.
+    cleanup_rebuild_temps
 
     return 0
 }
@@ -587,9 +634,15 @@ if [[ "$FORCE_REFRESH" == false &&
       -s "$CACHE_FILE" &&
       -s "$STATE_FILE" ]]; then
 
-    CACHED_STATE="$(cat "$STATE_FILE")"
+    # Line 1 is the cache format version, the rest is the Homebrew
+    # state snapshot. A state file written before versioning existed
+    # has the snapshot on line 1, so its "version" won't match and the
+    # cache correctly rebuilds.
+    CACHED_FORMAT="$(sed -n '1p' "$STATE_FILE")"
+    CACHED_STATE="$(sed -n '2,$p' "$STATE_FILE")"
 
-    if [[ "$CURRENT_STATE" == "$CACHED_STATE" ]]; then
+    if [[ "$CACHED_FORMAT" == "$CACHE_FORMAT_VERSION" &&
+          "$CURRENT_STATE" == "$CACHED_STATE" ]]; then
         CACHE_VALID=true
     fi
 fi
@@ -1138,6 +1191,11 @@ query:#f5e0e6
 
 launch_in_current_terminal() {
     local command_path="$1"
+
+    # exec replaces this process, so the EXIT trap never runs — clean
+    # the click file up by hand before handing the terminal over.
+    rm -f "$FOOTER_CLICK_FILE"
+
     exec "$command_path"
 }
 
@@ -1341,7 +1399,11 @@ toggle_favorite() {
     if [[ -f "$favorites_file" ]] &&
        grep -Fqx "$command" "$favorites_file" 2>/dev/null; then
 
-        tmp_favorites="$(mktemp "$CATEGORIES_DIR/Favorites.XXXXXX")" || return 1
+        # Temp file goes in CACHE_DIR, never CATEGORIES_DIR — every
+        # file in the latter is treated as a category by
+        # load_category_names, so an interrupted edit would leave a
+        # phantom category behind.
+        tmp_favorites="$(mktemp "$CACHE_DIR/Favorites.XXXXXX")" || return 1
         grep -Fvx "$command" "$favorites_file" > "$tmp_favorites" 2>/dev/null
         mv "$tmp_favorites" "$favorites_file"
 
@@ -1367,7 +1429,8 @@ toggle_category_direct() {
     if [[ -f "$category_file" ]] &&
        grep -Fqx "$command" "$category_file" 2>/dev/null; then
 
-        tmp_category="$(mktemp "$CATEGORIES_DIR/${category_name}.XXXXXX")" || return 1
+        # CACHE_DIR, not CATEGORIES_DIR — see toggle_favorite above.
+        tmp_category="$(mktemp "$CACHE_DIR/category.XXXXXX")" || return 1
         grep -Fvx "$command" "$category_file" > "$tmp_category" 2>/dev/null
         mv "$tmp_category" "$category_file"
 
@@ -1442,6 +1505,18 @@ toggle_category() {
 
     [[ -z "$category_name" ]] && return 1
 
+    # The typed name becomes a filename directly, so reject anything
+    # that would escape CATEGORIES_DIR or silently fail. A "/" is an
+    # easy typo ("Games/Action") that would otherwise fail with no
+    # feedback at all, which reads as the key being broken.
+    if [[ "$category_name" == */* || "$category_name" == .* ]]; then
+        printf '\n'
+        printf 'Invalid category name: %s\n' "$category_name"
+        printf 'Names cannot contain "/" or start with ".".\n'
+        sleep 2
+        return 1
+    fi
+
     mkdir -p "$CATEGORIES_DIR"
 
     local category_file="$CATEGORIES_DIR/$category_name"
@@ -1449,7 +1524,8 @@ toggle_category() {
     if [[ -f "$category_file" ]] &&
        grep -Fqx "$command" "$category_file" 2>/dev/null; then
 
-        tmp_category="$(mktemp "$CATEGORIES_DIR/${category_name}.XXXXXX")" || return 1
+        # CACHE_DIR, not CATEGORIES_DIR — see toggle_favorite above.
+        tmp_category="$(mktemp "$CACHE_DIR/category.XXXXXX")" || return 1
         grep -Fvx "$command" "$category_file" > "$tmp_category" 2>/dev/null
         mv "$tmp_category" "$category_file"
         return 2

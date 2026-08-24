@@ -1,11 +1,17 @@
-name: Lint
+name: CI
 
-# Syntax-checks bin/brew-launcher on every push/PR. Note: ShellCheck is
-# intentionally not used here — it doesn't support zsh (only
-# sh/bash/dash/ksh), and forcing it to treat this script as bash produces
-# false positives on legitimate zsh-only syntax (e.g. ${(@f)var} flag
-# expansion, multi-line array literals). zsh -n gives real signal for the
-# language actually in use.
+# Two gates on every push/PR:
+#
+#   1. zsh -n  — syntax. Note ShellCheck is intentionally not used: it
+#      doesn't support zsh (only sh/bash/dash/ksh), and forcing it to
+#      treat this script as bash produces false positives on legitimate
+#      zsh-only syntax (e.g. ${(@f)var} flag expansion, multi-line array
+#      literals). zsh -n gives real signal for the language in use.
+#
+#   2. cache round-trip test — behavior. Syntax checking alone could not
+#      catch the v0.4.0 bug where the cache was written without a
+#      trailing newline and every read loop silently dropped the last
+#      entry, so there is a real test for that path now.
 
 on:
   push:
@@ -14,7 +20,7 @@ on:
     branches: [main]
 
 jobs:
-  zsh-syntax-check:
+  syntax:
     runs-on: macos-latest
     steps:
       - name: Checkout
@@ -22,3 +28,17 @@ jobs:
 
       - name: zsh -n bin/brew-launcher
         run: zsh -n bin/brew-launcher
+
+  cache-roundtrip:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The launcher refuses to start without fzf, and runners don't
+      # ship it. python3 and brew are already present.
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: Cache round-trip smoke test
+        run: zsh test/cache-roundtrip.sh
