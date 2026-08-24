@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] — 2026-08-24
+
+### Changed
+
+- **Two Option aliases now match their labels.** `⌥A` → **`⌥C`** for Categorize
+  (the `A` was left over from when F7 was "Add to category") and `⌥P` →
+  **`⌥D`** for Details (`P` was fzf's word for the pane, not the launcher's).
+  The F-keys are unchanged, so only the aliases move. Every alias is now the
+  first letter of what the footer calls it.
+
+- **The footer adapts to the terminal width.** It needs 138 columns, and fzf
+  truncates silently — at 100 columns the last two items vanished, at 80
+  columns three did, including keys with no other route to discovery.
+
+  It now gives up the cheapest thing first: spacing before any action, the
+  Option aliases before the marker legend, and `[Refresh]` last, since it's the
+  escape hatch for the cache TTL. At 80 columns five actions fit where
+  previously four were cut off mid-word.
+
+### Fixed
+
+- `[Shortcut]` no longer appears in the footer on Linux, where pressing it
+  could only print "Shortcuts are only supported on macOS" and pause. One of
+  seven footer slots was permanently dead weight there.
+- Footer clicks work on the narrow layout, which renders a bare `F4` rather
+  than `F4/⌥S`.
+
 ## [0.5.4] — 2026-08-24
 
 ### Added
@@ -224,6 +251,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.5.5]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.5
 [0.5.4]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.4
 [0.5.3]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.3
 [0.5.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.2
