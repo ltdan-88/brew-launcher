@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.5.1"
+VERSION="0.5.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -127,7 +127,8 @@ Views:
   your categories. "Hidden" is an ordinary view — Enter still launches
   there, and F2 unhides. Ctrl-D in the picker deletes the highlighted
   category (All, Hidden and Favorites can't be deleted; Favorites has
-  its own F6 toggle).
+  its own F6 toggle). Deleting asks first and shows how many entries
+  the category holds — it's the one action here you can't undo.
 
   Esc goes up one level at a time: a filtered view -> the view picker
   -> All -> quit.
@@ -910,6 +911,55 @@ load_category_members() {
     done < "$category_file"
 }
 
+# Confirm before deleting a category. Returns 0 to proceed.
+#
+# Deleting is the one irreversible action in the launcher — F2, F6 and
+# F7 are all toggles you can undo with the same key, but a category you
+# spent time curating is gone for good. It also sits in the view
+# picker, which is now the main navigation hub, so it's easy to reach
+# by accident.
+#
+# The member count is the point of the prompt: "Delete Games?" is noise
+# when it holds one entry and genuinely worth pausing over when it
+# holds twenty. Cancel is listed first so it's the default and Esc also
+# cancels — the safe outcome takes no thought.
+confirm_delete_category() {
+
+    local name="$1"
+    local file="$CATEGORIES_DIR/$name"
+    local count=0
+    local answer
+
+    [[ -f "$file" ]] && count="$(grep -c '[^[:space:]]' "$file" 2>/dev/null || echo 0)"
+
+    local noun="entries"
+    (( count == 1 )) && noun="entry"
+
+    answer="$(
+        printf '%s\n' "Cancel" "Delete \"$name\" and its $count $noun" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=" Delete category " \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            --header="This can't be undone." \
+            `# "Enter chooses" is deliberately not bracketed/clickable:` \
+            `# Enter acts on the highlighted row, so a clickable` \
+            `# [Confirm] would cancel whenever Cancel was highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == Delete* ]]
+}
+
 # The single "what am I looking at?" hub: All, Hidden, and every
 # category, fuzzy-searchable.
 #
@@ -989,7 +1039,9 @@ pick_view() {
             printf '\n'
             printf '"%s" can'"'"'t be deleted.\n' "$picked"
             sleep 1
-        else
+
+        elif confirm_delete_category "$picked"; then
+
             rm -f "$CATEGORIES_DIR/$picked"
             load_category_names
             load_categorized_commands
