@@ -112,6 +112,12 @@ dependencies and any caveats — and it follows the cursor as you move. It's the
 disk: the text is written when the cache is built, so the pane is instant rather
 than the ~0.6s a live `brew info` costs on every keystroke.
 
+It also answers the one question the list can't. A `#` in the list tells you an
+entry is filed somewhere, but not *where* — the pane names the categories, so
+you don't have to go hunting through **F3** to find out. That line is read fresh
+each time rather than cached, so it's correct the moment you press **F6** or
+**F7**.
+
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
 stays closed until you ask for it.
 

@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.5.3"
+VERSION="0.5.4"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -38,7 +38,9 @@ STATE_FILE="$CACHE_DIR/state"
 #
 #   2 — entries are newline-terminated (older caches dropped their
 #       last entry when read back), and carry the 7th full_name field
-CACHE_FORMAT_VERSION=3
+#   3 — a rebuild also writes the per-formula details text (PREVIEW_DIR)
+#   4 — that details text reserves a slot for the live category list
+CACHE_FORMAT_VERSION=4
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -74,6 +76,13 @@ OUTDATED_TTL=21600  # 6 hours
 # these — `brew info` takes ~0.64s and fzf re-runs the preview on every
 # cursor move, which would make scrolling unusable.
 PREVIEW_DIR="$CACHE_DIR/previews"
+
+# Placeholder written into each preview file where the live category
+# list belongs. Category membership is the one thing in the pane that
+# can't be precomputed — F6/F7 change it constantly — so the cached
+# text reserves a slot inside the metadata block and the renderer fills
+# it in. Passed to the Python cache writer so both sides agree on it.
+PREVIEW_CATEGORY_MARKER="@@CATEGORIES@@"
 
 # How long to trust the cache without re-asking Homebrew whether
 # anything was installed or removed. That check costs ~0.54s of a
@@ -125,7 +134,7 @@ Keyboard shortcuts:
   F7 / ⌥A   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
   F8 / ⌥P   Show or hide the details pane (homepage, license,
-            dependencies, caveats). Shift-Up/Down scrolls it.
+            categories, dependencies, caveats). Shift-Up/Down scrolls it.
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
@@ -235,6 +244,65 @@ if [[ "$1" == "--internal-footer-click" ]]; then
             printf 'ignore'
             ;;
     esac
+
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# Details-pane renderer (internal use only)
+#
+# Invoked by run_fzf()'s --preview as a fresh subprocess, once per
+# highlighted row. Almost all of the text was precomputed during the
+# last cache rebuild (see PREVIEW_DIR), because `brew info` costs
+# ~0.64s and this runs on every cursor move.
+#
+# What's left to do here is substitute the live category list into the
+# slot the cached file reserved for it. That slot sits inside the
+# metadata block rather than at the end of the file, so it stays on
+# screen without scrolling even when a formula carries long dependency
+# or caveat sections.
+#
+# Placed this early for the same reason as the click handler above: it
+# must skip all the normal startup work to feel instant.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-preview" ]]; then
+
+    preview_command="$2"
+    preview_file="$PREVIEW_DIR/$3"
+
+    if [[ ! -f "$preview_file" ]]; then
+        print -r -- "  no details cached — press F5 to refresh"
+        exit 0
+    fi
+
+    # Matches on the command name, not the formula: one formula can
+    # provide several commands and they can be filed separately.
+    # The glob is expanded first because grep with no file operands
+    # would read stdin and hang.
+    preview_categories=()
+    preview_category_files=("$CATEGORIES_DIR"/*(N))
+
+    if (( ${#preview_category_files} )) && [[ -n "$preview_command" ]]; then
+        preview_matches="$(grep -lxF -- "$preview_command" "${preview_category_files[@]}" 2>/dev/null)"
+
+        # Split on newlines explicitly. An unquoted ${(f)$(...)} does not
+        # split here, which silently collapses a multi-category result
+        # into one glued string — :t then reports only the last name.
+        if [[ -n "$preview_matches" ]]; then
+            preview_categories=("${(@f)preview_matches}")
+            preview_categories=("${preview_categories[@]:t}")
+        fi
+    fi
+
+    while IFS= read -r preview_line; do
+        if [[ "$preview_line" == "$PREVIEW_CATEGORY_MARKER" ]]; then
+            (( ${#preview_categories} )) && \
+                printf '  %-10s %s\n' 'Categories' "${(j:, :)preview_categories}"
+        else
+            print -r -- "$preview_line"
+        fi
+    done < "$preview_file"
 
     exit 0
 fi
@@ -397,7 +465,8 @@ rebuild_cache() {
         "$tmp_outdated" \
         "$brew_prefix" \
         "$tmp_entries" \
-        "$PREVIEW_DIR" <<'PY'
+        "$PREVIEW_DIR" \
+        "$PREVIEW_CATEGORY_MARKER" <<'PY'
 
 import json
 import os
@@ -410,6 +479,7 @@ outdated_file = sys.argv[3]
 brew_prefix = sys.argv[4]
 output_file = sys.argv[5]
 preview_dir = sys.argv[6]
+category_marker = sys.argv[7]
 
 # ------------------------------------------------------------
 # Read Homebrew metadata.
@@ -703,6 +773,11 @@ for formula in formulae:
     ):
         if value:
             lines.append(f"  {label:<10} {value}")
+
+    # Filled in at display time by --internal-preview. Sits here, with
+    # the rest of the metadata, so it stays visible without scrolling
+    # when a formula has long dependency or caveat sections.
+    lines.append(category_marker)
 
     deps = formula.get("dependencies") or []
     if deps:
@@ -1857,7 +1932,7 @@ run_fzf() {
         # columns for its own footer, so the pane only costs width once
         # you actually ask for it. F8 and a footer click both toggle it
         # entirely inside fzf, so the main loop never sees them.
-        --preview "cat ${(q)PREVIEW_DIR}/{3} 2>/dev/null || echo '  no details cached — press F5 to refresh'"
+        --preview "${(q)SCRIPT_PATH} --internal-preview {1} {3}"
         --preview-window='down,35%,border-top,hidden,wrap'
         --bind='f8:toggle-preview'
         --bind='alt-p:toggle-preview'

@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] — 2026-08-24
+
+### Added
+
+- **The details pane now names the categories an entry is filed under.** The
+  `#` marker in the list says an entry is categorized but not *where*, which
+  previously meant stepping through the **F3** views to find out.
+
+  This one line is looked up live rather than cached, because `F6`/`F7` change
+  it constantly and a baked-in answer would be stale the moment it was toggled.
+  It sits inside the metadata block, not at the end, so it stays on screen
+  without scrolling on formulae with long dependency or caveat sections.
+
+### Changed
+
+- The cache format version is bumped again, so details text written by 0.5.3
+  gains the slot the category list goes in. Without it the pane would keep
+  rendering, just never showing categories.
+
 ## [0.5.3] — 2026-08-24
 
 ### Added
@@ -205,6 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.5.4]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.4
 [0.5.3]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.3
 [0.5.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.2
 [0.5.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.1
