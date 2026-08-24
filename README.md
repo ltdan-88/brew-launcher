@@ -142,6 +142,11 @@ On macOS with [Ghostty](https://ghostty.org/), picking a tool opens it in a
 **new tab**, so the launcher stays where it is and you can fire off several in a
 row. Everywhere else it launches in place. See [Terminal backends](#terminal-backends).
 
+This works the same for a long-running TUI (`htop`, `lazygit`) and a one-shot
+CLI that prints and exits (`eza`, `jq`, `shellcheck`) — quitting or finishing
+either one leaves you at a normal shell prompt in that tab, exactly like typing
+the command yourself would.
+
 ### macOS shortcuts
 
 **F9** writes a `.command` file to `/Applications/TUIs/` — double-click it, drag

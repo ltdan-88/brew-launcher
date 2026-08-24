@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.7.2"
+VERSION="0.8.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -1681,7 +1681,21 @@ launch_in_current_terminal() {
     # the click file up by hand before handing the terminal over.
     rm -f "$FOOTER_CLICK_FILE"
 
-    exec "$command_path"
+    # Was a bare `exec "$command_path"`, which replaces this process
+    # outright. That works for a TUI that takes over the screen until
+    # you quit it, but a one-shot CLI (eza, jq, bat, ...) prints and
+    # exits in under a second — there's then no process left in the
+    # terminal at all, so the tab looks broken or dies, even though
+    # the command ran fine.
+    #
+    # Running it in a sub-shell that falls through to a fresh
+    # interactive zsh afterwards fixes both cases the same way, and
+    # matches what typing the same command into an ordinary terminal
+    # tab would do — no "is this a TUI?" classification needed. The
+    # command path is passed as "$1" to the inner `zsh -c` rather than
+    # interpolated into its script text, so a path containing spaces
+    # or shell metacharacters is still passed through as one argument.
+    exec zsh -c '"$1"; exec zsh' -- "$command_path"
 }
 
 # ------------------------------------------------------------
@@ -1713,7 +1727,13 @@ on run argv
 
         end if
 
-        input text ("exec " & quoted form of commandPath) to newTerminal
+        -- Same reasoning as launch_in_current_terminal: run the
+        -- command, then fall through to a fresh interactive shell in
+        -- the same tab, rather than exec-ing straight into it. A
+        -- one-shot CLI (eza, jq, bat, ...) prints and exits in under
+        -- a second; exec-ing into it left the tab with no process to
+        -- show for it, so it looked broken.
+        input text ("exec zsh -c '\"$1\"; exec zsh' -- " & quoted form of commandPath) to newTerminal
 
         send key "enter" to newTerminal
 
