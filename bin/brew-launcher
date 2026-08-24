@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.5.0"
+VERSION="0.5.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -68,6 +68,15 @@ CATEGORIES_DIR="$CONFIG_DIR/categories"
 # go stale for days just because nothing locally installed has changed.
 OUTDATED_FILE="$CACHE_DIR/outdated"
 OUTDATED_TTL=21600  # 6 hours
+
+# How long to trust the cache without re-asking Homebrew whether
+# anything was installed or removed. That check costs ~0.54s of a
+# ~0.55s launch, so skipping it is effectively the entire startup time.
+#
+# The trade is a window where a just-installed tool isn't listed yet.
+# 60s keeps that short, and F5 forces a refresh immediately if you hit
+# it. --refresh bypasses this entirely.
+STATE_TTL=60
 
 # ------------------------------------------------------------
 # Help / version
@@ -289,12 +298,23 @@ get_state() {
     } | LC_ALL=C sort
 }
 
-CURRENT_STATE="$(get_state)"
+# Deliberately NOT called at startup. These two brew calls cost about
+# 0.54s of a 0.55s launch — practically all of it — and they only exist
+# to answer "has anything been installed or removed since last time?".
+# The cache validation below skips them entirely while the answer is
+# still recent (see STATE_TTL), so repeat launches don't pay for them.
+CURRENT_STATE=""
 
-if [[ -z "$CURRENT_STATE" ]]; then
-    echo "Error: unable to determine installed Homebrew formulae."
-    exit 1
-fi
+# Fills CURRENT_STATE on demand. Returns non-zero if Homebrew can't be
+# read at all, which the callers treat as fatal.
+ensure_current_state() {
+
+    [[ -n "$CURRENT_STATE" ]] && return 0
+
+    CURRENT_STATE="$(get_state)"
+
+    [[ -n "$CURRENT_STATE" ]]
+}
 
 # ------------------------------------------------------------
 # Build cache
@@ -611,6 +631,13 @@ PY
         mv "$tmp_entries" "$CACHE_FILE"
 
         # Format version first, then the Homebrew state snapshot.
+        #
+        # ensure_current_state rather than assuming a caller filled it
+        # in: F5 calls rebuild_cache directly, and startup now skips
+        # reading Homebrew's state whenever the TTL says it can. Writing
+        # an empty snapshot here would make the cache fail every future
+        # comparison and rebuild on every launch.
+        ensure_current_state
         printf '%s\n%s\n' "$CACHE_FORMAT_VERSION" "$CURRENT_STATE" > "$STATE_FILE"
 
         # Reuse the outdated snapshot already fetched above instead of
@@ -646,15 +673,44 @@ if [[ "$FORCE_REFRESH" == false &&
     # has the snapshot on line 1, so its "version" won't match and the
     # cache correctly rebuilds.
     CACHED_FORMAT="$(sed -n '1p' "$STATE_FILE")"
-    CACHED_STATE="$(sed -n '2,$p' "$STATE_FILE")"
 
-    if [[ "$CACHED_FORMAT" == "$CACHE_FORMAT_VERSION" &&
-          "$CURRENT_STATE" == "$CACHED_STATE" ]]; then
-        CACHE_VALID=true
+    if [[ "$CACHED_FORMAT" == "$CACHE_FORMAT_VERSION" ]]; then
+
+        # STATE_FILE's mtime is "when we last confirmed the cache
+        # matches Homebrew" — set both by a rebuild and by a successful
+        # check below. Inside the TTL, trust it and skip the two brew
+        # calls entirely; that's the whole speedup.
+        #
+        # Deliberately does NOT touch the file on a skip: if it did,
+        # frequent launches would keep pushing the deadline out and the
+        # cache would never be re-verified. As written, at most one
+        # real check happens per TTL window.
+        state_mtime="$(stat -f %m "$STATE_FILE" 2>/dev/null || stat -c %Y "$STATE_FILE" 2>/dev/null)"
+        state_age=$(( $(date +%s) - ${state_mtime:-0} ))
+
+        if (( state_age < STATE_TTL )); then
+
+            CACHE_VALID=true
+
+        else
+
+            CACHED_STATE="$(sed -n '2,$p' "$STATE_FILE")"
+
+            if ensure_current_state && [[ "$CURRENT_STATE" == "$CACHED_STATE" ]]; then
+                CACHE_VALID=true
+                # Restart the TTL window from this verification.
+                touch "$STATE_FILE"
+            fi
+        fi
     fi
 fi
 
 if [[ "$CACHE_VALID" == false ]]; then
+
+    if ! ensure_current_state; then
+        echo "Error: unable to determine installed Homebrew formulae."
+        exit 1
+    fi
 
     rebuild_cache || {
         echo "Error: unable to build Homebrew application cache."
@@ -1791,6 +1847,11 @@ while true; do
 
         printf '\n'
         printf 'Refreshing…\n'
+
+        # Clear the memoised state so rebuild_cache re-reads Homebrew
+        # rather than reusing whatever was captured at startup, which
+        # may be minutes old. Re-reading is the point of pressing F5.
+        CURRENT_STATE=""
 
         # rebuild_cache always rebuilds — it doesn't consult
         # FORCE_REFRESH — and it refreshes the outdated snapshot as a

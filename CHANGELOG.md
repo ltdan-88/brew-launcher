@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-08-24
+
+### Changed
+
+- **Launches are ~40x faster.** Startup was ~0.55s, and ~0.54s of that was two
+  `brew` calls run on *every* launch purely to ask whether anything had been
+  installed or removed. That answer is now trusted for 60 seconds, so repeat
+  launches take ~0.01s.
+
+  The trade is a window where a just-installed tool isn't listed yet. It's
+  bounded to a minute, `F5` forces a refresh immediately, and `--refresh` ignores
+  the TTL entirely. Past the window the check runs exactly as before, so a real
+  change is still picked up.
+
 ## [0.5.0] — 2026-08-24
 
 ### Changed
@@ -159,6 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.5.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.1
 [0.5.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.0
 [0.4.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.4.2
 [0.4.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.4.1
