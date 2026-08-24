@@ -102,6 +102,19 @@ not.
 special screen: it's just another view in the picker, so **Enter** still launches
 and **F2** unhides. Same key, opposite direction, exactly like Favorites.
 
+### The full details, without leaving
+
+<p align="center"><img src="assets/details.gif" alt="Toggling the details pane with F8; it follows the cursor down the list"></p>
+
+**F8** opens a details pane under the list — homepage, license, size, tap,
+dependencies and any caveats — and it follows the cursor as you move. It's the
+`brew info` output you'd otherwise quit and go look up, except it's already on
+disk: the text is written when the cache is built, so the pane is instant rather
+than the ~0.6s a live `brew info` costs on every keystroke.
+
+**Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
+stays closed until you ask for it.
+
 ### Launch without leaving the launcher
 
 On macOS with [Ghostty](https://ghostty.org/), picking a tool opens it in a
@@ -132,10 +145,12 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 | **F5** / **⌥R** | Refresh the cache without leaving |
 | **F6** / **⌥F** | Toggle Favorites for selected entry |
 | **F7** / **⌥A** | Categorize selected entry (adds or removes) |
+| **F8** / **⌥P** | Show or hide the details pane |
+| **Shift-Up/Down** | Scroll the details pane |
 | **Esc** | Go back one level, or quit |
 
 **F2**, **F6** and **F7** all toggle something about the highlighted entry;
-**F3** changes what you're looking at. **F5** is refresh, matching the
+**F3** and **F8** change what you're looking at. **F5** is refresh, matching the
 convention everywhere else.
 
 The ⌥ (Option) aliases exist because F-keys need Fn on most Mac laptops. In
