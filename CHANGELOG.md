@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-08-24
+
+### Changed
+
+- **Keys have moved.** `F5` is now **Refresh**, matching the convention it has
+  almost everywhere else; the view picker moved to `F3`.
+
+  | Key | Was | Now |
+  |---|---|---|
+  | `F2` / `⌥H` | Hide | Hide **or unhide** |
+  | `F3` / `⌥V` | Hidden entries | **Views** |
+  | `F5` / `⌥C` → `⌥R` | Category picker | **Refresh** |
+
+  `F4`, `F6` and `F7` are unchanged. The grouping is now legible: `F2`/`F6`/`F7`
+  toggle something about the selected entry, `F3` changes what you're looking at,
+  `F5` refreshes.
+
+- **Hidden is an ordinary view, not a separate screen.** It appears in the `F3`
+  picker alongside All, Favorites and your categories. `Enter` launches in every
+  view now, and `F2` unhides — where previously the hidden screen was the one
+  place a familiar key meant something different. Removes ~100 lines that
+  duplicated the main list renderer.
+
+### Added
+
+- **`F5` / `⌥R` refreshes the cache without leaving the launcher** — previously
+  this meant quitting and running `--refresh` from the shell.
+
 ## [0.4.2] — 2026-08-24
 
 ### Fixed
@@ -120,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.5.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.0
 [0.4.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.4.2
 [0.4.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.4.1
 [0.4.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.4.0
