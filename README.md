@@ -150,8 +150,8 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 | **F4** / **⌥S** | Create macOS shortcut |
 | **F5** / **⌥R** | Refresh the cache without leaving |
 | **F6** / **⌥F** | Toggle Favorites for selected entry |
-| **F7** / **⌥A** | Categorize selected entry (adds or removes) |
-| **F8** / **⌥P** | Show or hide the details pane |
+| **F7** / **⌥C** | Categorize selected entry (adds or removes) |
+| **F8** / **⌥D** | Show or hide the details pane |
 | **Shift-Up/Down** | Scroll the details pane |
 | **Esc** | Go back one level, or quit |
 
@@ -159,9 +159,17 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 **F3** and **F8** change what you're looking at. **F5** is refresh, matching the
 convention everywhere else.
 
-The ⌥ (Option) aliases exist because F-keys need Fn on most Mac laptops. In
-stock Terminal.app, enable *Use Option as Meta Key* in the profile's Keyboard
-settings first; Ghostty supports it out of the box.
+Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥S**hortcut,
+**⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails — so there are seven
+letters to learn rather than seven arbitrary numbers. They exist because F-keys
+need Fn on most Mac laptops. In stock Terminal.app, enable *Use Option as Meta
+Key* in the profile's Keyboard settings first; Ghostty supports it out of the
+box.
+
+The footer adapts to the terminal. Below roughly 140 columns it drops the
+Option aliases, then the marker legend, then the rarest actions — so a narrow
+window loses padding and hints rather than silently cutting a key off mid-word.
+**F4** doesn't appear on Linux at all, since shortcuts are macOS-only.
 
 ```bash
 brew-launcher --refresh   # rebuild the application cache
