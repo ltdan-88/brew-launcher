@@ -139,10 +139,12 @@ Categories:
 
   No manual file editing needed for any of this. Categories match on
   command name (use --list to find it), not formula name.
-  "*" suffixed on the version (e.g. "1.4.7*") means an update is
-  available. Before the name: "+" means favorited, "#" means the
-  entry belongs to some other category — both can show together
-  (e.g. "+#").
+  Row markers describe state, they aren't actions:
+    "*"  suffixed on the version (e.g. "1.4.7*") — outdated, a newer
+         version exists. Upgrading stays Homebrew's job.
+    "+"  before the name — favorited
+    "#"  before the name — in some category
+  "+" and "#" can show together (e.g. "+#").
 
 Mouse:
   Click a row to select it, double-click to launch it. Footer words
@@ -1061,6 +1063,14 @@ fi
 # means is spelled out in the footer instead. Both markers are shown
 # in every view, not just their own filtered one, since toggling from
 # the "All" view otherwise gives no visible feedback at all.
+# The footer legend names these in the past participle — "Favorited",
+# "Categorized", "Outdated" — for two reasons. Semantically they
+# describe a *state* a row is in, whereas every bracketed footer item
+# is an *action* you can take; "Update" read as a verb and implied the
+# launcher would update something, which it never does (that's
+# Homebrew's job). Practically, the participles also can't collide
+# with the click handler's action words: a bare "Favorite" in the
+# legend would be clickable and fire F6.
 UPDATE_INDICATOR_TEXT="*"
 FAVORITE_MARKER_TEXT="+"
 CATEGORIZED_MARKER_TEXT="#"
@@ -1702,8 +1712,8 @@ while true; do
         printf '%s\n' "${entries[@]}" |
         run_fzf \
             "$border_label" \
-            "  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]
-  F2/⌥H  [$hide_label]    F3/⌥V  [Views]    F4/⌥S  [Shortcut]    F5/⌥R  [Refresh]    F6/⌥F  [Favorite]    F7/⌥A  [Categorize]    +  Fav    *  Update" \
+            "  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]    +  Favorited    #  Categorized    *  Outdated
+  F2/⌥H  [$hide_label]    F3/⌥V  [Views]    F4/⌥S  [Shortcut]    F5/⌥R  [Refresh]    F6/⌥F  [Favorite]    F7/⌥A  [Categorize]" \
             'enter,f2,f3,f4,f5,f6,f7,alt-h,alt-v,alt-s,alt-r,alt-f,alt-a,esc' \
             "$restore_position"
     )"

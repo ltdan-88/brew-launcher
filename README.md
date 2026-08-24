@@ -65,11 +65,12 @@ Three markers tell you the state of a row at a glance:
 
 | Marker | Where | Meaning |
 |---|---|---|
-| `*` | after the version (`1.13.0*`) | An update is available |
+| `*` | after the version (`1.13.0*`) | Outdated — a newer version exists |
 | `+` | before the name | Favorited |
-| `#` | before the name | Belongs to a category |
+| `#` | before the name | Categorized |
 
-Both `+` and `#` can appear together (`+#`).
+Both `+` and `#` can appear together (`+#`). These describe *state* — they
+aren't things you press. Upgrading stays Homebrew's job.
 
 ### One place to switch views
 

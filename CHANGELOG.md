@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   place a familiar key meant something different. Removes ~100 lines that
   duplicated the main list renderer.
 
+- Footer legend now reads `+ Favorited  # Categorized  * Outdated`. "Update"
+  read as a verb in a footer where every other item is an action, implying the
+  launcher would update something — it never does. The `#` marker was also
+  shown in the list but never explained. The legend moved to the first footer
+  line, which had room; the two lines are now balanced (114 / 118 columns
+  instead of 65 / 141).
 - `All` and `Hidden` are reserved view names. Creating a category with
   either name is refused, and a hand-made file with those names is skipped
   rather than listed twice — previously it would appear as a duplicate row,
