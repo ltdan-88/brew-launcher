@@ -65,18 +65,20 @@ Three markers tell you the state of a row at a glance:
 
 | Marker | Where | Meaning |
 |---|---|---|
-| `*` | after the version (`1.13.0*`) | An update is available |
+| `*` | after the version (`1.13.0*`) | Outdated — a newer version exists |
 | `+` | before the name | Favorited |
-| `#` | before the name | Belongs to a category |
+| `#` | before the name | Categorized |
 
-Both `+` and `#` can appear together (`+#`).
+Both `+` and `#` can appear together (`+#`). These describe *state* — they
+aren't things you press. Upgrading stays Homebrew's job.
 
-### Categories
+### One place to switch views
 
-<p align="center"><img src="assets/categories.gif" alt="Opening the category picker, filtering to a category, and stepping back out"></p>
+<p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
 
-Group tools however you think about them — Games, Editors, Monitoring. **F5**
-opens a picker; **Esc** steps back one level at a time (filtered view → picker →
+**F3** opens the view picker: `All`, `Favorites`, `Hidden`, then your own
+categories. Group tools however you think about them — Games, Editors,
+Monitoring. **Esc** steps back one level at a time (filtered view → picker →
 everything → quit) rather than dumping you out.
 
 ### Favorites
@@ -89,10 +91,11 @@ not.
 
 ### Hide what you don't use
 
-<p align="center"><img src="assets/hidden.gif" alt="Hiding an entry with F2, then reviewing and restoring it with F3"></p>
+<p align="center"><img src="assets/hidden.gif" alt="Hiding an entry with F2, then finding it again in the Hidden view"></p>
 
-**F2** hides an entry from the list — it stays installed, Homebrew is untouched.
-**F3** reviews what's hidden and restores it.
+**F2** hides an entry — it stays installed, Homebrew is untouched. Hidden isn't a
+special screen: it's just another view in the picker, so **Enter** still launches
+and **F2** unhides. Same key, opposite direction, exactly like Favorites.
 
 ### Launch without leaving the launcher
 
@@ -118,13 +121,17 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 | Key | Action |
 |---|---|
 | **Enter** | Launch selected application |
-| **F2** / **⌥H** | Hide selected entry |
-| **F3** / **⌥V** | View and restore hidden entries |
+| **F2** / **⌥H** | Hide — or unhide, in the Hidden view |
+| **F3** / **⌥V** | Switch view (All · Favorites · Hidden · categories) |
 | **F4** / **⌥S** | Create macOS shortcut |
-| **F5** / **⌥C** | Jump to a category filter |
+| **F5** / **⌥R** | Refresh the cache without leaving |
 | **F6** / **⌥F** | Toggle Favorites for selected entry |
 | **F7** / **⌥A** | Categorize selected entry (adds or removes) |
 | **Esc** | Go back one level, or quit |
+
+**F2**, **F6** and **F7** all toggle something about the highlighted entry;
+**F3** changes what you're looking at. **F5** is refresh, matching the
+convention everywhere else.
 
 The ⌥ (Option) aliases exist because F-keys need Fn on most Mac laptops. In
 stock Terminal.app, enable *Use Option as Meta Key* in the profile's Keyboard
