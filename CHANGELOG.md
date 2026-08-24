@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-08-24
+
+### Added
+
+- **`F9` / `⌥M` — a More menu**, holding the second-tier actions: hide,
+  favorite, categorize, create shortcut, and refresh the cache. Each one is
+  listed with its own key beside it, so the menu teaches its shortcuts rather
+  than replacing them — every action stays directly available from the list.
+
+### Changed
+
+- **The footer now shows only what browsing needs**: `[Views]`, `[Details]`
+  and `[More]`. It previously carried seven actions on every launch, six of
+  which are things you do while *setting the launcher up* — in bursts, and then
+  almost never again.
+
+  The split is by what you're doing, not by how often. Finding something and
+  running it is what the launcher is for; organizing and maintenance are not,
+  and they were taking six of the seven slots you look at every time.
+
+  Nothing is lost: `F2`, `F4`, `F5`, `F6` and `F7` all still work directly from
+  the list, exactly as before.
+
+- As a side effect the footer now fits terminals down to ~60 columns, where
+  even the 0.5.5 responsive layout had to start dropping actions.
+
 ## [0.5.5] — 2026-08-24
 
 ### Changed
@@ -251,6 +277,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.6.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.6.0
 [0.5.5]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.5
 [0.5.4]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.4
 [0.5.3]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.3

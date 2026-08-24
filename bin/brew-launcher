@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.5.5"
+VERSION="0.6.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -126,15 +126,20 @@ Terminal:
   BREW_LAUNCHER_TERMINAL=ghostty  Launch in a new Ghostty tab
 
 Keyboard shortcuts:
-  F2 / ⌥H   Hide or unhide selected entry
+
+  Shown in the footer:
   F3 / ⌥V   Switch view (All, Favorites, Hidden, your categories)
+  F8 / ⌥D   Show or hide the details pane (homepage, license,
+            categories, dependencies, caveats). Shift-Up/Down scrolls it.
+  F9 / ⌥M   Open the More menu — the actions below
+
+  In the More menu, and always available directly:
+  F2 / ⌥H   Hide or unhide selected entry
   F4 / ⌥S   Create a macOS shortcut
   F5 / ⌥R   Refresh the cache without leaving the launcher
   F6 / ⌥F   Toggle Favorites for selected entry
   F7 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
-  F8 / ⌥D   Show or hide the details pane (homepage, license,
-            categories, dependencies, caveats). Shift-Up/Down scrolls it.
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
@@ -225,6 +230,8 @@ if [[ "$1" == "--internal-footer-click" ]]; then
         '[Refresh]'|Refresh|F5/⌥R|F5| \
         '[Favorite]'|Favorite|F6/⌥F|F6| \
         '[Categorize]'|Categorize|F7/⌥C|F7| \
+        '[More]'|More|F9/⌥M|F9| \
+        '[Choose]'|Choose| \
         '[Quit]'|Quit|Enter|'[Launch]'|Launch| \
         '[View]'|View|'[Delete]'|Delete)
             mkdir -p "$CACHE_DIR"
@@ -1145,6 +1152,67 @@ confirm_delete_category() {
 # Esc inside the picker (empty result) resets to "All" — a consistent
 # "Esc goes up one level" model: Games -> [Esc] -> picker -> [Esc] ->
 # All -> [Esc] -> quit.
+# ------------------------------------------------------------
+# The [More] menu — second-tier actions.
+#
+# The split is by what you're doing, not by how often: browsing
+# (find something, look at it, run it) stays on the main footer,
+# while organizing and maintenance live here. Those are the things
+# you do while setting the launcher up or once in a blue moon, and
+# they were costing six of the seven footer slots you look at every
+# single launch.
+#
+# Every action here keeps its direct key, still live on the main
+# list — this menu is the discovery path, not the only one. It
+# prints each key beside its label so it teaches its own shortcut
+# and works itself out of a job.
+# ------------------------------------------------------------
+
+pick_more_action() {
+
+    local hide_label="$1"
+    local -a rows=()
+    local result chosen clicked_word
+
+    rows+=("f2"$'\t'"$(printf '%-18s%s' "$hide_label" 'F2 / ⌥H')")
+    rows+=("f6"$'\t'"$(printf '%-18s%s' 'Favorite' 'F6 / ⌥F')")
+    rows+=("f7"$'\t'"$(printf '%-18s%s' 'Categorize' 'F7 / ⌥C')")
+
+    # Shortcuts are macOS-only; elsewhere the action can only refuse,
+    # so it isn't offered rather than being offered and apologising.
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        rows+=("f4"$'\t'"$(printf '%-18s%s' 'Create shortcut' 'F4 / ⌥S')")
+    fi
+
+    rows+=("f5"$'\t'"$(printf '%-18s%s' 'Refresh cache' 'F5 / ⌥R')")
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    result="$(
+        printf '%s\n' "${rows[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' More ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --delimiter=$'\t' \
+            --with-nth=2 \
+            --footer='  ↑ ↓  Navigate    Enter  [Choose]    Esc  [Back]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$result" ]] && return 1
+
+    printf '%s' "${result%%$'\t'*}"
+}
+
 pick_view() {
 
     local choices result result_lines pick_action picked clicked_word
@@ -1946,17 +2014,14 @@ footer_key() {
 
 footer_actions() {
 
-    local hide_label="$1" with_alt="$2" with_shortcut="$3" with_refresh="$4"
-    local gap="$5"
+    local with_alt="$1" gap="$2"
     local -a parts=()
 
-    parts+=("$(footer_key F2 H $with_alt)  [$hide_label]")
+    # First tier only: what browsing needs. Everything else lives in
+    # the [More] menu, which is itself the third item here.
     parts+=("$(footer_key F3 V $with_alt)  [Views]")
-    (( with_shortcut )) && parts+=("$(footer_key F4 S $with_alt)  [Shortcut]")
-    (( with_refresh ))  && parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
-    parts+=("$(footer_key F6 F $with_alt)  [Favorite]")
-    parts+=("$(footer_key F7 C $with_alt)  [Categorize]")
     parts+=("$(footer_key F8 D $with_alt)  [Details]")
+    parts+=("$(footer_key F9 M $with_alt)  [More]")
 
     local separator="${(l:$gap:: :)}"
     local out="" part
@@ -1971,11 +2036,8 @@ footer_actions() {
 
 build_footer() {
 
-    local hide_label="$1" esc_hint="$2"
+    local esc_hint="$1"
     local width=$(( $(terminal_width) - 4 ))   # border and padding
-
-    local mac=0
-    [[ "$(uname -s)" == "Darwin" ]] && mac=1
 
     local nav="  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]"
     local legend="    +  Favorited    #  Categorized    *  Outdated"
@@ -1987,12 +2049,12 @@ build_footer() {
 
     # Tried in order; the last one stands if nothing fits, which is
     # still better than letting fzf cut an item off mid-word.
-    # Fields are: ⌥ aliases, [Shortcut], [Refresh], gap between items.
-    # Spacing is squeezed before any action is dropped, so a narrow
-    # terminal loses padding rather than a key it can't discover.
+    # Fields are: ⌥ aliases, gap between items. Since the second tier
+    # moved into [More] this line fits everywhere down to about 50
+    # columns, so it rarely gets past the first attempt.
     local line2 attempt
-    for attempt in "1 $mac 1 4" "0 $mac 1 4" "0 $mac 1 2" "0 0 1 4" "0 0 1 2" "0 0 0 2"; do
-        line2="$(footer_actions "$hide_label" ${=attempt})"
+    for attempt in "1 4" "0 4" "0 2"; do
+        line2="$(footer_actions ${=attempt})"
         (( ${#line2} <= width )) && break
     done
 
@@ -2097,8 +2159,8 @@ while true; do
         printf '%s\n' "${entries[@]}" |
         run_fzf \
             "$border_label" \
-            "$(build_footer "$hide_label" "$esc_hint")" \
-            'enter,f2,f3,f4,f5,f6,f7,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,esc' \
+            "$(build_footer "$esc_hint")" \
+            'enter,f2,f3,f4,f5,f6,f7,f9,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,alt-m,esc' \
             "$restore_position"
     )"
 
@@ -2148,6 +2210,7 @@ while true; do
             '[Refresh]'|Refresh|F5/⌥R|F5) action="f5" ;;
             '[Favorite]'|Favorite|F6/⌥F|F6) action="f6" ;;
             '[Categorize]'|Categorize|F7/⌥C|F7) action="f7" ;;
+            '[More]'|More|F9/⌥M|F9) action="f9" ;;
             '[Quit]'|Quit) action="esc" ;;
             Enter|'[Launch]'|Launch) action="enter" ;;
         esac
@@ -2158,6 +2221,30 @@ while true; do
     # available: even with no categories defined, "All" and "Hidden"
     # are always offered.
     # --------------------------------------------------------
+
+    # --------------------------------------------------------
+    # F9 / ⌥M — the [More] menu.
+    #
+    # Resolves to one of the second-tier actions and then falls
+    # through to that action's normal handler below, so each action
+    # has exactly one implementation no matter how it was reached.
+    # This block therefore has to sit above every handler it can
+    # resolve to, including F5's.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f9" || "$action" == "alt-m" ]]; then
+
+        chosen_action="$(pick_more_action "$hide_label")"
+
+        if [[ -z "$chosen_action" ]]; then
+            # Cancelled: redraw where we were instead of letting the
+            # cursor snap back to the top of the list.
+            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+            continue
+        fi
+
+        action="$chosen_action"
+    fi
 
     if [[ "$action" == "f3" || "$action" == "alt-v" ]]; then
 
