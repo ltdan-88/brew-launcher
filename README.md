@@ -157,6 +157,9 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 
 ## Reference
 
+**F1** (no alias needed — it means *help* nearly everywhere) opens the same
+reference below, from inside the launcher.
+
 The footer shows what browsing needs. Everything else lives one key away
 in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
 
@@ -173,6 +176,7 @@ in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
 | **F7** / **⌥F** | Toggle Favorites for selected entry | More |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | More |
 | **F9** / **⌥S** | Create macOS shortcut (macOS only) | More |
+| **F1** | Open this reference in the launcher | — |
 
 **F1** is deliberately unassigned — it means *help* nearly everywhere, and the
 launcher may want it later. The first-tier keys sit on **F2**–**F5** because
