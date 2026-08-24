@@ -5,6 +5,45 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-08-24
+
+### Changed
+
+- **The keys are renumbered so the ones you press live on `F2`–`F5`.** First
+  tier had drifted onto `F3`, `F8` and `F9` — the three keys you press most
+  were the three hardest to reach, which is backwards on a laptop that needs
+  `Fn`.
+
+  | Key | Action | Tier |
+  |---|---|---|
+  | `F2` / `⌥V` | Views | first |
+  | `F3` / `⌥D` | Details | first |
+  | `F4` / `⌥M` | More | first |
+  | `F5` / `⌥R` | Refresh | first |
+  | `F6` / `⌥H` | Hide | in More |
+  | `F7` / `⌥F` | Favorite | in More |
+  | `F8` / `⌥C` | Categorize | in More |
+  | `F9` / `⌥S` | Create shortcut | in More |
+
+  **The Option aliases don't move at all** — `⌥V`, `⌥D`, `⌥M`, `⌥R`, `⌥H`,
+  `⌥F`, `⌥C`, `⌥S` are exactly as they were, so anyone using those sees no
+  change.
+
+- **`F5` / `⌥R` Refresh is back in the first tier**, on the number it has in
+  every browser and file manager. `F3` for Details echoes `F3` = *view* from
+  the Norton/Midnight Commander lineage.
+
+- `F1` is now deliberately left unassigned: it means *help* nearly everywhere,
+  and assigning it to something else would be a mistake worth avoiding.
+
+- The More menu holds four actions now that Refresh has moved out of it.
+
+### Fixed
+
+- Every screenshot and GIF in the README has been re-recorded. `demo.gif` still
+  showed **v0.4.2** — a footer with `[Hidden]`, `[Category]`, `+ Fav` and
+  `* Update`, none of which have existed since 0.5.0.
+
 ## [0.6.0] — 2026-08-24
 
 ### Added
@@ -277,6 +316,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.7.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.6.0
 [0.5.5]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.5
 [0.5.4]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.4
