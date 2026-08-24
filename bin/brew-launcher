@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.4.1"
+VERSION="0.4.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -1073,6 +1073,19 @@ max_size=$((max_size + 2))
 
 build_entries() {
 
+    # These MUST be local. The read loop below assigns to `command`
+    # and `formula`, which are also the names the launcher loop uses
+    # for the currently selected entry — and this function reads with
+    # a plain redirect, so it runs in the current shell. Without
+    # `local`, finishing the loop leaves both empty, so anything the
+    # caller does with "$command" *after* calling build_entries gets
+    # an empty string. That silently broke the cursor-restore on F6
+    # and F7 (find_entry_position "" never matches, so no position was
+    # ever passed to fzf and the cursor snapped back to the top).
+    local command description formula version size outdated full_name
+    local display_name name_fmt version_text version_fmt size_fmt
+    local left_marker left_marker_fmt display
+
     entries=()
 
     while IFS=$'\t' read -r command description formula version size outdated full_name; do
@@ -1595,6 +1608,12 @@ show_hidden_entries() {
     local hidden_result
     local hidden_command
     local restored_anything=false
+
+    # Same reason as build_entries: the read loop below writes to
+    # `command`/`formula`, which the launcher loop also uses for the
+    # selected entry. Nothing after F3 currently reads them, but
+    # leaving them global is the same trap that broke cursor-restore.
+    local command description formula version size outdated full_name
 
     while true; do
 
