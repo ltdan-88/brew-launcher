@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.7.0"
+VERSION="0.7.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -40,7 +40,8 @@ STATE_FILE="$CACHE_DIR/state"
 #       last entry when read back), and carry the 7th full_name field
 #   3 — a rebuild also writes the per-formula details text (PREVIEW_DIR)
 #   4 — that details text reserves a slot for the live category list
-CACHE_FORMAT_VERSION=4
+#   5 — details metadata labels are padded to 12, not 10
+CACHE_FORMAT_VERSION=5
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -307,7 +308,7 @@ if [[ "$1" == "--internal-preview" ]]; then
     while IFS= read -r preview_line; do
         if [[ "$preview_line" == "$PREVIEW_CATEGORY_MARKER" ]]; then
             (( ${#preview_categories} )) && \
-                printf '  %-10s %s\n' 'Categories' "${(j:, :)preview_categories}"
+                printf '  %-12s%s\n' 'Categories' "${(j:, :)preview_categories}"
         else
             print -r -- "$preview_line"
         fi
@@ -781,7 +782,7 @@ for formula in formulae:
         ("Tap", formula.get("tap")),
     ):
         if value:
-            lines.append(f"  {label:<10} {value}")
+            lines.append(f"  {label:<12}{value}")
 
     # Filled in at display time by --internal-preview. Sits here, with
     # the rest of the metadata, so it stays visible without scrolling

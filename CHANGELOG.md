@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-08-24
+
+### Fixed
+
+- **The `Categories` row in the details pane was misaligned.** The label is
+  exactly as wide as the column that held it, so its value started one space
+  after the label where every other row had three — it read as a rendering
+  glitch and was easy to skim past. Metadata labels are now padded to 12.
+
+  The cache format version is bumped with it: without that, a cache written by
+  0.7.0 would keep its 10-wide baked labels while the live category line used
+  12, misaligning the row in the opposite direction.
+
 ## [0.7.0] — 2026-08-24
 
 ### Changed
@@ -316,6 +329,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.7.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.0
 [0.6.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.6.0
 [0.5.5]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.5
