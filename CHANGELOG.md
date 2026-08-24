@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-08-24
+
+### Fixed
+
+- **A one-shot CLI (`eza`, `jq`, `shellcheck`, ...) no longer leaves the tab
+  looking dead.** Launching used a bare `exec` into the command — right for a
+  TUI that takes over the screen until you quit it, but a one-shot prints and
+  exits in under a second, and `exec` leaves nothing running in the terminal
+  afterward. The tab then closes or sits inert, which reads as "the launcher
+  is broken," even though the command worked.
+
+  Both launch paths (Ghostty, current-terminal) now run the command and fall
+  through to a fresh interactive shell in the same tab afterward, rather than
+  exec-ing straight into it — the same thing typing the command into an
+  ordinary terminal tab would do. No classification of "is this a TUI?" was
+  needed: the fix is the same for both cases, because it's really the same
+  bug wearing two faces — it was always true that quitting a TUI also left an
+  exec'd tab with nothing to show for it, just less noticeable, since you'd
+  meant to be done with it anyway.
+
 ## [0.7.2] — 2026-08-24
 
 ### Added
@@ -344,6 +364,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.8.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.0
 [0.7.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.2
 [0.7.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.0
