@@ -135,7 +135,11 @@ Group your tools into named categories and jump to a filtered view with **F5** (
 No file editing needed to use them:
 
 - **F6** (or **⌥F**) toggles the selected entry in and out of **Favorites** directly — the same instant, in-picker action as F2 for hiding an entry.
-- **F7** (or **⌥A**) toggles the selected entry in and out of **any** category — a small prompt lists your existing categories; pick or type one to add the entry, pick/type the same one again to remove it. Typing a name that doesn't exist yet creates it on the spot. Adding opens the F5 picker so you can jump straight to viewing it; removing just refreshes in place, same as F2 hiding an entry — no picker detour when you're staying in the category you're already looking at.
+- **F7** (or **⌥A**) does the same for every *other* category:
+  - **While viewing a specific category**, it instantly adds or removes the selected entry from that category — no prompt at all, exactly like F6 does for Favorites. This is how you take something out of a category.
+  - **On `All`** (or while viewing Favorites), it asks which category: pick an existing one, or type a new name to create it on the spot. Picking one the entry is already in removes it.
+
+  F7 never touches Favorites — F6 owns that exclusively — and it always refreshes in place rather than navigating you somewhere else.
 - **Ctrl-D** inside the F5 category picker deletes the highlighted category entirely — except `All` (not a real category) and `Favorites` (protected, since it has its own dedicated F6 toggle). No confirmation prompt, same as everything else in the launcher — the file is trivial to recreate if that was a mistake. The picker reopens afterward so you can keep managing categories.
 
 **Esc** goes up one level at a time: a filtered view → the F5 picker → `All` → quit — rather than jumping straight to quitting from wherever you are.
