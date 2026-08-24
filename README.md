@@ -74,11 +74,11 @@ aren't things you press. Upgrading stays Homebrew's job.
 
 ### Two tiers of keys
 
-<p align="center"><img src="assets/more.gif" alt="Opening the More menu with F9 and favoriting an entry from it"></p>
+<p align="center"><img src="assets/more.gif" alt="Opening the More menu with F4 and favoriting an entry from it"></p>
 
 The footer shows the three things browsing needs: **Views**, **Details**, and
 **More**. Organizing and maintenance — hide, favorite, categorize, create a
-shortcut, refresh — live behind **F9 / ⌥M**, and every one of them still has a
+shortcut — live behind **F4 / ⌥M**, and every one of them still has a
 direct key that works from the list.
 
 The menu names each action in words and prints its shortcut next to it, which
@@ -89,7 +89,7 @@ teaches you the key and then gets out of the way.
 
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
 
-**F3** opens the view picker: `All`, `Favorites`, `Hidden`, then your own
+**F2** opens the view picker: `All`, `Favorites`, `Hidden`, then your own
 categories. Group tools however you think about them — Games, Editors,
 Monitoring. **Esc** steps back one level at a time (filtered view → picker →
 everything → quit) rather than dumping you out.
@@ -101,25 +101,25 @@ you can undo with the same key, so this is the one worth pausing on. `All`,
 
 ### Favorites
 
-<p align="center"><img src="assets/favorites.gif" alt="Toggling a favorite with F6; the marker appears and the cursor stays put"></p>
+<p align="center"><img src="assets/favorites.gif" alt="Toggling a favorite with F7; the marker appears and the cursor stays put"></p>
 
-**F6** toggles a favorite instantly — no prompt. **F7** does the same for any
+**F7** toggles a favorite instantly — no prompt. **F8** does the same for any
 other category: instant while you're viewing one, or it asks which, if you're
 not.
 
 ### Hide what you don't use
 
-<p align="center"><img src="assets/hidden.gif" alt="Hiding an entry with F2, then finding it again in the Hidden view"></p>
+<p align="center"><img src="assets/hidden.gif" alt="Hiding an entry with F6, then finding it again in the Hidden view"></p>
 
-**F2** hides an entry — it stays installed, Homebrew is untouched. Hidden isn't a
+**F6** hides an entry — it stays installed, Homebrew is untouched. Hidden isn't a
 special screen: it's just another view in the picker, so **Enter** still launches
-and **F2** unhides. Same key, opposite direction, exactly like Favorites.
+and **F6** unhides. Same key, opposite direction, exactly like Favorites.
 
 ### The full details, without leaving
 
-<p align="center"><img src="assets/details.gif" alt="Toggling the details pane with F8; it follows the cursor down the list"></p>
+<p align="center"><img src="assets/details.gif" alt="Toggling the details pane with F3; it follows the cursor down the list"></p>
 
-**F8** opens a details pane under the list — homepage, license, size, tap,
+**F3** opens a details pane under the list — homepage, license, size, tap,
 dependencies and any caveats — and it follows the cursor as you move. It's the
 `brew info` output you'd otherwise quit and go look up, except it's already on
 disk: the text is written when the cache is built, so the pane is instant rather
@@ -127,9 +127,9 @@ than the ~0.6s a live `brew info` costs on every keystroke.
 
 It also answers the one question the list can't. A `#` in the list tells you an
 entry is filed somewhere, but not *where* — the pane names the categories, so
-you don't have to go hunting through **F3** to find out. That line is read fresh
-each time rather than cached, so it's correct the moment you press **F6** or
-**F7**.
+you don't have to go hunting through **F2** to find out. That line is read fresh
+each time rather than cached, so it's correct the moment you press **F7** or
+**F8**.
 
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
 stays closed until you ask for it.
@@ -142,7 +142,7 @@ row. Everywhere else it launches in place. See [Terminal backends](#terminal-bac
 
 ### macOS shortcuts
 
-**F4** writes a `.command` file to `/Applications/TUIs/` — double-click it, drag
+**F9** writes a `.command` file to `/Applications/TUIs/` — double-click it, drag
 it to the Dock, or bind it to a hotkey in System Settings. Give it a custom icon
 via Finder → Get Info and it behaves like any other app.
 
@@ -150,27 +150,33 @@ via Finder → Get Info and it behaves like any other app.
 
 Click a row to select it, double-click to launch. Footer items shown in
 `[brackets]` are clickable too and do exactly what the key beside them does —
-clicking `[Hide]` is the same as pressing F2. Unbracketed footer text (the
+clicking `[Views]` is the same as pressing F2. Unbracketed footer text (the
 marker legend, "Navigate") is explanatory and deliberately inert.
 
 ## Reference
 
 The footer shows what browsing needs. Everything else lives one key away
-in **F9 / ⌥M — More**, and keeps working as a direct key from the list.
+in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
 
 | Key | Action | |
 |---|---|---|
 | **Enter** | Launch selected application | footer |
-| **F3** / **⌥V** | Switch view (All · Favorites · Hidden · categories) | footer |
-| **F8** / **⌥D** | Show or hide the details pane | footer |
+| **F2** / **⌥V** | Switch view (All · Favorites · Hidden · categories) | footer |
+| **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
 | **Esc** | Go back one level, or quit | footer |
-| **F9** / **⌥M** | Open the More menu | footer |
-| **F2** / **⌥H** | Hide — or unhide, in the Hidden view | More |
-| **F6** / **⌥F** | Toggle Favorites for selected entry | More |
-| **F7** / **⌥C** | Categorize selected entry (adds or removes) | More |
-| **F4** / **⌥S** | Create macOS shortcut (macOS only) | More |
-| **F5** / **⌥R** | Refresh the cache without leaving | More |
+| **F4** / **⌥M** | Open the More menu | footer |
+| **F5** / **⌥R** | Refresh the cache without leaving | footer |
+| **F6** / **⌥H** | Hide — or unhide, in the Hidden view | More |
+| **F7** / **⌥F** | Toggle Favorites for selected entry | More |
+| **F8** / **⌥C** | Categorize selected entry (adds or removes) | More |
+| **F9** / **⌥S** | Create macOS shortcut (macOS only) | More |
+
+**F1** is deliberately unassigned — it means *help* nearly everywhere, and the
+launcher may want it later. The first-tier keys sit on **F2**–**F5** because
+those are the ones you press constantly, and they're the easiest to reach on a
+laptop that needs **Fn**. **F5** is Refresh, matching the convention it has in
+every browser and file manager.
 
 The split is by what you're doing, not by how often. Finding something and
 running it is what you open the launcher for, so that stays on screen.
@@ -189,7 +195,7 @@ Key* in the profile's Keyboard settings first; Ghostty supports it out of the
 box.
 
 The footer also adapts to the terminal, dropping the marker legend and then the
-Option aliases rather than letting fzf cut an item off mid-word. **F4** isn't
+Option aliases rather than letting fzf cut an item off mid-word. **F9** isn't
 offered on Linux at all, since shortcuts are macOS-only.
 
 ```bash

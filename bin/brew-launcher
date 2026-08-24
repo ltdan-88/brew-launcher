@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.6.0"
+VERSION="0.7.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -128,35 +128,37 @@ Terminal:
 Keyboard shortcuts:
 
   Shown in the footer:
-  F3 / ⌥V   Switch view (All, Favorites, Hidden, your categories)
-  F8 / ⌥D   Show or hide the details pane (homepage, license,
+  F2 / ⌥V   Switch view (All, Favorites, Hidden, your categories)
+  F3 / ⌥D   Show or hide the details pane (homepage, license,
             categories, dependencies, caveats). Shift-Up/Down scrolls it.
-  F9 / ⌥M   Open the More menu — the actions below
+  F4 / ⌥M   Open the More menu — the actions below
+  F5 / ⌥R   Refresh the cache without leaving the launcher
 
   In the More menu, and always available directly:
-  F2 / ⌥H   Hide or unhide selected entry
-  F4 / ⌥S   Create a macOS shortcut
-  F5 / ⌥R   Refresh the cache without leaving the launcher
-  F6 / ⌥F   Toggle Favorites for selected entry
-  F7 / ⌥C   Categorize selected entry (adds or removes; instant while
+  F6 / ⌥H   Hide or unhide selected entry
+  F7 / ⌥F   Toggle Favorites for selected entry
+  F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
+  F9 / ⌥S   Create a macOS shortcut
+
+  F1 is deliberately unassigned: it means "help" nearly everywhere.
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
 
 Views:
-  F3/⌥V switches what you're looking at: All, Favorites, Hidden, then
+  F2/⌥V switches what you're looking at: All, Favorites, Hidden, then
   your categories. "Hidden" is an ordinary view — Enter still launches
-  there, and F2 unhides. Ctrl-D in the picker deletes the highlighted
+  there, and F6 unhides. Ctrl-D in the picker deletes the highlighted
   category (All, Hidden and Favorites can't be deleted; Favorites has
-  its own F6 toggle). Deleting asks first and shows how many entries
+  its own F7 toggle). Deleting asks first and shows how many entries
   the category holds — it's the one action here you can't undo.
 
   Esc goes up one level at a time: a filtered view -> the view picker
   -> All -> quit.
 
 Categories:
-  F6/⌥F toggles Favorites for the selected entry, instantly. F7/⌥A is
+  F7/⌥F toggles Favorites for the selected entry, instantly. F8/⌥C is
   the same idea for every other category:
 
     - While viewing a specific category, it instantly adds or removes
@@ -224,13 +226,13 @@ fi
 if [[ "$1" == "--internal-footer-click" ]]; then
 
     case "$FZF_CLICK_FOOTER_WORD" in
-        '[Hide]'|Hide|'[Unhide]'|Unhide|F2/⌥H|F2| \
-        '[Views]'|Views|F3/⌥V|F3| \
-        '[Shortcut]'|Shortcut|F4/⌥S|F4| \
+        '[Hide]'|Hide|'[Unhide]'|Unhide|F6/⌥H|F6| \
+        '[Views]'|Views|F2/⌥V|F2| \
+        '[Shortcut]'|Shortcut|F9/⌥S|F9| \
         '[Refresh]'|Refresh|F5/⌥R|F5| \
-        '[Favorite]'|Favorite|F6/⌥F|F6| \
-        '[Categorize]'|Categorize|F7/⌥C|F7| \
-        '[More]'|More|F9/⌥M|F9| \
+        '[Favorite]'|Favorite|F7/⌥F|F7| \
+        '[Categorize]'|Categorize|F8/⌥C|F8| \
+        '[More]'|More|F4/⌥M|F4| \
         '[Choose]'|Choose| \
         '[Quit]'|Quit|Enter|'[Launch]'|Launch| \
         '[View]'|View|'[Delete]'|Delete)
@@ -241,7 +243,7 @@ if [[ "$1" == "--internal-footer-click" ]]; then
         # Returns an fzf action rather than accept/abort: the
         # transform binding interprets whatever we print, so the
         # preview can be toggled in place without exiting fzf.
-        '[Details]'|Details|F8/⌥D|F8)
+        '[Details]'|Details|F3/⌥D|F3)
             printf 'toggle-preview'
             ;;
         '[Back]'|Back|'[Cancel]'|Cancel)
@@ -1174,17 +1176,16 @@ pick_more_action() {
     local -a rows=()
     local result chosen clicked_word
 
-    rows+=("f2"$'\t'"$(printf '%-18s%s' "$hide_label" 'F2 / ⌥H')")
-    rows+=("f6"$'\t'"$(printf '%-18s%s' 'Favorite' 'F6 / ⌥F')")
-    rows+=("f7"$'\t'"$(printf '%-18s%s' 'Categorize' 'F7 / ⌥C')")
+    rows+=("f6"$'\t'"$(printf '%-18s%s' "$hide_label" 'F6 / ⌥H')")
+    rows+=("f7"$'\t'"$(printf '%-18s%s' 'Favorite' 'F7 / ⌥F')")
+    rows+=("f8"$'\t'"$(printf '%-18s%s' 'Categorize' 'F8 / ⌥C')")
 
     # Shortcuts are macOS-only; elsewhere the action can only refuse,
     # so it isn't offered rather than being offered and apologising.
     if [[ "$(uname -s)" == "Darwin" ]]; then
-        rows+=("f4"$'\t'"$(printf '%-18s%s' 'Create shortcut' 'F4 / ⌥S')")
+        rows+=("f9"$'\t'"$(printf '%-18s%s' 'Create shortcut' 'F9 / ⌥S')")
     fi
 
-    rows+=("f5"$'\t'"$(printf '%-18s%s' 'Refresh cache' 'F5 / ⌥R')")
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -1860,7 +1861,7 @@ toggle_category_direct() {
 # Same add/remove toggle as toggle_favorite, generalized to any
 # category — picking or typing a category the entry is already in
 # removes it instead of being a no-op. That's how you unassign a
-# category: press F7/⌥A again and pick/type the same one.
+# category: press F8/⌥C again and pick/type the same one.
 #
 # Uses fzf's own --print-query: if the typed text matches an existing
 # category it's selected normally; if it matches nothing, Enter still
@@ -2019,9 +2020,10 @@ footer_actions() {
 
     # First tier only: what browsing needs. Everything else lives in
     # the [More] menu, which is itself the third item here.
-    parts+=("$(footer_key F3 V $with_alt)  [Views]")
-    parts+=("$(footer_key F8 D $with_alt)  [Details]")
-    parts+=("$(footer_key F9 M $with_alt)  [More]")
+    parts+=("$(footer_key F2 V $with_alt)  [Views]")
+    parts+=("$(footer_key F3 D $with_alt)  [Details]")
+    parts+=("$(footer_key F4 M $with_alt)  [More]")
+    parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
 
     local separator="${(l:$gap:: :)}"
     local out="" part
@@ -2094,7 +2096,7 @@ run_fzf() {
         # entirely inside fzf, so the main loop never sees them.
         --preview "${(q)SCRIPT_PATH} --internal-preview {1} {3}"
         --preview-window='down,35%,border-top,hidden,wrap'
-        --bind='f8:toggle-preview'
+        --bind='f3:toggle-preview'
         --bind='alt-d:toggle-preview'
         --bind='shift-up:preview-up'
         --bind='shift-down:preview-down'
@@ -2160,7 +2162,7 @@ while true; do
         run_fzf \
             "$border_label" \
             "$(build_footer "$esc_hint")" \
-            'enter,f2,f3,f4,f5,f6,f7,f9,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,alt-m,esc' \
+            'enter,f2,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,alt-m,esc' \
             "$restore_position"
     )"
 
@@ -2204,13 +2206,13 @@ while true; do
         # them apart: Esc-while-filtered and F3 run the same two lines
         # (pick_view; build_entries), so both map to "f3".
         case "$clicked_word" in
-            '[Hide]'|Hide|'[Unhide]'|Unhide|F2/⌥H|F2) action="f2" ;;
-            '[Views]'|Views|F3/⌥V|F3) action="f3" ;;
-            '[Shortcut]'|Shortcut|F4/⌥S|F4) action="f4" ;;
+            '[Hide]'|Hide|'[Unhide]'|Unhide|F6/⌥H|F6) action="f6" ;;
+            '[Views]'|Views|F2/⌥V|F2) action="f2" ;;
+            '[Shortcut]'|Shortcut|F9/⌥S|F9) action="f9" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) action="f5" ;;
-            '[Favorite]'|Favorite|F6/⌥F|F6) action="f6" ;;
-            '[Categorize]'|Categorize|F7/⌥C|F7) action="f7" ;;
-            '[More]'|More|F9/⌥M|F9) action="f9" ;;
+            '[Favorite]'|Favorite|F7/⌥F|F7) action="f7" ;;
+            '[Categorize]'|Categorize|F8/⌥C|F8) action="f8" ;;
+            '[More]'|More|F4/⌥M|F4) action="f4" ;;
             '[Quit]'|Quit) action="esc" ;;
             Enter|'[Launch]'|Launch) action="enter" ;;
         esac
@@ -2232,7 +2234,7 @@ while true; do
     # resolve to, including F5's.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f9" || "$action" == "alt-m" ]]; then
+    if [[ "$action" == "f4" || "$action" == "alt-m" ]]; then
 
         chosen_action="$(pick_more_action "$hide_label")"
 
@@ -2246,7 +2248,7 @@ while true; do
         action="$chosen_action"
     fi
 
-    if [[ "$action" == "f3" || "$action" == "alt-v" ]]; then
+    if [[ "$action" == "f2" || "$action" == "alt-v" ]]; then
 
         pick_view
         build_entries
@@ -2333,7 +2335,7 @@ while true; do
     # F2 / ⌥H = hide selected entry.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f2" || "$action" == "alt-h" ]]; then
+    if [[ "$action" == "f6" || "$action" == "alt-h" ]]; then
 
         # A toggle, like F6 and F7. Previously hiding was one-way and
         # unhiding lived on a separate screen where Enter meant
@@ -2354,7 +2356,7 @@ while true; do
     # F4 / ⌥S = create macOS .command shortcut.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f4" || "$action" == "alt-s" ]]; then
+    if [[ "$action" == "f9" || "$action" == "alt-s" ]]; then
 
         create_shortcut "$command" "$formula"
         restore_position="$(find_entry_position "$command")"
@@ -2365,7 +2367,7 @@ while true; do
     # F6 / ⌥F = toggle Favorites membership for selected entry.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f6" || "$action" == "alt-f" ]]; then
+    if [[ "$action" == "f7" || "$action" == "alt-f" ]]; then
 
         # No index bookkeeping needed: CURRENT_VIEW holds a name, so
         # creating the Favorites file (which reorders CATEGORY_NAMES)
@@ -2395,7 +2397,7 @@ while true; do
     # one.
     # --------------------------------------------------------
 
-    if [[ "$action" == "f7" || "$action" == "alt-c" ]]; then
+    if [[ "$action" == "f8" || "$action" == "alt-c" ]]; then
 
         # Instant toggle only when a real, non-Favorites category is
         # the active view. "All", "Hidden" and "Favorites" all fall
