@@ -51,7 +51,14 @@ export XDG_CONFIG_HOME="$TEST_HOME/config"
 
 OUTPUT="$TEST_HOME/list-output.txt"
 
+# Diagnostics capture both streams: the launcher reports startup
+# errors (missing dependencies, unbuildable cache) on stdout via echo,
+# not stderr, so capturing stderr alone reports a bare failure with no
+# explanation.
 if ! "$LAUNCHER" --list > "$OUTPUT" 2>"$TEST_HOME/stderr.txt"; then
+    printf -- '--- stdout ---\n' >&2
+    cat "$OUTPUT" >&2
+    printf -- '--- stderr ---\n' >&2
     cat "$TEST_HOME/stderr.txt" >&2
     fail "--list exited non-zero"
 fi

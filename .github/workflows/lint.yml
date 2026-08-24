@@ -35,5 +35,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The launcher refuses to start without fzf, and runners don't
+      # ship it. python3 and brew are already present.
+      - name: Install fzf
+        run: brew install fzf
+
       - name: Cache round-trip smoke test
         run: zsh test/cache-roundtrip.sh
