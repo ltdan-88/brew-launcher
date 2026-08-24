@@ -14,8 +14,11 @@ on:
     tags:
       - "v*.*.*"
 
+# contents: write is required by the "Create GitHub Release" step below.
+# The tap push uses HOMEBREW_TAP_TOKEN instead, since GITHUB_TOKEN can
+# never reach a different repository regardless of permissions.
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   update-formula:
@@ -102,3 +105,37 @@ jobs:
           git add -A
           git commit -m "Update brew-launcher formula to ${{ steps.version.outputs.version }}"
           git push origin HEAD:main
+
+      # Runs after the tap is updated, so a release never advertises a
+      # version the tap can't install yet. Notes come from CHANGELOG.md
+      # when that version has a section, otherwise GitHub generates them
+      # from the commit log.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, leaving it alone"
+            exit 0
+          fi
+
+          notes_file="$(mktemp)"
+
+          # Pull just this version's section out of the changelog:
+          # from its "## [x.y.z]" heading up to the next "## " heading.
+          if [[ -f CHANGELOG.md ]] && grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            awk -v v="^## \\\\[$VERSION\\\\]" '
+              $0 ~ v {found=1; next}
+              found && /^## / {exit}
+              found {print}
+            ' CHANGELOG.md > "$notes_file"
+          fi
+
+          if [[ -s "$notes_file" ]]; then
+            printf '\n---\n\n```bash\nbrew install ltdan-88/brew-launcher/brew-launcher\n```\n' >> "$notes_file"
+            gh release create "$TAG" --title "$TAG" --notes-file "$notes_file"
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi

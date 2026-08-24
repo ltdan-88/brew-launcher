@@ -1,194 +1,216 @@
-# brew-launcher
-
-A fast, interactive launcher for your installed Homebrew CLI applications.
+<h1 align="center">brew-launcher</h1>
 
 <p align="center">
-  <img src="assets/demo.gif">
+  <strong>You installed 40 terminal tools. You remember six.</strong><br>
+  A fast launcher for the Homebrew CLI apps you already have — browse, search, and run them without remembering names.
 </p>
 
-Works on macOS and Linux. Built on fzf, with optional Ghostty integration on macOS.
+<p align="center">
+  <a href="https://github.com/ltdan-88/brew-launcher/releases"><img alt="Version" src="https://img.shields.io/github/v/tag/ltdan-88/brew-launcher?label=version&color=89b4fa"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-a6e3a1"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-cba6f7">
+  <a href="https://github.com/ltdan-88/brew-launcher/actions"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/ltdan-88/brew-launcher/lint.yml?branch=main&label=ci"></a>
+</p>
 
-## Introduction
+<p align="center">
+  <img src="assets/demo.gif" alt="brew-launcher demo: searching, favoriting, and filtering by category">
+</p>
 
-Homebrew makes it easy to install terminal tools — and just as easy to forget what you've installed and what they're called. `brew-launcher` gives you one command, `brew-launcher`, that lists everything with a description of what it does, so you can search and launch instead of trying to remember whether it was `bottom` or `btop`.
+## Why this exists
 
-## Quick Start
+`brew list` gives you names. That's the problem — six months later, `bbrew`,
+`bastet` and `mole` are just words, and the tool you actually wanted stays
+installed and unused.
+
+`brew-launcher` shows you the same list **with what each thing actually does**,
+its version, and its size — then launches it.
+
+```
+bastet          0.43.2_14   317.2KB   Bastard Tetris
+bbrew           2.3.2       7.9MB     TUI for managing Homebrew, Flatpak, and Mac App Store packages
+mole            1.51.0*     9.7MB     Deep clean and optimize your Mac
+```
+
+**This is a launcher, not a package manager.** If you want to *install and
+remove* Homebrew packages interactively, [`taproom`](https://github.com/hzqtc/taproom)
+and [`fzf-brew`](https://github.com/thirteen37/fzf-brew) already do that well.
+This one is for the tools you've *already* installed and want to actually use.
+
+It's a single zsh file. No daemon, no database, no config to write, and startup
+is instant after the first run.
+
+## Quick start
 
 ```bash
 brew install ltdan-88/brew-launcher/brew-launcher
 brew-launcher
 ```
 
-That's it — no configuration needed. Type to search, **Enter** to launch, **Esc** to quit.
+That's it — nothing to configure. Type to search, **Enter** to launch, **Esc** to quit.
 
-## Features
+**Requirements:** macOS or Linux · [Homebrew](https://brew.sh/) · python3 (already on most systems).
+[fzf](https://github.com/junegunn/fzf) is installed automatically as a dependency.
 
-- **Automatic Discovery** – Finds installed Homebrew CLI applications automatically
-- **Metadata Display** – Shows application descriptions, installed versions, and disk size
-- **Fast Startup** – Persistent metadata cache automatically refreshes when Homebrew changes
-- **Outdated Indicator** – See which applications have updates available (`*` symbol)
-- **Fuzzy Search** – Type to search applications by name or description
-- **Hide Entries** – Temporarily hide applications you don't use
-- **Restore Hidden** – View and restore hidden entries from within the launcher
-- **Categories** – Group tools and jump straight to a filtered view; toggle entries in-picker, no file editing needed
-- **Terminal Backends** – Choose where applications launch (current terminal or Ghostty)
-- **macOS Shortcuts** – Create .command shortcuts for your favorite tools
-- **Keyboard-Driven** – Fully navigable with keyboard shortcuts
-- **Responsive UI** – Built on fzf for a snappy terminal experience
+## What you get
 
-## Requirements
+### Everything you installed, described
 
-- macOS or Linux
-- [Homebrew](https://brew.sh/)
-- [python3](https://www.python.org/) – usually already on your system
+<p align="center"><img src="assets/screenshot.png" alt="The main list showing name, version, size and description columns"></p>
 
-[fzf](https://github.com/junegunn/fzf) is installed automatically as a dependency — no separate step needed.
+Only tools **you** asked for — dependencies pulled in by other formulae are
+filtered out. Type any part of a name *or a description* to fuzzy-search: typing
+`weather` finds tools whose name never mentions it.
 
-Optional, macOS only:
-- [Ghostty](https://ghostty.org/) – launches picked apps in a new tab instead of replacing the picker
+Three markers tell you the state of a row at a glance:
 
-## Usage
+| Marker | Where | Meaning |
+|---|---|---|
+| `*` | after the version (`1.13.0*`) | An update is available |
+| `+` | before the name | Favorited |
+| `#` | before the name | Belongs to a category |
 
-Refresh the application cache:
+Both `+` and `#` can appear together (`+#`).
 
-```bash
-brew-launcher --refresh
-```
+### Categories
 
-Print entries as plain tab-separated text (for scripting or shell completion, not for humans) — `command  formula  version  size  outdated  description`:
+<p align="center"><img src="assets/categories.gif" alt="Opening the category picker, filtering to a category, and stepping back out"></p>
 
-```bash
-brew-launcher --list
-```
+Group tools however you think about them — Games, Editors, Monitoring. **F5**
+opens a picker; **Esc** steps back one level at a time (filtered view → picker →
+everything → quit) rather than dumping you out.
 
-View version and help:
+### Favorites
 
-```bash
-brew-launcher --version
-brew-launcher --help
-```
+<p align="center"><img src="assets/favorites.gif" alt="Toggling a favorite with F6; the marker appears and the cursor stays put"></p>
 
-## Keyboard Shortcuts
+**F6** toggles a favorite instantly — no prompt. **F7** does the same for any
+other category: instant while you're viewing one, or it asks which, if you're
+not.
+
+### Hide what you don't use
+
+<p align="center"><img src="assets/hidden.gif" alt="Hiding an entry with F2, then reviewing and restoring it with F3"></p>
+
+**F2** hides an entry from the list — it stays installed, Homebrew is untouched.
+**F3** reviews what's hidden and restores it.
+
+### Launch without leaving the launcher
+
+On macOS with [Ghostty](https://ghostty.org/), picking a tool opens it in a
+**new tab**, so the launcher stays where it is and you can fire off several in a
+row. Everywhere else it launches in place. See [Terminal backends](#terminal-backends).
+
+### macOS shortcuts
+
+**F4** writes a `.command` file to `/Applications/TUIs/` — double-click it, drag
+it to the Dock, or bind it to a hotkey in System Settings. Give it a custom icon
+via Finder → Get Info and it behaves like any other app.
+
+### Mouse support
+
+Click a row to select it, double-click to launch. Footer items shown in
+`[brackets]` are clickable too and do exactly what the key beside them does —
+clicking `[Hide]` is the same as pressing F2. Unbracketed footer text (the
+marker legend, "Navigate") is explanatory and deliberately inert.
+
+## Reference
 
 | Key | Action |
-|------|---------|
+|---|---|
 | **Enter** | Launch selected application |
 | **F2** / **⌥H** | Hide selected entry |
 | **F3** / **⌥V** | View and restore hidden entries |
 | **F4** / **⌥S** | Create macOS shortcut |
 | **F5** / **⌥C** | Jump to a category filter |
 | **F6** / **⌥F** | Toggle Favorites for selected entry |
-| **F7** / **⌥A** | Categorize selected entry (adds or removes, any category) |
-| **Esc** | Quit or go back |
+| **F7** / **⌥A** | Categorize selected entry (adds or removes) |
+| **Esc** | Go back one level, or quit |
 
-The ⌥ (Option) aliases work if F-keys need Fn on your keyboard. In stock Terminal.app, enable "Use Option as Meta Key" in the profile's Keyboard settings first; Ghostty supports it by default.
-
-An entry with an update available shows `*` right after its version number (e.g. `1.4.7*`). Before the name: `+` means favorited, `#` means it belongs to some other category — both can show together (e.g. `+#`).
-
-## Mouse
-
-Click a row to select it, double-click to launch it. Footer words shown in **[brackets]** are also clickable and do exactly what the key next to them does — clicking `[Hide]` is the same as pressing F2, `[Category]` the same as F5, and so on, across every screen (the main picker, hidden entries, and the category pickers). Plain, unbracketed footer text — the `+`/`*` legend, "Navigate" — isn't clickable; it's there to explain, not to act on.
-
-## Terminal Backends
-
-By default, `brew-launcher` automatically selects the best terminal for your system. On macOS, it prefers Ghostty if available; on Linux, it uses the current terminal.
-
-Override this behavior with the `BREW_LAUNCHER_TERMINAL` environment variable:
+The ⌥ (Option) aliases exist because F-keys need Fn on most Mac laptops. In
+stock Terminal.app, enable *Use Option as Meta Key* in the profile's Keyboard
+settings first; Ghostty supports it out of the box.
 
 ```bash
-# Auto-detect (default)
-BREW_LAUNCHER_TERMINAL=auto brew-launcher
-
-# Launch in current terminal
-BREW_LAUNCHER_TERMINAL=current brew-launcher
-
-# Launch in Ghostty
-BREW_LAUNCHER_TERMINAL=ghostty brew-launcher
+brew-launcher --refresh   # rebuild the application cache
+brew-launcher --list      # tab-separated plain text, for scripting
+brew-launcher --help
 ```
 
-Add to your shell configuration to make this permanent:
+## Terminal backends
+
+By default the best available option is chosen: Ghostty on macOS if installed,
+otherwise the current terminal. Override with `BREW_LAUNCHER_TERMINAL`:
 
 ```bash
-export BREW_LAUNCHER_TERMINAL=ghostty
+export BREW_LAUNCHER_TERMINAL=auto      # default
+export BREW_LAUNCHER_TERMINAL=current   # run in this terminal
+export BREW_LAUNCHER_TERMINAL=ghostty   # new Ghostty tab (macOS)
 ```
 
-## Hidden Entries
+## Configuration
 
-Hide applications you don't frequently use with **F2** (or **⌥H**). Hidden entries:
-
-- Are **not removed** from Homebrew
-- **Don't appear** in the launcher by default
-- Can be **restored** by pressing **F3** (or **⌥V**) and selecting "Restore"
-
-Configuration file location:
+There's nothing you *have* to configure — the in-app keys write these for you.
+They're plain text if you'd rather edit them directly, one command per line:
 
 ```
-~/.config/brew-launcher/ignore
+~/.config/brew-launcher/ignore              # hidden entries
+~/.config/brew-launcher/categories/<name>   # one file per category
+~/.config/brew-launcher/categories/Favorites
 ```
 
-To manually clear all hidden entries, remove this file and restart the launcher.
+Categories match on **command** name, not formula name — one formula can provide
+several commands (`midnight-commander` provides `mc`). Use `brew-launcher --list`
+to look one up.
 
-## Categories
+## How it works
 
-Group your tools into named categories and jump to a filtered view with **F5** (or **⌥C**) — a small picker lists `All`, `Favorites`, and your other categories alphabetically; select one directly instead of cycling through them. The border label shows which one you're viewing.
+Homebrew is queried once and the result cached, so startup after the first run
+is effectively instant. The cache invalidates itself when your installed
+formulae change; the "update available" check refreshes on its own schedule so
+it can't go stale for days.
 
-No file editing needed to use them:
+Discovery walks each formula's `opt/<name>/bin`, keeps executables that are
+actually reachable on your `PATH`, and drops obvious helper binaries. Only
+formulae you installed on purpose are listed.
 
-- **F6** (or **⌥F**) toggles the selected entry in and out of **Favorites** directly — the same instant, in-picker action as F2 for hiding an entry.
-- **F7** (or **⌥A**) does the same for every *other* category:
-  - **While viewing a specific category**, it instantly adds or removes the selected entry from that category — no prompt at all, exactly like F6 does for Favorites. This is how you take something out of a category.
-  - **On `All`** (or while viewing Favorites), it asks which category: pick an existing one, or type a new name to create it on the spot. Picking one the entry is already in removes it.
+Roughly 2,000 lines of zsh plus a small Python helper for parsing Homebrew's
+JSON — no Node, no Rust, no daemon, no SQLite.
 
-  F7 never touches Favorites — F6 owns that exclusively — and it always refreshes in place rather than navigating you somewhere else.
-- **Ctrl-D** inside the F5 category picker deletes the highlighted category entirely — except `All` (not a real category) and `Favorites` (protected, since it has its own dedicated F6 toggle). No confirmation prompt, same as everything else in the launcher — the file is trivial to recreate if that was a mistake. The picker reopens afterward so you can keep managing categories.
+<details>
+<summary><strong>Automator launcher (macOS)</strong></summary>
 
-**Esc** goes up one level at a time: a filtered view → the F5 picker → `All` → quit — rather than jumping straight to quitting from wherever you are.
+`extras/Brew Launcher.applescript` turns the launcher itself into a
+double-clickable app:
 
-An entry with an update available shows `*` right after its version number (e.g. `1.4.7*`). Before the name: `+` means favorited, `#` means it belongs to some other category — both can show together (e.g. `+#`). If you'd rather manage categories by hand, they're just plain files, one command per line, matching the same convention as the ignore file:
+1. Open **Automator** → new **Application**
+2. Add a **Run AppleScript** action
+3. Paste the contents of `extras/Brew Launcher.applescript`
+4. Save as `Brew Launcher.app`, then add it to the Dock or bind a hotkey
 
-```
-~/.config/brew-launcher/categories/Games
-~/.config/brew-launcher/categories/Monitoring
-```
+It opens `brew-launcher` in a new Ghostty tab.
+</details>
 
-Categories match on **command** name, not formula name — a formula can expose several commands (e.g. `midnight-commander` provides `mc`). Use `brew-launcher --list` if you ever need to look one up while hand-editing.
+## Troubleshooting
 
-## Application Shortcuts
+**A tool I installed isn't listed.** Only formulae installed *on purpose* appear
+— if it came in as a dependency it's filtered out. Run `brew-launcher --refresh`
+if you installed it very recently.
 
-Create macOS .command shortcuts for quick access to your favorite tools:
+**The ⌥ shortcuts do nothing.** In stock Terminal.app, enable *Use Option as
+Meta Key* in the profile's Keyboard settings. The F-keys work regardless.
 
-1. Select an application in the launcher
-2. Press **F4** (or **⌥S**)
-3. A shortcut is created in `/Applications/TUIs/`
+**Nothing launches in a new tab.** That's Ghostty-only, and macOS must allow
+brew-launcher to control Ghostty (System Settings → Privacy & Security →
+Automation).
 
-Example shortcuts:
+**Versions look out of date.** The update check runs on a timer, not every
+launch. `brew-launcher --refresh` forces it.
 
-```
-/Applications/TUIs/btop.command
-/Applications/TUIs/superfile.command
-/Applications/TUIs/linecast-weather.command
-```
+## Contributing
 
-You can:
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Release history
+is in [CHANGELOG.md](CHANGELOG.md).
 
-- **Run shortcuts directly** – Double-click them or run from terminal
-- **Add to Dock** – Drag shortcuts to the Dock for one-click access
-- **Assign keyboard shortcuts** – Use System Settings > Keyboard to trigger them globally
-- **Organize by folder** – Move shortcuts around in `/Applications/TUIs/` as needed
+## License
 
-## Automator Launcher
-
-The repository includes an AppleScript for creating a macOS Automator launcher:
-
-`extras/Brew Launcher.applescript`
-
-To create the launcher:
-
-1. Open Automator.
-2. Choose **Application**.
-3. Add a **Run AppleScript** action.
-4. Replace the default AppleScript with the contents of `extras/Brew Launcher.applescript`.
-5. Save the application as `Brew Launcher.app`.
-6. Add it to the Dock or assign it a keyboard shortcut.
-
-The launcher starts `brew-launcher` in the current Ghostty tab. When an application is selected, `brew-launcher` opens it in a new Ghostty tab.
+[MIT](LICENSE)
