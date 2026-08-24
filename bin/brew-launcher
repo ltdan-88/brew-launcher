@@ -799,6 +799,14 @@ load_category_names() {
 
         name="${file:t}"
 
+        # "All" and "Hidden" are built-in view names. F7 refuses to
+        # create them, but a hand-made file could still exist — skip it
+        # rather than listing a duplicate row that the built-in view
+        # would shadow anyway.
+        if [[ "$name" == "All" || "$name" == "Hidden" ]]; then
+            continue
+        fi
+
         if [[ "$name" == "Favorites" ]]; then
             has_favorites=true
             continue
@@ -1566,6 +1574,19 @@ toggle_category() {
         printf '\n'
         printf 'Invalid category name: %s\n' "$category_name"
         printf 'Names cannot contain "/" or start with ".".\n'
+        sleep 2
+        return 1
+    fi
+
+    # "All" and "Hidden" are built-in view names, not category files.
+    # A category called either would show up twice in the view picker,
+    # be shadowed by the built-in view (so its members were
+    # unreachable), and be undeletable, since Ctrl-D refuses those
+    # names. Refuse to create the trap in the first place.
+    if [[ "$category_name" == "All" || "$category_name" == "Hidden" ]]; then
+        printf '\n'
+        printf '"%s" is a built-in view name.\n' "$category_name"
+        printf 'Pick a different category name.\n'
         sleep 2
         return 1
     fi

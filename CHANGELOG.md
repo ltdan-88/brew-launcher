@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   place a familiar key meant something different. Removes ~100 lines that
   duplicated the main list renderer.
 
+- `All` and `Hidden` are reserved view names. Creating a category with
+  either name is refused, and a hand-made file with those names is skipped
+  rather than listed twice — previously it would appear as a duplicate row,
+  be shadowed by the built-in view, and be undeletable.
+
 ### Added
 
 - **`F5` / `⌥R` refreshes the cache without leaving the launcher** — previously
