@@ -81,6 +81,11 @@ categories. Group tools however you think about them — Games, Editors,
 Monitoring. **Esc** steps back one level at a time (filtered view → picker →
 everything → quit) rather than dumping you out.
 
+**Ctrl-D** in that picker deletes the highlighted category. It asks first and
+shows how many entries the category holds — every other action here is a toggle
+you can undo with the same key, so this is the one worth pausing on. `All`,
+`Hidden` and `Favorites` can't be deleted.
+
 ### Favorites
 
 <p align="center"><img src="assets/favorites.gif" alt="Toggling a favorite with F6; the marker appears and the cursor stays put"></p>
