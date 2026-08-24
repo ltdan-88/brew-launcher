@@ -72,6 +72,19 @@ Three markers tell you the state of a row at a glance:
 Both `+` and `#` can appear together (`+#`). These describe *state* — they
 aren't things you press. Upgrading stays Homebrew's job.
 
+### Two tiers of keys
+
+<p align="center"><img src="assets/more.gif" alt="Opening the More menu with F9 and favoriting an entry from it"></p>
+
+The footer shows the three things browsing needs: **Views**, **Details**, and
+**More**. Organizing and maintenance — hide, favorite, categorize, create a
+shortcut, refresh — live behind **F9 / ⌥M**, and every one of them still has a
+direct key that works from the list.
+
+The menu names each action in words and prints its shortcut next to it, which
+makes it easier to discover than an F-number in a crowded footer, and means it
+teaches you the key and then gets out of the way.
+
 ### One place to switch views
 
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
@@ -142,22 +155,31 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 
 ## Reference
 
-| Key | Action |
-|---|---|
-| **Enter** | Launch selected application |
-| **F2** / **⌥H** | Hide — or unhide, in the Hidden view |
-| **F3** / **⌥V** | Switch view (All · Favorites · Hidden · categories) |
-| **F4** / **⌥S** | Create macOS shortcut |
-| **F5** / **⌥R** | Refresh the cache without leaving |
-| **F6** / **⌥F** | Toggle Favorites for selected entry |
-| **F7** / **⌥C** | Categorize selected entry (adds or removes) |
-| **F8** / **⌥D** | Show or hide the details pane |
-| **Shift-Up/Down** | Scroll the details pane |
-| **Esc** | Go back one level, or quit |
+The footer shows what browsing needs. Everything else lives one key away
+in **F9 / ⌥M — More**, and keeps working as a direct key from the list.
 
-**F2**, **F6** and **F7** all toggle something about the highlighted entry;
-**F3** and **F8** change what you're looking at. **F5** is refresh, matching the
-convention everywhere else.
+| Key | Action | |
+|---|---|---|
+| **Enter** | Launch selected application | footer |
+| **F3** / **⌥V** | Switch view (All · Favorites · Hidden · categories) | footer |
+| **F8** / **⌥D** | Show or hide the details pane | footer |
+| **Shift-Up/Down** | Scroll the details pane | footer |
+| **Esc** | Go back one level, or quit | footer |
+| **F9** / **⌥M** | Open the More menu | footer |
+| **F2** / **⌥H** | Hide — or unhide, in the Hidden view | More |
+| **F6** / **⌥F** | Toggle Favorites for selected entry | More |
+| **F7** / **⌥C** | Categorize selected entry (adds or removes) | More |
+| **F4** / **⌥S** | Create macOS shortcut (macOS only) | More |
+| **F5** / **⌥R** | Refresh the cache without leaving | More |
+
+The split is by what you're doing, not by how often. Finding something and
+running it is what you open the launcher for, so that stays on screen.
+Organizing — hiding, favoriting, categorizing — and maintenance are things you
+do while *setting up*, in bursts, and they were costing six of the seven footer
+slots you look at on every single launch.
+
+The menu lists each action's key beside it, so it teaches its own shortcuts and
+works itself out of a job.
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥S**hortcut,
 **⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails — so there are seven
@@ -166,10 +188,9 @@ need Fn on most Mac laptops. In stock Terminal.app, enable *Use Option as Meta
 Key* in the profile's Keyboard settings first; Ghostty supports it out of the
 box.
 
-The footer adapts to the terminal. Below roughly 140 columns it drops the
-Option aliases, then the marker legend, then the rarest actions — so a narrow
-window loses padding and hints rather than silently cutting a key off mid-word.
-**F4** doesn't appear on Linux at all, since shortcuts are macOS-only.
+The footer also adapts to the terminal, dropping the marker legend and then the
+Option aliases rather than letting fzf cut an item off mid-word. **F4** isn't
+offered on Linux at all, since shortcuts are macOS-only.
 
 ```bash
 brew-launcher --refresh   # rebuild the application cache
