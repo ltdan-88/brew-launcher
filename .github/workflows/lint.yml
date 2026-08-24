@@ -11,7 +11,14 @@ name: CI
 #   2. cache round-trip test — behavior. Syntax checking alone could not
 #      catch the v0.4.0 bug where the cache was written without a
 #      trailing newline and every read loop silently dropped the last
-#      entry, so there is a real test for that path now.
+#      entry, so there is a real test for that path now. Runs against
+#      whatever real formulae exist on the machine, and skips on a bare
+#      runner with none installed.
+#
+#   3. --list fixture test — the same surface, but against a cache and
+#      state file written directly rather than a real `brew` install,
+#      so it exercises hidden-entry filtering and output shape on any
+#      runner, never skipping.
 
 on:
   push:
@@ -42,3 +49,15 @@ jobs:
 
       - name: Cache round-trip smoke test
         run: zsh test/cache-roundtrip.sh
+
+  list-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: --list fixture test
+        run: zsh test/list-fixtures.sh
