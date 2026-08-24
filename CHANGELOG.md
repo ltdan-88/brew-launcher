@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] — 2026-08-24
+
+### Added
+
+- **`F8` / `⌥P` opens a details pane** showing the highlighted tool's homepage,
+  license, size, tap, dependencies and caveats — the `brew info` output you
+  previously had to quit the launcher to read. It follows the cursor,
+  `Shift-Up`/`Shift-Down` scrolls it, and it starts closed.
+
+  The text is generated when the cache is built, from Homebrew JSON that was
+  already being fetched, so showing the pane costs a `cat`. Calling `brew info`
+  live would have cost ~0.6s on every cursor move.
+
+  The pane sits below the list rather than beside it: at any usable terminal
+  width a side pane truncates the footer, hiding half the key hints.
+
+### Changed
+
+- The cache format version is bumped, so the first run after upgrading rebuilds
+  once to generate the details text. Without this an existing cache would still
+  validate as fresh and the pane would stay empty indefinitely.
+
 ## [0.5.2] — 2026-08-24
 
 ### Changed
@@ -183,6 +205,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.5.3]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.3
 [0.5.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.2
 [0.5.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.1
 [0.5.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.5.0

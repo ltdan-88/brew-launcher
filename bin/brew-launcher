@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.5.2"
+VERSION="0.5.3"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -38,7 +38,7 @@ STATE_FILE="$CACHE_DIR/state"
 #
 #   2 — entries are newline-terminated (older caches dropped their
 #       last entry when read back), and carry the 7th full_name field
-CACHE_FORMAT_VERSION=2
+CACHE_FORMAT_VERSION=3
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -68,6 +68,12 @@ CATEGORIES_DIR="$CONFIG_DIR/categories"
 # go stale for days just because nothing locally installed has changed.
 OUTDATED_FILE="$CACHE_DIR/outdated"
 OUTDATED_TTL=21600  # 6 hours
+
+# One plain-text file per formula, written during a cache rebuild from
+# the JSON already fetched there. The preview pane just cats one of
+# these — `brew info` takes ~0.64s and fzf re-runs the preview on every
+# cursor move, which would make scrolling unusable.
+PREVIEW_DIR="$CACHE_DIR/previews"
 
 # How long to trust the cache without re-asking Homebrew whether
 # anything was installed or removed. That check costs ~0.54s of a
@@ -118,6 +124,8 @@ Keyboard shortcuts:
   F6 / ⌥F   Toggle Favorites for selected entry
   F7 / ⌥A   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
+  F8 / ⌥P   Show or hide the details pane (homepage, license,
+            dependencies, caveats). Shift-Up/Down scrolls it.
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
   profile's Keyboard settings first; Ghostty supports it by default.
@@ -213,6 +221,12 @@ if [[ "$1" == "--internal-footer-click" ]]; then
             mkdir -p "$CACHE_DIR"
             printf '%s\n%s\n' "$FZF_CLICK_FOOTER_WORD" "$FZF_CLICK_FOOTER_LINE" > "$FOOTER_CLICK_FILE"
             printf 'accept'
+            ;;
+        # Returns an fzf action rather than accept/abort: the
+        # transform binding interprets whatever we print, so the
+        # preview can be toggled in place without exiting fzf.
+        '[Details]'|Details|F8/⌥P)
+            printf 'toggle-preview'
             ;;
         '[Back]'|Back|'[Cancel]'|Cancel)
             printf 'abort'
@@ -382,7 +396,8 @@ rebuild_cache() {
         "$tmp_sizes" \
         "$tmp_outdated" \
         "$brew_prefix" \
-        "$tmp_entries" <<'PY'
+        "$tmp_entries" \
+        "$PREVIEW_DIR" <<'PY'
 
 import json
 import os
@@ -394,6 +409,7 @@ sizes_file = sys.argv[2]
 outdated_file = sys.argv[3]
 brew_prefix = sys.argv[4]
 output_file = sys.argv[5]
+preview_dir = sys.argv[6]
 
 # ------------------------------------------------------------
 # Read Homebrew metadata.
@@ -624,6 +640,82 @@ if duplicates:
 with open(output_file, "w", encoding="utf-8") as f:
     for entry in unique:
         f.write(entry + "\n")
+
+# ------------------------------------------------------------
+# Per-formula preview text.
+#
+# Written here, from the JSON already fetched above, rather than
+# shelling out to `brew info` when the preview is shown: that call
+# takes ~0.64s, and fzf re-runs the preview command on every cursor
+# move, so a live call would make scrolling unusable.
+#
+# One file per short formula name, which is what field 3 of the cache
+# holds, so the preview command is a plain `cat`.
+# ------------------------------------------------------------
+
+# Only formulae that actually survived into the cache — no point
+# writing previews for ones the list will never show.
+kept_formulae = {e.split("\t")[2] for e in unique}
+
+os.makedirs(preview_dir, exist_ok=True)
+
+for old in os.listdir(preview_dir):
+    try:
+        os.remove(os.path.join(preview_dir, old))
+    except OSError:
+        pass
+
+
+def wrap(text, width=64, indent=""):
+    out, line = [], ""
+    for word in text.split():
+        if line and len(line) + 1 + len(word) > width:
+            out.append(indent + line)
+            line = word
+        else:
+            line = f"{line} {word}".strip()
+    if line:
+        out.append(indent + line)
+    return out
+
+
+for formula in formulae:
+
+    name = formula.get("name", "")
+    if not name or name not in kept_formulae:
+        continue
+
+    installed_versions = formula.get("installed", [])
+    version = installed_versions[-1].get("version", "") if installed_versions else ""
+    full_name = formula.get("full_name", name)
+
+    lines = [f"  {name}  {version}".rstrip(), ""]
+
+    desc = formula.get("desc")
+    if desc:
+        lines += wrap(desc, indent="  ") + [""]
+
+    for label, value in (
+        ("Homepage", formula.get("homepage")),
+        ("License", formula.get("license")),
+        ("Size", sizes.get(full_name) or sizes.get(name)),
+        ("Tap", formula.get("tap")),
+    ):
+        if value:
+            lines.append(f"  {label:<10} {value}")
+
+    deps = formula.get("dependencies") or []
+    if deps:
+        lines += ["", "  Dependencies"] + wrap(", ".join(deps), indent="    ")
+
+    caveats = formula.get("caveats")
+    if caveats:
+        lines += ["", "  Caveats"]
+        for raw in caveats.strip().splitlines():
+            lines.append("    " + raw.strip() if raw.strip() else "")
+
+    with open(os.path.join(preview_dir, name), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
 
 PY
 
@@ -1759,6 +1851,18 @@ run_fzf() {
         --with-nth=2
         --nth=1,2,3,4
         --color="$FZF_COLORS"
+
+        # Field 3 is the formula name, which is what the preview files
+        # are keyed by. Hidden by default: the list already needs ~143
+        # columns for its own footer, so the pane only costs width once
+        # you actually ask for it. F8 and a footer click both toggle it
+        # entirely inside fzf, so the main loop never sees them.
+        --preview "cat ${(q)PREVIEW_DIR}/{3} 2>/dev/null || echo '  no details cached — press F5 to refresh'"
+        --preview-window='down,35%,border-top,hidden,wrap'
+        --bind='f8:toggle-preview'
+        --bind='alt-p:toggle-preview'
+        --bind='shift-up:preview-up'
+        --bind='shift-down:preview-down'
     )
 
     if [[ -n "$expected_keys" ]]; then
@@ -1821,7 +1925,7 @@ while true; do
         run_fzf \
             "$border_label" \
             "  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]    +  Favorited    #  Categorized    *  Outdated
-  F2/⌥H  [$hide_label]    F3/⌥V  [Views]    F4/⌥S  [Shortcut]    F5/⌥R  [Refresh]    F6/⌥F  [Favorite]    F7/⌥A  [Categorize]" \
+  F2/⌥H  [$hide_label]    F3/⌥V  [Views]    F4/⌥S  [Shortcut]    F5/⌥R  [Refresh]    F6/⌥F  [Favorite]    F7/⌥A  [Categorize]    F8/⌥P  [Details]" \
             'enter,f2,f3,f4,f5,f6,f7,alt-h,alt-v,alt-s,alt-r,alt-f,alt-a,esc' \
             "$restore_position"
     )"
