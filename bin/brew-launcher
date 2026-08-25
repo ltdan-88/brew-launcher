@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.14.0"
+VERSION="0.15.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -185,6 +185,10 @@ Terminal:
   BREW_LAUNCHER_TERMINAL=auto     Default behavior
   BREW_LAUNCHER_TERMINAL=current  Run in the current terminal
   BREW_LAUNCHER_TERMINAL=ghostty  Launch in a new Ghostty tab
+  BREW_LAUNCHER_TERMINAL=tmux     Launch in a new tmux window (only
+                                  when already inside a tmux session;
+                                  falls back to "current" otherwise —
+                                  never auto-starts tmux for you)
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin  Default
@@ -431,11 +435,11 @@ done
 TERMINAL="${BREW_LAUNCHER_TERMINAL:-${CONFIG_TERMINAL:-auto}}"
 
 case "$TERMINAL" in
-    auto|current|ghostty)
+    auto|current|ghostty|tmux)
         ;;
     *)
         echo "Error: unsupported terminal '$TERMINAL'."
-        echo "Supported values: auto, current, ghostty."
+        echo "Supported values: auto, current, ghostty, tmux."
         exit 1
         ;;
 esac
@@ -453,6 +457,18 @@ fi
 if [[ "$TERMINAL" == "ghostty" ]] &&
    ! command -v osascript >/dev/null 2>&1; then
     echo "Error: osascript is required when using Ghostty."
+    exit 1
+fi
+
+# tmux is deliberately never chosen by "auto" — it's opt-in only. It
+# would be a genuinely surprising thing for "auto" to do to someone:
+# wrapping their launcher (or worse, silently changing behavior) based
+# on whether tmux happens to be installed, whether or not they use it
+# day to day, is exactly the kind of behavior-that-differs-by-what's-
+# on-your-machine this project has otherwise avoided throughout.
+if [[ "$TERMINAL" == "tmux" ]] &&
+   ! command -v tmux >/dev/null 2>&1; then
+    echo "Error: tmux is required when using BREW_LAUNCHER_TERMINAL=tmux."
     exit 1
 fi
 
@@ -2281,6 +2297,40 @@ launch_in_current_terminal() {
 }
 
 # ------------------------------------------------------------
+# Launch application in tmux
+#
+# Only gives the "picker survives, tool opens alongside it" benefit
+# when you're already inside a tmux session ($TMUX set) — the same
+# idea as launch_in_ghostty's new tab, just terminal-agnostic instead
+# of tied to one app. Outside of a session, this deliberately falls
+# back to the plain current-terminal behavior rather than starting one
+# for you: bootstrapping brew-launcher into its own tmux session
+# behind your back is exactly the kind of surprising, install-
+# dependent behavior this project has avoided everywhere else, and
+# would be genuinely disruptive to anyone already running their own
+# tmux elsewhere, or not using tmux at all.
+# ------------------------------------------------------------
+
+launch_in_tmux() {
+
+    local command_path="$1"
+
+    if [[ -z "$TMUX" ]]; then
+        launch_in_current_terminal "$command_path"
+        return $?
+    fi
+
+    # Same one-shot-CLI fix as the other two launch paths: run the
+    # command, then fall through to a fresh interactive shell in the
+    # new window, rather than exec-ing straight into it. tmux runs
+    # this string through a shell itself, so command_path is quoted
+    # with zsh's own (q) flag — the same tool already used to build
+    # the details pane's --preview command — rather than interpolated
+    # raw, so a path containing spaces still arrives as one argument.
+    tmux new-window "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)command_path}"
+}
+
+# ------------------------------------------------------------
 # Launch application in Ghostty
 # ------------------------------------------------------------
 
@@ -3400,6 +3450,15 @@ while true; do
             printf 'Make sure Ghostty is installed and macOS allows\n'
             printf 'brew-launcher to control Ghostty.\n'
 
+            sleep 2
+        fi
+
+    elif [[ "$TERMINAL" == "tmux" ]]; then
+
+        if ! launch_in_tmux "$command_path"; then
+
+            printf '\n'
+            printf 'Unable to launch: %s\n' "$command"
             sleep 2
         fi
 
