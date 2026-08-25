@@ -250,17 +250,45 @@ export BREW_LAUNCHER_TERMINAL=current   # run in this terminal
 export BREW_LAUNCHER_TERMINAL=ghostty   # new Ghostty tab (macOS)
 ```
 
+To make a choice permanent without exporting it every session, put it in the
+[config file](#configuration) instead.
+
+## Theming
+
+Five built-in palettes — `catppuccin` (the default), `gruvbox`, `tokyonight`,
+`nord`, `dracula`. Picked because they're what's actually popular right now,
+not arbitrary — same idea as `Most Used`/`Recently Added`'s naming, checked
+against real usage rather than invented.
+
+```bash
+export BREW_LAUNCHER_THEME=nord   # for one session
+```
+
+Or set it permanently in the config file:
+
+```
+# ~/.config/brew-launcher/config
+THEME=nord
+```
+
 ## Configuration
 
-There's nothing you *have* to configure — the in-app keys write these for you.
-They're plain text if you'd rather edit them directly, one command per line:
+There's nothing you *have* to configure — the in-app keys write most of these
+for you. They're plain text if you'd rather edit them directly, one setting or
+command per line:
 
 ```
-~/.config/brew-launcher/ignore              # hidden entries
-~/.config/brew-launcher/categories/<name>   # one file per category
+~/.config/brew-launcher/config              # TERMINAL=, THEME= — see above
+~/.config/brew-launcher/ignore               # hidden entries
+~/.config/brew-launcher/categories/<name>    # one file per category
 ~/.config/brew-launcher/categories/Favorites
-~/.config/brew-launcher/launch-history      # one line per launch, powers Most Used
+~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used
 ```
+
+`config` is the one file here you write yourself — nothing in the launcher
+generates it. `#` comments and blank lines are ignored. An env var
+(`BREW_LAUNCHER_TERMINAL`, `BREW_LAUNCHER_THEME`) always wins over whatever it
+says, for that one run.
 
 Categories match on **command** name, not formula name — one formula can provide
 several commands (`midnight-commander` provides `mc`). Use `brew-launcher --list`

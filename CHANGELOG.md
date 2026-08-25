@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] — 2026-08-25
+
+### Added
+
+- **A persisted config file** (`~/.config/brew-launcher/config`) for defaults
+  that previously needed exporting an env var every session. Two keys:
+  `TERMINAL=` and `THEME=` (see below), plain `KEY=value` lines, `#` comments
+  and blank lines ignored. It's the one file under `CONFIG_DIR` you write
+  yourself — nothing in the launcher generates it, and it's parsed as plain
+  data rather than sourced as shell code, staying consistent with every other
+  file there (`ignore`, `categories/*`, `launch-history`) being inert.
+  `BREW_LAUNCHER_TERMINAL` / `BREW_LAUNCHER_THEME` still win over it for one
+  run, same precedence env vars already had.
+
+- **Five color themes**: `catppuccin` (the existing default), `gruvbox`,
+  `tokyonight`, `nord`, `dracula` — checked against real theme-popularity
+  data rather than picked from memory, same discipline as `Most Used`/
+  `Recently Added`'s naming. Set with `BREW_LAUNCHER_THEME=<name>` or the
+  config file's `THEME=`. An unrecognized name is rejected with the valid
+  list shown, matching the fail-fast convention `BREW_LAUNCHER_TERMINAL`
+  already had — a silent fallback would hide a typo instead of surfacing it.
+
 ## [0.11.0] — 2026-08-25
 
 ### Added
@@ -551,6 +573,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.12.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.12.0
 [0.11.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.11.0
 [0.10.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.10.0
 [0.9.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.2
