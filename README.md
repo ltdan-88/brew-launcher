@@ -181,7 +181,7 @@ File format and the `--preset` CLI flag are in [Configuration](#configuration).
 
 ### Color themes
 
-<p align="center"><img src="assets/themes.png" alt="The Theme picker showing all seven palettes with descriptions"></p>
+<p align="center"><img src="assets/themes.png" alt="The same list rendered in all seven themes side by side, showing each palette's actual colors"></p>
 
 Seven built-in palettes: five popular modern ones — `catppuccin` (the
 default), `gruvbox`, `tokyonight`, `nord`, `dracula` — plus two real, older
