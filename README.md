@@ -127,19 +127,25 @@ and **F6** unhides. Same key, opposite direction, exactly like Favorites.
 
 <p align="center"><img src="assets/details.gif" alt="Toggling the details pane with F3; it follows the cursor down the list"></p>
 
-**F3** opens a details pane under the list — homepage, license, size, tap,
-dependencies and any caveats — and it follows the cursor as you move. It's the
-`brew info` output you'd otherwise quit and go look up, except it's already on
-disk: the text is written when the cache is built, so the pane is instant rather
-than the ~0.6s a live `brew info` costs on every keystroke.
+**F3** opens a details pane under the list — homepage, license, size, tap, when
+you installed it, dependencies and any caveats — and it follows the cursor as
+you move. It's the `brew info` output you'd otherwise quit and go look up,
+except it's already on disk: the text is written when the cache is built, so
+the pane is instant rather than the ~0.6s a live `brew info` costs on every
+keystroke. "Installed" is exactly that — when *you* installed the current
+version, not when its developers released it; Homebrew doesn't track the
+latter anywhere.
+
+If a newer version exists, the pane shows it: `Update available  1.52.0`. Same
+information the `*` marker in the list is already telling you, just with the
+actual version number attached.
 
 It also answers the one question the list can't. A `#` in the list tells you an
 entry is filed somewhere, but not *where* — the pane names the categories, so
-you don't have to go hunting through **F2** to find out. The line is
-omitted when an entry isn't filed anywhere, so the `#` marker tells you which
-rows will have it. That line is read fresh
-each time rather than cached, so it's correct the moment you press **F7** or
-**F8**.
+you don't have to go hunting through **F2** to find out. That line is omitted
+when an entry isn't filed anywhere (so the `#` marker tells you which rows will
+have it) and read fresh each time rather than cached, so it's correct the
+moment you press **F7** or **F8**.
 
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
 stays closed until you ask for it.
