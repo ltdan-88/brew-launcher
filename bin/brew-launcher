@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.19.0"
+VERSION="0.20.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -221,6 +221,7 @@ Theme:
   BREW_LAUNCHER_THEME=amber            Amber-phosphor CRT
   BREW_LAUNCHER_THEME=solarized-dark   Full color-wheel spread
   BREW_LAUNCHER_THEME=solarized-light  Same, on a cream background
+  BREW_LAUNCHER_THEME=red-sands        Deep brick-red background
 
   Both settings persist without exporting them every session via
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
@@ -665,6 +666,10 @@ fi
 # whole design is a curated spread across the color wheel, and it's
 # one of the only well-known palettes that ships an official light
 # variant sharing the same accents as its dark one.
+#
+# Red Sands rounds it out with a genuinely red theme rather than a
+# theme that merely uses red as one accent among several — see its
+# own case block below for detail. 10 total.
 # ------------------------------------------------------------
 
 THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
@@ -849,9 +854,39 @@ label:#268bd2,
 query:#586e75
 '
         ;;
+    red-sands)
+        # From the iTerm2-Color-Schemes collection (mbadolato/iTerm2-
+        # Color-Schemes), the reference most terminal color schemes get
+        # ported through. A genuinely red theme rather than a theme
+        # with a red accent — every other palette here uses red only
+        # as one accent among several; this one's actual background
+        # is the red. fg/bg/pointer/marker/spinner below are its own
+        # published foreground, background and ANSI colors unchanged.
+        # It's a classic 16-color ANSI scheme rather than a from-scratch
+        # UI palette though, so border and info/header have no official
+        # equivalent to carry over — reused its own bright-black ANSI
+        # entry for both rather than inventing an unpublished shade.
+        FZF_COLORS='
+fg:#d7c9a7,
+bg:#7a251e,
+fg+:#ffffff,
+bg+:#a4a390,
+hl:#e7b000,
+hl+:#e7b000,
+info:#6e6e6e,
+prompt:#e7b000,
+pointer:#00bbbb,
+marker:#00bb00,
+spinner:#0072ff,
+header:#6e6e6e,
+border:#6e6e6e,
+label:#e7b000,
+query:#ffffff
+'
+        ;;
     *)
         echo "Error: unknown theme '$THEME_NAME'."
-        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber, solarized-dark, solarized-light."
+        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber, solarized-dark, solarized-light, red-sands."
         exit 1
         ;;
 esac
@@ -1959,6 +1994,7 @@ pick_theme() {
         "amber"$'\t'"$(printf '%-17s%s' amber 'Amber-phosphor CRT — black background, warm amber text')"
         "solarized-dark"$'\t'"$(printf '%-17s%s' solarized-dark 'Full color-wheel spread — teal background, warm accents')"
         "solarized-light"$'\t'"$(printf '%-17s%s' solarized-light 'Same accents as Solarized Dark, on a warm cream background')"
+        "red-sands"$'\t'"$(printf '%-17s%s' red-sands 'Deep brick-red background, warm cream text')"
     )
     local result picked
 
