@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] — 2026-08-25
+
+### Added
+
+- **Presets: `brew-launcher --preset <name>`** — launches every command
+  listed in `~/.config/brew-launcher/presets/<name>` together, one per
+  tmux pane (`tmux select-layout tiled`), so a whole "morning setup" of
+  tools comes up in one shot. One command per line, `#` comments and
+  blank lines skipped, same convention as the ignore file — hand-edited,
+  no in-app creation UI yet.
+
+  Unlike the `tmux` terminal backend, this always starts (or reattaches
+  to) a tmux session — invoking `--preset` by name is itself the
+  opt-in, so there's no ambiguity about whether tmux gets bootstrapped.
+  Re-running the same preset while its session is already alive
+  reattaches (or, from inside another tmux session, switches the
+  client) instead of spawning a duplicate.
+
 ## [0.15.0] — 2026-08-25
 
 ### Added

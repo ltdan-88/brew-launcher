@@ -11,6 +11,7 @@
 #   brew-launcher
 #   brew-launcher --refresh
 #   brew-launcher --list
+#   brew-launcher --preset <name>
 #   brew-launcher --version
 #   brew-launcher --help
 # ============================================================
@@ -23,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.15.0"
+VERSION="0.16.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -110,6 +111,12 @@ fi
 # load_category_names).
 CATEGORIES_DIR="$CONFIG_DIR/categories"
 
+# One file per preset, same one-command-per-line convention as
+# IGNORE_FILE and CATEGORIES_DIR — hand-edited, no in-picker creation
+# UI. Consumed only by --preset, which launches every command in the
+# file together in one tmux session (one pane each).
+PRESETS_DIR="$CONFIG_DIR/presets"
+
 # One line appended per successful launch — deliberately a plain
 # append-only log, not a "name: count" file that would need reading,
 # incrementing and rewriting on every single launch. Counting is done
@@ -170,11 +177,12 @@ brew-launcher $VERSION
 Interactive launcher for installed Homebrew CLI applications.
 
 Usage:
-  brew-launcher           Launch the application picker
-  brew-launcher --refresh Rebuild the application cache
-  brew-launcher --list    Print entries as tab-separated plain text
-  brew-launcher --version Show version
-  brew-launcher --help    Show this help
+  brew-launcher              Launch the application picker
+  brew-launcher --refresh    Rebuild the application cache
+  brew-launcher --list       Print entries as tab-separated plain text
+  brew-launcher --preset X   Launch preset X's commands together in tmux
+  brew-launcher --version    Show version
+  brew-launcher --help       Show this help
 
 Requirements:
   Homebrew
@@ -189,6 +197,15 @@ Terminal:
                                   when already inside a tmux session;
                                   falls back to "current" otherwise —
                                   never auto-starts tmux for you)
+
+Presets:
+  brew-launcher --preset <name>  Launch every command listed in
+                                  ~/.config/brew-launcher/presets/<name>
+                                  together, one per tmux pane. Unlike
+                                  BREW_LAUNCHER_TERMINAL=tmux above,
+                                  this always starts (or reattaches to)
+                                  a tmux session — invoking --preset is
+                                  itself the opt-in.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin  Default
@@ -406,11 +423,21 @@ trap 'rm -f "$FOOTER_CLICK_FILE"' EXIT
 
 FORCE_REFRESH=false
 LIST_MODE=false
+PRESET_MODE=false
+PRESET_NAME=""
 
 if [[ "$1" == "--refresh" || "$1" == "-r" ]]; then
     FORCE_REFRESH=true
 elif [[ "$1" == "--list" || "$1" == "-l" ]]; then
     LIST_MODE=true
+elif [[ "$1" == "--preset" ]]; then
+    if [[ -z "$2" ]]; then
+        echo "Error: --preset requires a name."
+        echo "Run 'brew-launcher --help' for usage."
+        exit 1
+    fi
+    PRESET_MODE=true
+    PRESET_NAME="$2"
 elif [[ -n "$1" ]]; then
     echo "Error: unrecognized argument '$1'."
     echo "Run 'brew-launcher --help' for usage."
@@ -427,6 +454,110 @@ for dependency in brew fzf python3; do
         exit 1
     fi
 done
+
+# ------------------------------------------------------------
+# Presets — exit early, before any of the terminal/theme/cache
+# machinery below, since a preset needs none of it: it's a standalone
+# "start (or reattach to) a tmux session and hand it these commands"
+# operation, invoked directly rather than through the picker.
+# ------------------------------------------------------------
+
+if [[ "$PRESET_MODE" == true ]]; then
+
+    if ! command -v tmux >/dev/null 2>&1; then
+        echo "Error: tmux is required to use presets."
+        exit 1
+    fi
+
+    preset_file="$PRESETS_DIR/$PRESET_NAME"
+
+    if [[ ! -f "$preset_file" ]]; then
+        echo "Error: preset '$PRESET_NAME' not found."
+        echo "Expected a file at $preset_file — one command per line."
+        exit 1
+    fi
+
+    preset_commands=()
+
+    while IFS= read -r preset_line; do
+
+        preset_line="${preset_line#"${preset_line%%[![:space:]]*}"}"
+        preset_line="${preset_line%"${preset_line##*[![:space:]]}"}"
+
+        [[ -z "$preset_line" ]] && continue
+        [[ "$preset_line" == \#* ]] && continue
+
+        preset_commands+=("$preset_line")
+
+    done < "$preset_file"
+
+    if (( ${#preset_commands[@]} == 0 )); then
+        echo "Error: preset '$PRESET_NAME' has no commands in it."
+        echo "Add one command per line to $preset_file."
+        exit 1
+    fi
+
+    # Namespaced session name so this can't collide with an unrelated
+    # tmux session you already happen to have running under the same
+    # plain name. Re-running the same preset while its session is
+    # still alive reattaches (or, from inside another tmux session,
+    # switches the client) instead of spawning a duplicate — the same
+    # check a person would run by hand with `tmux has-session`.
+    preset_session="blpreset-$PRESET_NAME"
+
+    if tmux has-session -t "$preset_session" 2>/dev/null; then
+        if [[ -n "$TMUX" ]]; then
+            exec tmux switch-client -t "$preset_session"
+        else
+            exec tmux attach-session -t "$preset_session"
+        fi
+    fi
+
+    # First live command becomes the session's initial pane; every one
+    # after that splits a new pane into the same window. Not resolved
+    # through the picker's cache — a preset can run before any picker
+    # session has ever built one, so this does its own plain
+    # `command -v` lookup per line instead of depending on that being
+    # warm. A command not found on PATH is skipped with a warning
+    # rather than aborting the whole preset over one bad line.
+    preset_started=false
+
+    for preset_cmd in "${preset_commands[@]}"; do
+
+        preset_resolved="$(command -v "$preset_cmd" 2>/dev/null)"
+
+        if [[ -z "$preset_resolved" ]]; then
+            echo "Warning: '$preset_cmd' not found on PATH, skipping."
+            continue
+        fi
+
+        # Same one-shot-CLI fix as the interactive launch paths: run
+        # the command, then fall through to a fresh interactive shell
+        # in the pane, rather than exec-ing straight into it.
+        if [[ "$preset_started" == false ]]; then
+            tmux new-session -d -s "$preset_session" -n "$PRESET_NAME" \
+                "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)preset_resolved}"
+            preset_started=true
+        else
+            tmux split-window -t "$preset_session" \
+                "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)preset_resolved}"
+        fi
+
+    done
+
+    if [[ "$preset_started" == false ]]; then
+        echo "Error: none of the commands in preset '$PRESET_NAME' were found on PATH."
+        exit 1
+    fi
+
+    tmux select-layout -t "$preset_session" tiled
+
+    if [[ -n "$TMUX" ]]; then
+        exec tmux switch-client -t "$preset_session"
+    else
+        exec tmux attach-session -t "$preset_session"
+    fi
+fi
 
 # ------------------------------------------------------------
 # Terminal configuration

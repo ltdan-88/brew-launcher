@@ -261,6 +261,35 @@ alongside the launcher; run it outside tmux and it just falls back to
 To make a choice permanent without exporting it every session, put it in the
 [config file](#configuration) instead.
 
+## Presets
+
+Launch several tools together — a whole setup in one shot, each in its own
+tmux pane:
+
+```bash
+brew-launcher --preset devops
+```
+
+That reads `~/.config/brew-launcher/presets/devops`, one command per line
+(`#` comments and blank lines skipped, same convention as the ignore file):
+
+```
+# ~/.config/brew-launcher/presets/devops
+btop
+lazygit
+lazydocker
+```
+
+Every command in the file opens as its own pane in one tmux session, tiled
+evenly (`tmux select-layout tiled`). No hand-editing UI yet — write the file
+yourself.
+
+Unlike `BREW_LAUNCHER_TERMINAL=tmux` above, this always starts (or reattaches
+to) a tmux session — naming a preset on the command line *is* the opt-in, so
+there's no ambiguity about whether tmux gets bootstrapped. Re-running the
+same preset while it's still running reattaches you to it rather than
+spawning a duplicate.
+
 ## Theming
 
 Seven built-in palettes. Five are what's actually popular right now, not
@@ -301,12 +330,13 @@ command per line:
 ~/.config/brew-launcher/categories/<name>    # one file per category
 ~/.config/brew-launcher/categories/Favorites
 ~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used
+~/.config/brew-launcher/presets/<name>       # one file per preset — see Presets above
 ```
 
-`config` is the one file here you write yourself — nothing in the launcher
-generates it. `#` comments and blank lines are ignored. An env var
-(`BREW_LAUNCHER_TERMINAL`, `BREW_LAUNCHER_THEME`) always wins over whatever it
-says, for that one run.
+`config` and `presets/<name>` are the files here you write yourself — nothing
+in the launcher generates them. `#` comments and blank lines are ignored. An
+env var (`BREW_LAUNCHER_TERMINAL`, `BREW_LAUNCHER_THEME`) always wins over
+whatever `config` says, for that one run.
 
 Categories match on **command** name, not formula name — one formula can provide
 several commands (`midnight-commander` provides `mc`). Use `brew-launcher --list`
