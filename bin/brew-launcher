@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.9.1"
+VERSION="0.9.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -1334,8 +1334,27 @@ pick_more_action() {
 pick_view() {
 
     local choices result result_lines pick_action picked clicked_word
+    local name
 
-    choices=("All" "${CATEGORY_NAMES[@]}" "Hidden")
+    # Two columns per row: the real name (what gets used and stored),
+    # and a display form that marks categories you made yourself with
+    # "· " — everything else here (All, Hidden, Favorites) is built
+    # in, not something you created, so it stays unmarked. Reusing the
+    # main list's own "#"/"*" markers here was considered and rejected
+    # — they already mean something specific there (categorized /
+    # outdated), and reusing them for a different meaning on this
+    # screen would confuse more than it clarifies.
+    choices=("All"$'\t'"All")
+
+    for name in "${CATEGORY_NAMES[@]}"; do
+        if [[ "$name" == "Favorites" ]]; then
+            choices+=("$name"$'\t'"$name")
+        else
+            choices+=("$name"$'\t'"· $name")
+        fi
+    done
+
+    choices+=("Hidden"$'\t'"Hidden")
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -1350,6 +1369,8 @@ pick_view() {
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
+            --delimiter=$'\t' \
+            --with-nth=2 \
             --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    Ctrl-D  [Delete]    Esc  [Back]' \
             --expect=enter,ctrl-d \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -1364,7 +1385,9 @@ pick_view() {
 
     result_lines=("${(@f)result}")
     pick_action="${result_lines[1]}"
-    picked="${result_lines[2]}"
+    # The selected row still carries both tab-delimited columns even
+    # though only the display one was shown — take the real name.
+    picked="${result_lines[2]%%$'\t'*}"
 
     if [[ -f "$FOOTER_CLICK_FILE" ]]; then
         clicked_word="$(sed -n '1p' "$FOOTER_CLICK_FILE")"

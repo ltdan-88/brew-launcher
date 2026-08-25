@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] — 2026-08-25
+
+### Changed
+
+- **Your own categories are now marked with `·` in the view picker**, so
+  they're easy to tell apart from the built-in views above them (`All`,
+  `Favorites`, `Hidden`). Doesn't reuse the main list's `#`/`*` markers —
+  those already mean something specific there (categorized / outdated), and
+  reusing them here for something different would confuse rather than
+  clarify.
+
+  The marker is display-only: picking a marked row still stores and uses
+  the plain category name, same as before.
+
 ## [0.9.1] — 2026-08-25
 
 ### Changed
@@ -463,6 +477,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.9.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.2
 [0.9.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.1
 [0.9.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.0
 [0.8.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.1
