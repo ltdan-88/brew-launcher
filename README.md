@@ -154,7 +154,9 @@ stays closed until you ask for it.
 
 On macOS with [Ghostty](https://ghostty.org/), picking a tool opens it in a
 **new tab**, so the launcher stays where it is and you can fire off several in a
-row. Everywhere else it launches in place. See [Terminal backends](#terminal-backends).
+row. Inside a tmux session, `BREW_LAUNCHER_TERMINAL=tmux` does the same with a
+**new window** instead. Everywhere else it launches in place. See
+[Terminal backends](#terminal-backends).
 
 This works the same for a long-running TUI (`htop`, `lazygit`) and a one-shot
 CLI that prints and exits (`eza`, `jq`, `shellcheck`) — quitting or finishing
@@ -248,7 +250,13 @@ otherwise the current terminal. Override with `BREW_LAUNCHER_TERMINAL`:
 export BREW_LAUNCHER_TERMINAL=auto      # default
 export BREW_LAUNCHER_TERMINAL=current   # run in this terminal
 export BREW_LAUNCHER_TERMINAL=ghostty   # new Ghostty tab (macOS)
+export BREW_LAUNCHER_TERMINAL=tmux      # new tmux window
 ```
+
+`tmux` is deliberately opt-in only — it never starts a tmux session for you.
+Use it while you're already inside one and it opens tools in a new window
+alongside the launcher; run it outside tmux and it just falls back to
+`current`, same as if you hadn't set it.
 
 To make a choice permanent without exporting it every session, put it in the
 [config file](#configuration) instead.
@@ -347,6 +355,10 @@ Meta Key* in the profile's Keyboard settings. The F-keys work regardless.
 **Nothing launches in a new tab.** That's Ghostty-only, and macOS must allow
 brew-launcher to control Ghostty (System Settings → Privacy & Security →
 Automation).
+
+**`BREW_LAUNCHER_TERMINAL=tmux` isn't opening a new window.** It only does
+that from inside an existing tmux session (`$TMUX` set); otherwise it falls
+back to launching in place, same as `current`.
 
 **Versions look out of date.** The update check runs on a timer, not every
 launch. `brew-launcher --refresh` forces it.

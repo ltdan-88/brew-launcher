@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] — 2026-08-25
+
+### Added
+
+- **A tmux terminal backend: `BREW_LAUNCHER_TERMINAL=tmux`** — opens a
+  picked tool in a new tmux window, same "picker stays put" idea as the
+  Ghostty backend, just terminal-agnostic instead of tied to one app.
+  Strictly opt-in: it only opens a new window when you're already inside
+  a tmux session (`$TMUX` set); outside of one it falls back to launching
+  in place, same as `current`. It never starts tmux or a session on its
+  own — this project has consistently avoided behavior that changes
+  based on what happens to be installed, and auto-bootstrapping into
+  tmux would be exactly that, plus disruptive to anyone already running
+  their own tmux elsewhere.
+
 ## [0.14.0] — 2026-08-25
 
 ### Added
