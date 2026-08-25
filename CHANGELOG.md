@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] — 2026-08-25
+
+### Added
+
+- **F9 launches a preset from the picker** — lists your presets, launches
+  the one you pick, reattaching if it's already running. Given a footer
+  key of its own (`[Presets]`, ⌥P alias) since running a preset is
+  something you'd reach for repeatedly, unlike the one-time setup
+  actions that live in More.
+
+### Changed
+
+- **F9 no longer creates a desktop shortcut** — moved to `F4 → More →
+  Create shortcut` instead, with no direct key. It's made once per tool
+  and rarely touched again, closer in spirit to Theme and Create Preset
+  than to Hide/Favorite/Categorize, which get exercised repeatedly as
+  you curate your list. Works exactly the same, just one menu away.
+
 ## [0.17.0] — 2026-08-25
 
 ### Added
