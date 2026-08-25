@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0] — 2026-08-25
+
+### Added
+
+- **An in-app "Create Preset" screen (`F4 → Create Preset`)** — writes a
+  preset file for you instead of hand-editing one. Multi-select which
+  tools go in it (Tab marks, Enter confirms), then name it: type a new
+  name, or pick an existing preset to replace. Draws from your whole
+  toolset regardless of which view was open when you started, same as
+  Categorize already does. Picking an existing name asks for
+  confirmation before replacing it.
+
 ## [0.16.0] — 2026-08-25
 
 ### Added

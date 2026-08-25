@@ -281,8 +281,12 @@ lazydocker
 ```
 
 Every command in the file opens as its own pane in one tmux session, tiled
-evenly (`tmux select-layout tiled`). No hand-editing UI yet — write the file
-yourself.
+evenly (`tmux select-layout tiled`).
+
+Don't want to hand-edit the file? **F4 → Create Preset** does it for you:
+Tab marks each tool you want, Enter confirms the selection, then name it —
+type a new name or pick an existing preset to replace. Draws from your whole
+toolset regardless of which view you had open when you started.
 
 Unlike `BREW_LAUNCHER_TERMINAL=tmux` above, this always starts (or reattaches
 to) a tmux session — naming a preset on the command line *is* the opt-in, so

@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.16.0"
+VERSION="0.17.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -206,6 +206,9 @@ Presets:
                                   this always starts (or reattaches to)
                                   a tmux session — invoking --preset is
                                   itself the opt-in.
+
+  In the launcher, F4 → Create Preset picks the tools and writes the
+  file for you — no hand-editing required.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin  Default
@@ -1759,6 +1762,7 @@ pick_help() {
         rows+=("  F9 / ⌥S   Create a shortcut (macOS .command or Linux .desktop)")
     fi
     rows+=("            Theme  Switch color theme (no key of its own)")
+    rows+=("     Create Preset  Pick tools to launch together via --preset")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -1816,6 +1820,9 @@ pick_more_action() {
     # often enough to need a direct shortcut.
     rows+=("theme"$'\t'"$(printf '%-18s%s' 'Theme' '')")
 
+    # Same reasoning as Theme above — also setup-adjacent rather than
+    # everyday, so it doesn't need a key of its own either.
+    rows+=("preset"$'\t'"$(printf '%-18s%s' 'Create Preset' '')")
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -3036,6 +3043,152 @@ toggle_category() {
     fi
 }
 
+# ------------------------------------------------------------
+# Create a preset in-app: multi-select which tools it contains, then
+# name it. Writes the same plain one-command-per-line file --preset
+# already reads — this is just a friendlier way to write that file
+# than doing it by hand, not a second mechanism.
+# ------------------------------------------------------------
+
+create_preset() {
+
+    local saved_view="$CURRENT_VIEW"
+    local -a selected_commands=()
+    local fzf_result line
+    local preset_name preset_file existing_count overwrite_answer
+    local -a existing_presets=()
+
+    # 1. Multi-select from the full "All" list, regardless of whatever
+    #    view was on screen when this was opened — a preset should be
+    #    able to draw from the whole toolset. Hidden entries stay
+    #    excluded, same precedent already set for categorizing (a
+    #    narrow niche not worth the extra plumbing).
+    CURRENT_VIEW="All"
+    build_entries
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    fzf_result="$(
+        printf '%s\n' "${entries[@]}" |
+        fzf \
+            --multi \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' New preset — select tools ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --marker='●' \
+            --delimiter=$'\t' \
+            --with-nth=2 \
+            --nth=1,2,3,4 \
+            --header='Tab marks a tool. Enter confirms every marked one (or just the one under the cursor, if none are marked).' \
+            --footer='  ↑ ↓  Navigate    Tab  Mark/unmark    Enter  [Confirm]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    CURRENT_VIEW="$saved_view"
+    build_entries
+
+    [[ -z "$fzf_result" ]] && return 1
+
+    for line in "${(@f)fzf_result}"; do
+        [[ -z "$line" ]] && continue
+        selected_commands+=("${line%%$'\t'*}")
+    done
+
+    (( ${#selected_commands[@]} == 0 )) && return 1
+
+    # 2. Name it — type a new name, or pick an existing preset to
+    #    replace. Same type-or-pick convention toggle_category() above
+    #    uses for categories.
+    if [[ -d "$PRESETS_DIR" ]]; then
+        for line in "$PRESETS_DIR"/*; do
+            [[ -f "$line" ]] || continue
+            existing_presets+=("${line:t}")
+        done
+    fi
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    preset_name="$(
+        printf '%s\n' "${existing_presets[@]}" |
+        fzf \
+            --print-query \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' New preset — name it ' \
+            --border-label-pos=2 \
+            --prompt=' New or existing: ' \
+            --footer="  ↑ ↓  Navigate    Type  New name or pick to replace    Enter  [Save ${#selected_commands[@]}]    Esc  [Cancel]" \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --pointer='▌' \
+            --color="$FZF_COLORS" |
+        tail -n1
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$preset_name" ]] && return 1
+
+    # The typed name becomes a filename directly — same guard
+    # toggle_category() applies to category names, for the same reason.
+    if [[ "$preset_name" == */* || "$preset_name" == .* ]]; then
+        printf '\n'
+        printf 'Invalid preset name: %s\n' "$preset_name"
+        printf 'Names cannot contain "/" or start with ".".\n'
+        sleep 2
+        return 1
+    fi
+
+    preset_file="$PRESETS_DIR/$preset_name"
+
+    if [[ -f "$preset_file" ]]; then
+
+        existing_count="$(grep -cv '^[[:space:]]*#\|^[[:space:]]*$' "$preset_file" 2>/dev/null)"
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        overwrite_answer="$(
+            printf '%s\n' "Replace it" "Cancel" |
+            fzf \
+                --height=100% \
+                --no-clear \
+                --layout=reverse \
+                --border=rounded \
+                --border-label=' Preset already exists ' \
+                --border-label-pos=2 \
+                --prompt='  ' \
+                --pointer='▌' \
+                --header="\"$preset_name\" already has $existing_count command(s). Replace it with this new selection?" \
+                --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+                --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+                --color="$FZF_COLORS"
+        )"
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        [[ "$overwrite_answer" != "Replace it" ]] && return 1
+    fi
+
+    mkdir -p "$PRESETS_DIR"
+    printf '%s\n' "${selected_commands[@]}" > "$preset_file"
+
+    printf '\n'
+    printf 'Preset "%s" saved with %d command(s).\n' "$preset_name" "${#selected_commands[@]}"
+    printf 'Run: brew-launcher --preset %s\n' "$preset_name"
+    sleep 2
+
+    return 0
+}
+
 
 # ------------------------------------------------------------
 # Show hidden application entries
@@ -3344,6 +3497,20 @@ while true; do
     if [[ "$action" == "theme" ]]; then
 
         pick_theme
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # Create Preset — same reasoning as Theme just above: reached only
+    # through More, self-contained (create_preset() does its own
+    # multi-select, naming and file-writing), so it just redraws where
+    # it was afterward rather than falling through further.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "preset" ]]; then
+
+        create_preset
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
