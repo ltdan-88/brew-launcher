@@ -104,6 +104,15 @@ jobs:
       - name: Duplicate command name test
         run: zsh test/dedup-fixtures.sh
 
+  computed-view-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Most Used / Recently Added ranking test
+        run: zsh test/computed-view-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:

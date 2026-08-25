@@ -89,16 +89,23 @@ teaches you the key and then gets out of the way.
 
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
 
-**F2** opens the view picker: `All`, `Favorites`, `Hidden`, then your own
-categories, each marked with `·` so they're easy to tell apart from the
-built-in views above them. Group tools however you think about them — Games,
-Editors, Monitoring. **Esc** steps back one level at a time (filtered view →
-picker → everything → quit) rather than dumping you out.
+**F2** opens the view picker: `All`, `Favorites`, `Hidden`, `Most Used`,
+`Recently Added`, then your own categories, each marked with `·` so they're
+easy to tell apart from the built-in views above them. Group tools however you
+think about them — Games, Editors, Monitoring. Every view except `All` shows
+how many entries it holds. **Esc** steps back one level at a time (filtered
+view → picker → everything → quit) rather than dumping you out.
+
+`Most Used` and `Recently Added` are computed, not something you set up —
+`Most Used` tracks what you actually launch, and `Recently Added` reads the
+install date Homebrew already records for every formula. Both cap themselves
+to the 15 most relevant tools, so they stay a short, useful list instead of
+turning into "everything, just re-sorted."
 
 **Ctrl-D** in that picker deletes the highlighted category. It asks first and
 shows how many entries the category holds — every other action here is a toggle
 you can undo with the same key, so this is the one worth pausing on. `All`,
-`Hidden` and `Favorites` can't be deleted.
+`Hidden`, `Favorites`, `Most Used` and `Recently Added` can't be deleted.
 
 ### Favorites
 
@@ -246,6 +253,7 @@ They're plain text if you'd rather edit them directly, one command per line:
 ~/.config/brew-launcher/ignore              # hidden entries
 ~/.config/brew-launcher/categories/<name>   # one file per category
 ~/.config/brew-launcher/categories/Favorites
+~/.config/brew-launcher/launch-history      # one line per launch, powers Most Used
 ```
 
 Categories match on **command** name, not formula name — one formula can provide

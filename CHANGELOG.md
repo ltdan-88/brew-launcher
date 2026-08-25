@@ -5,6 +5,45 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] — 2026-08-25
+
+### Added
+
+- **Most Used and Recently Added**, two new computed views in the `F2`
+  picker alongside `All`/`Favorites`/`Hidden`. Neither is something you set
+  up: `Most Used` tracks what you actually launch (a plain append-only log
+  at `~/.config/brew-launcher/launch-history`, tallied on demand — not a
+  running counter file that needs rewriting on every launch), and
+  `Recently Added` reads the install timestamp Homebrew already records for
+  every formula, so it costs nothing new to capture. Both cap themselves to
+  the 15 most relevant tools, so they stay a short, useful list rather than
+  becoming "everything, just re-sorted."
+
+  Names match what's already industry-standard for this — literally what
+  Windows' own Start Menu and Chrome's new-tab page call the same idea.
+
+- **Every view in the picker now shows a count.** `Games (3)`, `Hidden (13)`
+  — mainly useful for noticing a category has quietly emptied out, which
+  wasn't visible before without opening it. `All` is left out on purpose:
+  it isn't a filtered subset the way the others are.
+
+- Categories you created yourself are marked with `· ` in the picker, so
+  they're easy to tell apart from the built-in views above them (`All`,
+  `Favorites`, `Hidden`, and now `Most Used`/`Recently Added`). Doesn't
+  reuse the main list's own `#`/`*` markers — those already mean something
+  specific there.
+
+### Fixed
+
+- A real bug turned up while building the ranking for the two new views:
+  `sort_prep=("${(On)sort_prep}")` — sorting an array with the result
+  wrapped in double quotes — collapses the whole sorted result into one
+  glued-together string instead of a real array, silently dropping every
+  element after the first. Caught visually (15 expected entries showed as
+  1) before release, not after; a regression test
+  (`test/computed-view-fixtures.sh`) now guards this specific failure
+  shape.
+
 ## [0.9.2] — 2026-08-25
 
 ### Changed
@@ -477,6 +516,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.10.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.10.0
 [0.9.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.2
 [0.9.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.1
 [0.9.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.0

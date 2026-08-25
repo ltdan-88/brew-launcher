@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.9.2"
+VERSION="0.10.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -44,7 +44,10 @@ STATE_FILE="$CACHE_DIR/state"
 #   6 — a rebuild also writes the resolved executable path (8th
 #       column), so Enter can launch it directly without a fresh
 #       PATH lookup
-CACHE_FORMAT_VERSION=6
+#   7 — a rebuild also writes each formula's install timestamp (9th
+#       column, from Homebrew's own installed[].time), for the
+#       Recently Added view
+CACHE_FORMAT_VERSION=7
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -68,6 +71,22 @@ IGNORE_FILE="$CONFIG_DIR/ignore"
 # category file with a name the picker order treats specially (see
 # load_category_names).
 CATEGORIES_DIR="$CONFIG_DIR/categories"
+
+# One line appended per successful launch — deliberately a plain
+# append-only log, not a "name: count" file that would need reading,
+# incrementing and rewriting on every single launch. Counting is done
+# by tallying this on demand (see load_launch_counts), which stays
+# cheap at any realistic size. Lives under CONFIG_DIR, not CACHE_DIR:
+# usage history is something you'd want to survive a cache clear, the
+# same reasoning that already puts Favorites/categories/ignore there.
+LAUNCH_HISTORY_FILE="$CONFIG_DIR/launch-history"
+
+# How many entries the computed views (Most Used, Recently Added) cap
+# themselves to. Both stay meaningful — "your actual most-used tools",
+# "what's actually new" — only if they stay short; uncapped, "Recently
+# Added" on a long-lived install would just become "everything, sorted
+# by date", and "Most Used" the same "everything, sorted by count".
+COMPUTED_VIEW_LIMIT=15
 
 # Outdated-formula snapshot. Refreshed independently of the full cache
 # (see refresh_outdated_if_stale below) so the outdated indicator doesn't
@@ -136,7 +155,8 @@ Keyboard shortcuts:
             to universal, so it costs nothing to leave undocumented.
 
   Shown in the footer:
-  F2 / ⌥V   Switch view (All, Favorites, Hidden, your categories)
+  F2 / ⌥V   Switch view (All, Favorites, Hidden, Most Used,
+            Recently Added, your categories)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
             categories, dependencies, caveats). Shift-Up/Down scrolls it.
   F4 / ⌥M   Open the More menu — the actions below
@@ -624,8 +644,15 @@ for formula in formulae:
 
     if installed_versions:
         version = installed_versions[-1].get("version", "")
+        # Unix timestamp Homebrew itself recorded at install time —
+        # already present in the same JSON this loop already reads,
+        # so capturing it for the "Recently Added" view costs nothing
+        # extra. Falls back to "0" (oldest possible) rather than "" so
+        # it still sorts predictably if it's ever missing.
+        install_time = str(installed_versions[-1].get("time", 0))
     else:
         version = ""
+        install_time = "0"
 
     # --------------------------------------------------------
     # Installed size.
@@ -721,6 +748,7 @@ for formula in formulae:
                 outdated_flag,
                 full_name,
                 resolved_path,
+                install_time,
             ])
         )
 
@@ -1036,6 +1064,35 @@ load_hidden_commands() {
 
 load_hidden_commands
 
+# Tallied from LAUNCH_HISTORY_FILE on demand rather than kept
+# permanently in sync — the file is a plain append-only log (see its
+# own definition above for why), so counting means reading it once,
+# which stays cheap at any realistic size for a personal tool.
+typeset -A launch_counts
+
+load_launch_counts() {
+
+    launch_counts=()
+
+    [[ -f "$LAUNCH_HISTORY_FILE" ]] || return
+
+    local logged_command
+
+    while IFS= read -r logged_command; do
+        [[ -z "$logged_command" ]] && continue
+        (( launch_counts[$logged_command]++ ))
+    done < "$LAUNCH_HISTORY_FILE"
+}
+
+load_launch_counts
+
+# Filled in by build_entries() as it reads the cache — every row
+# already carries this, so recording it costs nothing extra and gives
+# the Recently Added view a lookup that survives past the read loop
+# without changing the shape of the `entries` tuples the rest of the
+# script parses.
+typeset -A install_times
+
 # ------------------------------------------------------------
 # Categories
 #
@@ -1084,11 +1141,12 @@ load_category_names() {
 
         name="${file:t}"
 
-        # "All" and "Hidden" are built-in view names. F7 refuses to
-        # create them, but a hand-made file could still exist — skip it
-        # rather than listing a duplicate row that the built-in view
-        # would shadow anyway.
-        if [[ "$name" == "All" || "$name" == "Hidden" ]]; then
+        # These are all built-in view names. F7 refuses to create a
+        # category with any of them, but a hand-made file could still
+        # exist — skip it rather than listing a duplicate row that the
+        # built-in view would shadow anyway.
+        if [[ "$name" == "All" || "$name" == "Hidden" \
+              || "$name" == "Most Used" || "$name" == "Recently Added" ]]; then
             continue
         fi
 
@@ -1239,7 +1297,8 @@ pick_help() {
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
     rows+=("")
     rows+=("First tier — always on screen")
-    rows+=("  F2 / ⌥V   Switch view (All, Favorites, Hidden, categories)")
+    rows+=("  F2 / ⌥V   Switch view (All, Favorites, Hidden, Most Used,")
+    rows+=("            Recently Added, categories)")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
@@ -1334,7 +1393,15 @@ pick_more_action() {
 pick_view() {
 
     local choices result result_lines pick_action picked clicked_word
-    local name
+    local name count total_count
+
+    # Refreshed here rather than trusted from the caller — the counts
+    # this builds need them, and pick_view() is reached from more than
+    # one place, not all of which are guaranteed to have loaded them
+    # first. A launch just before opening this picker should already
+    # be reflected in Most Used's own count.
+    load_hidden_commands
+    load_launch_counts
 
     # Two columns per row: the real name (what gets used and stored),
     # and a display form that marks categories you made yourself with
@@ -1344,17 +1411,41 @@ pick_view() {
     # — they already mean something specific there (categorized /
     # outdated), and reusing them for a different meaning on this
     # screen would confuse more than it clarifies.
+    #
+    # Every row except "All" also gets a count. "All" is left out
+    # deliberately: it's not a filtered subset the way the others are,
+    # so a count there would just repeat the total the main screen's
+    # own header already shows once you're in it.
     choices=("All"$'\t'"All")
 
     for name in "${CATEGORY_NAMES[@]}"; do
+
+        count="$(grep -c '' "$CATEGORIES_DIR/$name" 2>/dev/null)"
+        count="${count:-0}"
+
         if [[ "$name" == "Favorites" ]]; then
-            choices+=("$name"$'\t'"$name")
+            choices+=("$name"$'\t'"$name ($count)")
         else
-            choices+=("$name"$'\t'"· $name")
+            choices+=("$name"$'\t'"· $name ($count)")
         fi
     done
 
-    choices+=("Hidden"$'\t'"Hidden")
+    # Most Used and Recently Added are computed, not saved category
+    # files — unmarked, like the other built-ins above. Their counts
+    # reflect what will actually appear (capped at
+    # COMPUTED_VIEW_LIMIT), not the true total, so the number here
+    # never promises more than the view itself will show.
+    count="${#launch_counts[@]}"
+    (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
+    choices+=("Most Used"$'\t'"Most Used ($count)")
+
+    total_count="$(grep -c '' "$CACHE_FILE" 2>/dev/null)"
+    count=$(( ${total_count:-0} - ${#hidden_commands[@]} ))
+    (( count < 0 )) && count=0
+    (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
+    choices+=("Recently Added"$'\t'"Recently Added ($count)")
+
+    choices+=("Hidden"$'\t'"Hidden (${#hidden_commands[@]})")
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -1403,15 +1494,19 @@ pick_view() {
 
     if [[ "$pick_action" == "ctrl-d" ]]; then
 
-        # "All" and "Hidden" aren't category files, and "Favorites" is
-        # protected because F6 owns it — deleting it out from under
-        # that would leave F6 unable to get it back into this list.
+        # "All" and "Hidden" aren't category files, "Favorites" is
+        # protected because F6 owns it (deleting it out from under
+        # that would leave F6 unable to get it back into this list),
+        # and "Most Used"/"Recently Added" are computed rather than a
+        # category file at all — there's nothing under CATEGORIES_DIR
+        # for any of these to delete.
         #
         # Explicit message on refusal, not a silent no-op: otherwise
         # this falls through to rebuilding with whatever view was
         # active before, which looks like the refused delete
         # "navigated" somewhere on its own.
-        if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" ]]; then
+        if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" \
+              || "$picked" == "Most Used" || "$picked" == "Recently Added" ]]; then
             printf '\n'
             printf '"%s" can'"'"'t be deleted.\n' "$picked"
             sleep 1
@@ -1505,7 +1600,7 @@ load_categorized_commands
 
 if [[ "$LIST_MODE" == true ]]; then
 
-    while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path; do
+    while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path install_time; do
 
         if [[ -n "${hidden_commands[$command]-}" ]]; then
             continue
@@ -1564,7 +1659,7 @@ max_name=4
 max_version=7
 max_size=4
 
-while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path; do
+while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path install_time; do
 
     display_name="$formula"
 
@@ -1617,20 +1712,40 @@ build_entries() {
     # and F7 (find_entry_position "" never matches, so no position was
     # ever passed to fzf and the cursor snapped back to the top).
     local command description formula version size outdated full_name
-    local resolved_path
+    local resolved_path install_time
     local display_name name_fmt version_text version_fmt size_fmt
     local left_marker left_marker_fmt display
+    local -a sort_prep
+    local sort_entry sort_cmd sort_key sort_index
 
     entries=()
 
-    while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path; do
+    while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path install_time; do
 
-        # Three-way view filter. "Hidden" is the only view that shows
-        # hidden entries, and it shows nothing else — which is what
-        # lets it be an ordinary view instead of a separate screen.
+        # Recorded for every row regardless of view — Recently Added
+        # needs it as a lookup once the loop below has moved past this
+        # row, and it's cheap enough not to bother gating.
+        install_times[$command]="$install_time"
+
+        # View filter. "Hidden" is the only view that shows hidden
+        # entries, and it shows nothing else — which is what lets it
+        # be an ordinary view instead of a separate screen. Most Used
+        # and Recently Added get their own branches rather than
+        # falling through to the category-file check below: neither
+        # is backed by a file under CATEGORIES_DIR, so category_members
+        # would just be empty for them and exclude everything.
         if [[ "$CURRENT_VIEW" == "Hidden" ]]; then
 
             [[ -z "${hidden_commands[$command]-}" ]] && continue
+
+        elif [[ "$CURRENT_VIEW" == "Most Used" ]]; then
+
+            [[ -n "${hidden_commands[$command]-}" ]] && continue
+            [[ -z "${launch_counts[$command]-}" ]] && continue
+
+        elif [[ "$CURRENT_VIEW" == "Recently Added" ]]; then
+
+            [[ -n "${hidden_commands[$command]-}" ]] && continue
 
         else
 
@@ -1677,6 +1792,54 @@ build_entries() {
         )
 
     done < "$CACHE_FILE"
+
+    # Most Used and Recently Added show their own ranking, not
+    # alphabetical order (which is what the read loop above naturally
+    # produces, since CACHE_FILE is written sorted by name). Sorted
+    # here rather than by changing what CACHE_FILE itself contains —
+    # every other view still wants alphabetical order, so the rank
+    # only matters for these two, applied after the fact and only to
+    # whatever already survived the filter above.
+    #
+    # The sort key is zero-padded to a fixed width and placed ahead of
+    # a real tab-delimited entry, sorted as one string, then stripped
+    # back off — sidesteps any doubt about exactly how zsh's numeric
+    # sort flag treats a key embedded partway through a longer string,
+    # since a zero-padded prefix sorts correctly as plain text too.
+    if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" ]]; then
+
+        sort_prep=()
+
+        for sort_entry in "${entries[@]}"; do
+
+            sort_cmd="${sort_entry%%$'\t'*}"
+
+            if [[ "$CURRENT_VIEW" == "Most Used" ]]; then
+                sort_key="${launch_counts[$sort_cmd]:-0}"
+            else
+                sort_key="${install_times[$sort_cmd]:-0}"
+            fi
+
+            sort_prep+=("$(printf '%020d' "$sort_key")"$'\t'"$sort_entry")
+        done
+
+        # Deliberately unquoted: quoting this expansion collapses the
+        # sorted result into one glued-together string instead of a
+        # proper array — every element after the first silently
+        # vanishes. Caught by an isolated test that showed 3 array
+        # elements shrink to 1 after sorting; confirmed the unquoted
+        # form is what actually produces a real 3-element array.
+        sort_prep=(${(On)sort_prep})
+
+        entries=()
+        sort_index=0
+
+        for sort_entry in "${sort_prep[@]}"; do
+            (( sort_index >= COMPUTED_VIEW_LIMIT )) && break
+            entries+=("${sort_entry#*$'\t'}")
+            (( sort_index++ ))
+        done
+    fi
 }
 
 build_entries
@@ -2231,12 +2394,13 @@ toggle_category() {
         return 1
     fi
 
-    # "All" and "Hidden" are built-in view names, not category files.
-    # A category called either would show up twice in the view picker,
-    # be shadowed by the built-in view (so its members were
-    # unreachable), and be undeletable, since Ctrl-D refuses those
-    # names. Refuse to create the trap in the first place.
-    if [[ "$category_name" == "All" || "$category_name" == "Hidden" ]]; then
+    # These are all built-in view names, not category files. A
+    # category with any of these names would show up twice in the
+    # view picker, be shadowed by the built-in view (so its members
+    # were unreachable), and be undeletable, since Ctrl-D refuses
+    # those names. Refuse to create the trap in the first place.
+    if [[ "$category_name" == "All" || "$category_name" == "Hidden" \
+          || "$category_name" == "Most Used" || "$category_name" == "Recently Added" ]]; then
         printf '\n'
         printf '"%s" is a built-in view name.\n' "$category_name"
         printf 'Pick a different category name.\n'
@@ -2770,6 +2934,15 @@ while true; do
 
         continue
     fi
+
+    # Logged only once command_path is confirmed real, so a launch
+    # that fails to even find a command doesn't still count as a use
+    # of it. mkdir here rather than assuming CONFIG_DIR already exists
+    # — hiding/favoriting/categorizing all create it lazily too, but
+    # a config-free first run could reach Enter before any of those.
+    mkdir -p "$CONFIG_DIR"
+    printf '%s\n' "$command" >> "$LAUNCH_HISTORY_FILE"
+    (( launch_counts[$command]++ ))
 
     if [[ "$TERMINAL" == "current" ]]; then
 
