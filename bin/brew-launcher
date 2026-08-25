@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.9.0"
+VERSION="0.9.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -41,7 +41,10 @@ STATE_FILE="$CACHE_DIR/state"
 #   3 — a rebuild also writes the per-formula details text (PREVIEW_DIR)
 #   4 — that details text reserves a slot for the live category list
 #   5 — details metadata labels are padded to 12, not 10
-CACHE_FORMAT_VERSION=5
+#   6 — a rebuild also writes the resolved executable path (8th
+#       column), so Enter can launch it directly without a fresh
+#       PATH lookup
+CACHE_FORMAT_VERSION=6
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -674,8 +677,19 @@ for formula in formulae:
         ):
             continue
 
-        # Make sure the command is reachable through PATH.
+        # Make sure the command is reachable through PATH, and keep
+        # the exact path this found it at (e.g. /opt/homebrew/bin/btop)
+        # — not the opt_bin path above, which is homebrew-internal and
+        # not necessarily what a shell would actually run.
+        #
+        # This is the same path `command -v` would return live, so
+        # caching it doesn't risk going stale the way caching a fully
+        # resolved Cellar path would: Homebrew re-points this exact
+        # symlink on every upgrade, it only stops existing if the
+        # formula is fully uninstalled — a case the launch-time check
+        # already has to handle regardless.
         found_on_path = False
+        resolved_path = ""
 
         for directory in os.environ.get("PATH", "").split(os.pathsep):
 
@@ -686,6 +700,7 @@ for formula in formulae:
 
             if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
                 found_on_path = True
+                resolved_path = candidate
                 break
 
         if not found_on_path:
@@ -705,6 +720,7 @@ for formula in formulae:
                 size,
                 outdated_flag,
                 full_name,
+                resolved_path,
             ])
         )
 
@@ -1466,7 +1482,7 @@ load_categorized_commands
 
 if [[ "$LIST_MODE" == true ]]; then
 
-    while IFS=$'\t' read -r command description formula version size outdated full_name; do
+    while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path; do
 
         if [[ -n "${hidden_commands[$command]-}" ]]; then
             continue
@@ -1525,7 +1541,7 @@ max_name=4
 max_version=7
 max_size=4
 
-while IFS=$'\t' read -r command description formula version size outdated full_name; do
+while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path; do
 
     display_name="$formula"
 
@@ -1578,12 +1594,13 @@ build_entries() {
     # and F7 (find_entry_position "" never matches, so no position was
     # ever passed to fzf and the cursor snapped back to the top).
     local command description formula version size outdated full_name
+    local resolved_path
     local display_name name_fmt version_text version_fmt size_fmt
     local left_marker left_marker_fmt display
 
     entries=()
 
-    while IFS=$'\t' read -r command description formula version size outdated full_name; do
+    while IFS=$'\t' read -r command description formula version size outdated full_name resolved_path; do
 
         # Three-way view filter. "Hidden" is the only view that shows
         # hidden entries, and it shows nothing else — which is what
@@ -1633,7 +1650,7 @@ build_entries() {
         display="$left_marker_fmt$name_fmt$version_fmt$size_fmt$description"
 
         entries+=(
-            "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"
+            "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"$'\t'"$resolved_path"
         )
 
     done < "$CACHE_FILE"
@@ -2594,6 +2611,8 @@ while true; do
     # Field 2 = display text
     # Field 3 = formula
     # Field 4 = description
+    # Field 5 = resolved path (last field, from the cache — see Enter
+    #           below for why this is preferred over a fresh lookup)
     # --------------------------------------------------------
 
     command="${selection%%$'\t'*}"
@@ -2602,6 +2621,9 @@ while true; do
     remaining="${remaining#*$'\t'}"
 
     formula="${remaining%%$'\t'*}"
+
+    remaining="${remaining#*$'\t'}"
+    resolved_path="${remaining#*$'\t'}"
 
     # --------------------------------------------------------
     # F2 / ⌥H = hide selected entry.
@@ -2693,9 +2715,29 @@ while true; do
 
     # --------------------------------------------------------
     # Enter = launch selected entry.
+    #
+    # Prefer the path the cache already verified during the last
+    # rebuild over a fresh `command -v` lookup: it's the same value
+    # `command -v` would return anyway in the common case (Homebrew
+    # re-points this exact path on every upgrade, it doesn't go
+    # stale), and using it closes the narrow gap where something on
+    # PATH changed in between browsing the list and pressing Enter —
+    # what launches is guaranteed to be what was actually shown.
+    #
+    # Falls back to a fresh lookup if the cached path is missing
+    # (a cache built before this existed) or no longer executable (the
+    # formula was fully uninstalled since the cache was built) — that
+    # fallback is also the entire safety net a stale cache needs; a
+    # rename/reinstall elsewhere on PATH is the one case a fresh
+    # lookup could find something the cached path wouldn't, and it's
+    # rare enough not to justify always paying for a live lookup.
     # --------------------------------------------------------
 
-    command_path="$(command -v "$command" 2>/dev/null)"
+    if [[ -n "$resolved_path" && -x "$resolved_path" ]]; then
+        command_path="$resolved_path"
+    else
+        command_path="$(command -v "$command" 2>/dev/null)"
+    fi
 
     if [[ -z "$command_path" ]]; then
 

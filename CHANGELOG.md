@@ -5,6 +5,51 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] — 2026-08-25
+
+### Changed
+
+- **Pressing Enter now launches the exact path the cache already verified**,
+  instead of doing a fresh lookup on every launch. This closes a narrow gap
+  where something on `PATH` could change between browsing the list and
+  pressing Enter, so what launches wasn't always guaranteed to be what was
+  shown.
+
+  This doesn't trade away picking up Homebrew upgrades: Homebrew re-points
+  the same path on every upgrade rather than making a new one, so the
+  cached path stays valid across upgrades on its own. Only a full uninstall
+  invalidates it, and that case falls back to a fresh lookup automatically.
+
+  Verified directly: shadowed a real command with a decoy earlier on `PATH`
+  (which a fresh lookup would have found first) and confirmed the launcher
+  still launched the real one from the cache; then made the cached path
+  point at a file that doesn't exist and confirmed it fell back to a live
+  lookup instead of erroring.
+
+  Cache format version bumped (adds an 8th column, the resolved path);
+  existing caches rebuild once automatically. `--list`'s documented 6-field
+  output is unaffected.
+
+### Added
+
+- `test/ignore-fixtures.sh` — hide/unhide round-trips, duplicate-hide is a
+  no-op, blank lines and `#` comments in a hand-edited ignore file are
+  skipped rather than treated as commands.
+- `test/dedup-fixtures.sh` — duplicate command names across formulae are
+  reduced to one entry, with the dropped one(s) still reported.
+- `test/category-fixtures.sh` — sources `load_category_names()` directly
+  against a fixture categories directory (no fzf or brew needed), covering
+  reserved-name skipping (`All`/`Hidden` hand-made files) and that
+  `Favorites` is pinned first rather than just happening to sort there.
+- `test/list-fixtures.sh` — a second CI test covering hidden-entry
+  filtering and `--list`'s 6-field output shape, built against a cache
+  and state file written directly rather than a real Homebrew install.
+  `test/cache-roundtrip.sh` skips on a bare runner with no formulae
+  installed; this one never does, since it needs no real formulae to
+  begin with.
+- README now documents the 60-second cache-freshness window from
+  0.5.1 and points at `F5` as the way to skip it.
+
 ## [0.9.0] — 2026-08-25
 
 ### Added
@@ -58,34 +103,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   where a single timestamp was expected. Found by the first real CI run
   on a Linux runner, added in this same release. Fixed with an explicit
   `uname -s` branch instead of the try-both assumption.
-
-## [Unreleased]
-
-### Added
-
-- `test/ignore-fixtures.sh` — hide/unhide round-trips, duplicate-hide is a
-  no-op, blank lines and `#` comments in a hand-edited ignore file are
-  skipped rather than treated as commands.
-- `test/dedup-fixtures.sh` — duplicate command names across formulae are
-  reduced to one entry, with the dropped one(s) still reported.
-
-### Added
-
-- `test/category-fixtures.sh` — sources `load_category_names()` directly
-  against a fixture categories directory (no fzf or brew needed), covering
-  reserved-name skipping (`All`/`Hidden` hand-made files) and that
-  `Favorites` is pinned first rather than just happening to sort there.
-
-### Added
-
-- `test/list-fixtures.sh` — a second CI test covering hidden-entry
-  filtering and `--list`'s 6-field output shape, built against a cache
-  and state file written directly rather than a real Homebrew install.
-  `test/cache-roundtrip.sh` skips on a bare runner with no formulae
-  installed; this one never does, since it needs no real formulae to
-  begin with.
-- README now documents the 60-second cache-freshness window from
-  0.5.1 and points at `F5` as the way to skip it.
 
 ## [0.8.0] — 2026-08-24
 
@@ -446,6 +463,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.9.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.1
 [0.9.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.0
 [0.8.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.1
 [0.8.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.0
