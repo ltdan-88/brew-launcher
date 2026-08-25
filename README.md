@@ -36,8 +36,8 @@ remove* Homebrew packages interactively, [`taproom`](https://github.com/hzqtc/ta
 and [`fzf-brew`](https://github.com/thirteen37/fzf-brew) already do that well.
 This one is for the tools you've *already* installed and want to actually use.
 
-It's a single zsh file. No daemon, no database, no config to write, and startup
-is instant after the first run.
+It's a single zsh file. No daemon, no database, nothing you *have to*
+configure — startup is instant after the first run.
 
 ## Quick start
 
@@ -50,6 +50,8 @@ That's it — nothing to configure. Type to search, **Enter** to launch, **Esc**
 
 **Requirements:** macOS or Linux · [Homebrew](https://brew.sh/) · python3 (already on most systems).
 [fzf](https://github.com/junegunn/fzf) is installed automatically as a dependency.
+Optional: [tmux](https://github.com/tmux/tmux), only if you use the tmux terminal
+backend or Presets — see [Configuration](#configuration).
 
 ## What you get
 
@@ -91,10 +93,10 @@ teaches you the key and then gets out of the way.
 
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
 
-**F2** opens the view picker: `All`, `Favorites`, `Hidden`, `Most Used`,
-`Recently Added`, then your own categories, each marked with `·` so they're
-easy to tell apart from the built-in views above them. Group tools however you
-think about them — Games, Editors, Monitoring. Every view except `All` shows
+**F2** opens the view picker: `All`, `Favorites`, then your own categories —
+each marked with `·` so they're easy to tell apart from the built-in views —
+followed by `Most Used`, `Recently Added`, and `Hidden` last. Group tools
+however you think about them — Games, Editors, Monitoring. Every view except `All` shows
 how many entries it holds. **Esc** steps back one level at a time (filtered
 view → picker → everything → quit) rather than dumping you out.
 
@@ -158,12 +160,41 @@ On macOS with [Ghostty](https://ghostty.org/), picking a tool opens it in a
 **new tab**, so the launcher stays where it is and you can fire off several in a
 row. Inside a tmux session, `BREW_LAUNCHER_TERMINAL=tmux` does the same with a
 **new window** instead. Everywhere else it launches in place. See
-[Terminal backends](#terminal-backends).
+[Configuration](#configuration).
 
 This works the same for a long-running TUI (`htop`, `lazygit`) and a one-shot
 CLI that prints and exits (`eza`, `jq`, `shellcheck`) — quitting or finishing
 either one leaves you at a normal shell prompt in that tab, exactly like typing
 the command yourself would.
+
+### Launch several tools together
+
+<p align="center"><img src="assets/presets.gif" alt="Creating a preset by multi-selecting tools with Tab, naming it, then launching it with F9"></p>
+
+A preset is a named group of tools that all open together, one per tmux pane —
+your morning setup in one shot instead of launching each tool by hand.
+
+**F4 → Create Preset** picks the tools (Tab marks, Enter confirms) and names
+it for you. **F9** lists your presets and launches the one you pick,
+reattaching to it if it's already running rather than opening a second copy.
+File format and the `--preset` CLI flag are in [Configuration](#configuration).
+
+### Color themes
+
+<p align="center"><img src="assets/themes.png" alt="The Theme picker showing all seven palettes with descriptions"></p>
+
+Seven built-in palettes: five popular modern ones — `catppuccin` (the
+default), `gruvbox`, `tokyonight`, `nord`, `dracula` — plus two real, older
+ones, `green` and `amber`, the actual colors green- and amber-phosphor CRT
+terminals displayed. Monochrome on purpose: that hardware could only show one
+hue at varying brightness, so unlike the other five these never reach for a
+second color.
+
+**F4 → Theme** shows a short description next to each name, so you don't have
+to guess from the name alone. Picking one writes the config file for you — no
+terminal needed — and offers to relaunch immediately since colors are resolved
+once at startup. Env var and config-file syntax are in
+[Configuration](#configuration).
 
 ### Desktop shortcuts
 
@@ -193,13 +224,10 @@ marker legend, "Navigate") is explanatory and deliberately inert.
 **F1** (no alias needed — it means *help* nearly everywhere) opens the same
 reference below, from inside the launcher.
 
-The footer shows what browsing needs. Everything else lives one key away
-in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
-
 | Key | Action | |
 |---|---|---|
 | **Enter** | Launch selected application | footer |
-| **F2** / **⌥V** | Switch view (All · Favorites · Hidden · categories) | footer |
+| **F2** / **⌥V** | Switch view (All · Favorites · categories · Hidden) | footer |
 | **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
 | **Esc** | Go back one level, or quit | footer |
@@ -213,6 +241,15 @@ in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
 | — | Switch color theme | More only |
 | — | Create a new preset | More only |
 | — | Create a desktop shortcut (macOS or Linux) | More only |
+
+Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
+**⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails. They exist because
+F-keys need Fn on most Mac laptops. In stock Terminal.app, enable *Use Option
+as Meta Key* in the profile's Keyboard settings first; Ghostty supports it out
+of the box.
+
+<details>
+<summary>Why the keys are split this way</summary>
 
 **F1** is deliberately unassigned — it means *help* nearly everywhere, and the
 launcher may want it later. The footer keys sit on **F2**–**F5** plus **F9**
@@ -230,28 +267,46 @@ reverse: unlike making a shortcut (once per tool, rarely repeated), running a
 preset is something you'd reach for over and over, so it earned a footer key
 of its own rather than staying More-only.
 
-The menu lists each action's key beside it, so it teaches its own shortcuts and
-works itself out of a job.
+The menu lists each action's key beside it, so it teaches its own shortcuts
+and works itself out of a job.
 
-Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
-**⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails — so there are seven
-letters to learn rather than seven arbitrary numbers. They exist because F-keys
-need Fn on most Mac laptops. In stock Terminal.app, enable *Use Option as Meta
-Key* in the profile's Keyboard settings first; Ghostty supports it out of the
-box.
-
-The footer also adapts to the terminal, dropping the marker legend and then the
-Option aliases rather than letting fzf cut an item off mid-word. Create
+The footer also adapts to the terminal, dropping the marker legend and then
+the Option aliases rather than letting fzf cut an item off mid-word. Create
 shortcut isn't offered on any platform besides macOS and Linux, since there's
 nowhere to put the result elsewhere.
 
+</details>
+
 ```bash
-brew-launcher --refresh   # rebuild the application cache
-brew-launcher --list      # tab-separated plain text, for scripting
+brew-launcher --refresh          # rebuild the application cache
+brew-launcher --list             # tab-separated plain text, for scripting
+brew-launcher --preset devops    # launch a preset directly, no picker
 brew-launcher --help
 ```
 
-## Terminal backends
+## Configuration
+
+There's nothing you *have to* configure — the in-app keys (Theme, Create
+Preset) write these files for you. They're plain text if you'd rather edit
+them directly, one setting or command per line, `#` comments and blank lines
+ignored:
+
+```
+~/.config/brew-launcher/config              # TERMINAL=, THEME= — see below
+~/.config/brew-launcher/ignore               # hidden entries
+~/.config/brew-launcher/categories/<name>    # one file per category
+~/.config/brew-launcher/categories/Favorites
+~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used
+~/.config/brew-launcher/presets/<name>       # one file per preset — see below
+```
+
+`config` and `presets/<name>` are the only files here you'd ever write
+yourself. An env var (`BREW_LAUNCHER_TERMINAL`, `BREW_LAUNCHER_THEME`) always
+wins over what `config` says, for that one run. Categories match on
+**command** name, not formula name — one formula can provide several commands
+(`midnight-commander` provides `mc`). Use `brew-launcher --list` to look one up.
+
+### Terminal backends
 
 By default the best available option is chosen: Ghostty on macOS if installed,
 otherwise the current terminal. Override with `BREW_LAUNCHER_TERMINAL`:
@@ -268,62 +323,7 @@ Use it while you're already inside one and it opens tools in a new window
 alongside the launcher; run it outside tmux and it just falls back to
 `current`, same as if you hadn't set it.
 
-To make a choice permanent without exporting it every session, put it in the
-[config file](#configuration) instead.
-
-## Presets
-
-Launch several tools together — a whole setup in one shot, each in its own
-tmux pane. Quickest way in: **F9** in the launcher lists your presets and
-launches the one you pick, reattaching if it's already running. From a
-terminal, name it directly:
-
-```bash
-brew-launcher --preset devops
-```
-
-That reads `~/.config/brew-launcher/presets/devops`, one command per line
-(`#` comments and blank lines skipped, same convention as the ignore file):
-
-```
-# ~/.config/brew-launcher/presets/devops
-btop
-lazygit
-lazydocker
-```
-
-Every command in the file opens as its own pane in one tmux session, tiled
-evenly (`tmux select-layout tiled`).
-
-Don't want to hand-edit the file? **F4 → Create Preset** does it for you:
-Tab marks each tool you want, Enter confirms the selection, then name it —
-type a new name or pick an existing preset to replace. Draws from your whole
-toolset regardless of which view you had open when you started.
-
-Unlike `BREW_LAUNCHER_TERMINAL=tmux` above, this always starts (or reattaches
-to) a tmux session — naming a preset on the command line *is* the opt-in, so
-there's no ambiguity about whether tmux gets bootstrapped. Re-running the
-same preset while it's still running reattaches you to it rather than
-spawning a duplicate.
-
-## Theming
-
-Seven built-in palettes. Five are what's actually popular right now, not
-arbitrary — `catppuccin` (the default), `gruvbox`, `tokyonight`, `nord`,
-`dracula` — checked against real usage rather than invented, same idea as
-`Most Used`/`Recently Added`'s naming. Two are real too, just older: `green`
-and `amber`, the actual colors green- and amber-phosphor CRT terminals
-displayed. Monochrome on purpose — that hardware could only show one hue at
-varying brightness, so unlike the other five these never reach for a second
-color.
-
-Switch from inside the launcher: **F4 → Theme**. Each one shows a short
-description so you don't have to guess from the name alone. Picking one writes
-the config file for you — no terminal needed. Colors are resolved once at
-startup, so it offers to relaunch and apply the change immediately; say no and
-it's there next time regardless.
-
-Or set it yourself:
+### Theme
 
 ```bash
 export BREW_LAUNCHER_THEME=nord   # for one session
@@ -334,29 +334,31 @@ export BREW_LAUNCHER_THEME=nord   # for one session
 THEME=nord
 ```
 
-## Configuration
+Valid names: `catppuccin`, `gruvbox`, `tokyonight`, `nord`, `dracula`,
+`green`, `amber`. An unrecognized name fails fast rather than silently
+falling back, matching `BREW_LAUNCHER_TERMINAL`'s own convention.
 
-There's nothing you *have* to configure — the in-app keys write most of these
-for you. They're plain text if you'd rather edit them directly, one setting or
-command per line:
+### Presets
 
-```
-~/.config/brew-launcher/config              # TERMINAL=, THEME= — see above
-~/.config/brew-launcher/ignore               # hidden entries
-~/.config/brew-launcher/categories/<name>    # one file per category
-~/.config/brew-launcher/categories/Favorites
-~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used
-~/.config/brew-launcher/presets/<name>       # one file per preset — see Presets above
+```bash
+brew-launcher --preset devops
 ```
 
-`config` and `presets/<name>` are the files here you write yourself — nothing
-in the launcher generates them. `#` comments and blank lines are ignored. An
-env var (`BREW_LAUNCHER_TERMINAL`, `BREW_LAUNCHER_THEME`) always wins over
-whatever `config` says, for that one run.
+reads `~/.config/brew-launcher/presets/devops`, one command per line:
 
-Categories match on **command** name, not formula name — one formula can provide
-several commands (`midnight-commander` provides `mc`). Use `brew-launcher --list`
-to look one up.
+```
+# ~/.config/brew-launcher/presets/devops
+btop
+lazygit
+lazydocker
+```
+
+Every command opens as its own pane in one tmux session, tiled evenly
+(`tmux select-layout tiled`). Unlike `BREW_LAUNCHER_TERMINAL=tmux` above,
+naming a preset on the command line *is* the opt-in — it always starts (or
+reattaches to) a tmux session, no ambiguity about whether tmux gets
+bootstrapped. Re-running the same preset while it's still running reattaches
+you to it rather than spawning a duplicate.
 
 ## How it works
 
@@ -372,8 +374,8 @@ Discovery walks each formula's `opt/<name>/bin`, keeps executables that are
 actually reachable on your `PATH`, and drops obvious helper binaries. Only
 formulae you installed on purpose are listed.
 
-Roughly 2,600 lines of zsh plus a small Python helper for parsing Homebrew's
-JSON — no Node, no Rust, no daemon, no SQLite.
+One zsh file plus a small Python helper for parsing Homebrew's JSON — no
+Node, no Rust, no daemon, no SQLite.
 
 <details>
 <summary><strong>Automator launcher (macOS)</strong></summary>
@@ -405,6 +407,9 @@ Automation).
 **`BREW_LAUNCHER_TERMINAL=tmux` isn't opening a new window.** It only does
 that from inside an existing tmux session (`$TMUX` set); otherwise it falls
 back to launching in place, same as `current`.
+
+**`--preset`/F9 says tmux is required.** Presets always use tmux regardless of
+`BREW_LAUNCHER_TERMINAL` — install it with `brew install tmux`.
 
 **Versions look out of date.** The update check runs on a timer, not every
 launch. `brew-launcher --refresh` forces it.

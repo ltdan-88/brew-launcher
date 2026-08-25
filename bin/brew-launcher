@@ -231,8 +231,8 @@ Keyboard shortcuts:
             to universal, so it costs nothing to leave undocumented.
 
   Shown in the footer:
-  F2 / ⌥V   Switch view (All, Favorites, Hidden, Most Used,
-            Recently Added, your categories)
+  F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
+            Recently Added, Hidden)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
             categories, dependencies, caveats). Shift-Up/Down scrolls it.
   F4 / ⌥M   Open the More menu — the actions below
@@ -252,9 +252,10 @@ Keyboard shortcuts:
   profile's Keyboard settings first; Ghostty supports it by default.
 
 Views:
-  F2/⌥V switches what you're looking at: All, Favorites, Hidden, then
-  your categories. "Hidden" is an ordinary view — Enter still launches
-  there, and F6 unhides. Ctrl-D in the picker deletes the highlighted
+  F2/⌥V switches what you're looking at: All, Favorites, your
+  categories, then the computed views and Hidden last. "Hidden" is an
+  ordinary view — Enter still launches there, and F6 unhides. Ctrl-D
+  in the picker deletes the highlighted
   category (All, Hidden and Favorites can't be deleted; Favorites has
   its own F7 toggle). Deleting asks first and shows how many entries
   the category holds — it's the one action here you can't undo.
@@ -1775,8 +1776,8 @@ pick_help() {
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
     rows+=("")
     rows+=("First tier — always on screen")
-    rows+=("  F2 / ⌥V   Switch view (All, Favorites, Hidden, Most Used,")
-    rows+=("            Recently Added, categories)")
+    rows+=("  F2 / ⌥V   Switch view (All, Favorites, categories, Most Used,")
+    rows+=("            Recently Added, Hidden)")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
