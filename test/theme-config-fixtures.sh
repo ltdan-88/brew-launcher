@@ -59,7 +59,7 @@ EOF
 # 1. Every documented theme name is accepted.
 # ------------------------------------------------------------
 
-for theme in catppuccin gruvbox tokyonight nord dracula; do
+for theme in catppuccin gruvbox tokyonight nord dracula green amber; do
     if ! BREW_LAUNCHER_THEME="$theme" "$LAUNCHER" --list >/dev/null 2>"$TEST_HOME/stderr.txt"; then
         cat "$TEST_HOME/stderr.txt" >&2
         fail "theme '$theme' was rejected, but it's supposed to be valid"

@@ -255,15 +255,20 @@ To make a choice permanent without exporting it every session, put it in the
 
 ## Theming
 
-Five built-in palettes — `catppuccin` (the default), `gruvbox`, `tokyonight`,
-`nord`, `dracula`. Picked because they're what's actually popular right now,
-not arbitrary — same idea as `Most Used`/`Recently Added`'s naming, checked
-against real usage rather than invented.
+Seven built-in palettes. Five are what's actually popular right now, not
+arbitrary — `catppuccin` (the default), `gruvbox`, `tokyonight`, `nord`,
+`dracula` — checked against real usage rather than invented, same idea as
+`Most Used`/`Recently Added`'s naming. Two are real too, just older: `green`
+and `amber`, the actual colors green- and amber-phosphor CRT terminals
+displayed. Monochrome on purpose — that hardware could only show one hue at
+varying brightness, so unlike the other five these never reach for a second
+color.
 
-Switch from inside the launcher: **F4 → Theme**. It writes the config file for
-you — no terminal needed. Colors are resolved once at startup, so it offers to
-relaunch and apply the change immediately; say no and it's there next time
-regardless.
+Switch from inside the launcher: **F4 → Theme**. Each one shows a short
+description so you don't have to guess from the name alone. Picking one writes
+the config file for you — no terminal needed. Colors are resolved once at
+startup, so it offers to relaunch and apply the change immediately; say no and
+it's there next time regardless.
 
 Or set it yourself:
 
