@@ -188,6 +188,7 @@ Requirements:
   Homebrew
   fzf
   python3
+  tmux    Optional — only for the tmux terminal backend and Presets
 
 Terminal:
   BREW_LAUNCHER_TERMINAL=auto     Default behavior
