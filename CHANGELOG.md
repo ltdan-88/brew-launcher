@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-08-25
+
+### Added
+
+- **A "Theme" option in the More menu (`F4`) picks a color theme in-app** —
+  no terminal, no hand-editing the config file. Since colors are resolved
+  once at startup and can't repaint an already-running screen, picking a
+  new one offers to relaunch immediately; declining still saves the choice
+  for next time.
+
+  Reuses the config file's own `set_config_value()` writer to update just
+  the `THEME=` line, preserving everything else already in the file —
+  other settings, hand-written comments included.
+
 ## [0.12.0] — 2026-08-25
 
 ### Added
@@ -573,6 +587,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.13.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.13.0
 [0.12.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.12.0
 [0.11.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.11.0
 [0.10.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.10.0

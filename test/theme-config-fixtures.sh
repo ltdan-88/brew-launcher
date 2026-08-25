@@ -107,4 +107,45 @@ if BREW_LAUNCHER_THEME="not-a-real-theme" "$LAUNCHER" --list >/dev/null 2>"$TEST
     fail "the env var should override the config file's valid theme with an invalid one and fail"
 fi
 
-printf 'PASS: all named themes accepted, unknown theme rejected, config file honored, env var still wins\n'
+# ------------------------------------------------------------
+# 5. set_config_value() — the function the in-app Theme picker uses
+#    to write the config file. Pure with respect to the filesystem
+#    (no fzf), so sourced and called directly, same approach as
+#    hide_entry()/unhide_entry() in ignore-fixtures.sh.
+# ------------------------------------------------------------
+
+CONFIG_DIR="$TEST_HOME/set-config-dir"
+CONFIG_FILE="$CONFIG_DIR/config"
+CACHE_DIR="$TEST_HOME/set-config-cache"
+mkdir -p "$CACHE_DIR"
+
+source <(sed -n '/^set_config_value() {/,/^}/p' "$LAUNCHER")
+
+# 5a. Writing into a config file that doesn't exist yet creates it.
+set_config_value THEME nord
+[[ "$(cat "$CONFIG_FILE")" == "THEME=nord" ]] ||
+    fail "set_config_value should create the config file with the new line: $(cat "$CONFIG_FILE" 2>/dev/null)"
+
+# 5b. Adding a second, different key appends rather than overwriting.
+set_config_value TERMINAL current
+
+if [[ "$(grep -c '' "$CONFIG_FILE")" != "2" ]]; then
+    fail "expected 2 lines after adding a second key, got: $(cat "$CONFIG_FILE")"
+fi
+grep -qx "THEME=nord" "$CONFIG_FILE" || fail "THEME=nord should have survived adding TERMINAL"
+grep -qx "TERMINAL=current" "$CONFIG_FILE" || fail "TERMINAL=current should have been added"
+
+# 5c. Updating an existing key replaces its line in place — a hand-
+#     written comment elsewhere in the file must survive untouched.
+printf '# a note I wrote by hand\n' >> "$CONFIG_FILE"
+set_config_value THEME dracula
+
+if [[ "$(grep -c '' "$CONFIG_FILE")" != "3" ]]; then
+    fail "updating an existing key should not change the line count: $(cat "$CONFIG_FILE")"
+fi
+grep -qx "THEME=dracula" "$CONFIG_FILE" || fail "THEME should have been updated to dracula"
+grep -qx "THEME=nord" "$CONFIG_FILE" && fail "the old THEME=nord line should be gone, not duplicated"
+grep -qx "# a note I wrote by hand" "$CONFIG_FILE" || fail "a hand-written comment should survive an update to a different concern"
+grep -qx "TERMINAL=current" "$CONFIG_FILE" || fail "TERMINAL=current should still be there, untouched by a THEME update"
+
+printf 'PASS: all named themes accepted, unknown theme rejected, config file honored, env var still wins, set_config_value writes/updates correctly\n'
