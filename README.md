@@ -90,9 +90,10 @@ teaches you the key and then gets out of the way.
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
 
 **F2** opens the view picker: `All`, `Favorites`, `Hidden`, then your own
-categories. Group tools however you think about them — Games, Editors,
-Monitoring. **Esc** steps back one level at a time (filtered view → picker →
-everything → quit) rather than dumping you out.
+categories, each marked with `·` so they're easy to tell apart from the
+built-in views above them. Group tools however you think about them — Games,
+Editors, Monitoring. **Esc** steps back one level at a time (filtered view →
+picker → everything → quit) rather than dumping you out.
 
 **Ctrl-D** in that picker deletes the highlighted category. It asks first and
 shows how many entries the category holds — every other action here is a toggle
