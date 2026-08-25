@@ -113,6 +113,18 @@ jobs:
       - name: Most Used / Recently Added ranking test
         run: zsh test/computed-view-fixtures.sh
 
+  theme-config-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: Theme and config file test
+        run: zsh test/theme-config-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:

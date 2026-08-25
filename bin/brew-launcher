@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.11.0"
+VERSION="0.12.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -67,6 +67,41 @@ CACHE_FORMAT_VERSION=8
 export FOOTER_CLICK_FILE="${FOOTER_CLICK_FILE:-$CACHE_DIR/footer-click.$$}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
+
+# Persisted defaults for things an env var can already override for one
+# run — BREW_LAUNCHER_TERMINAL and BREW_LAUNCHER_THEME still win if
+# set, this is just what to fall back to instead of the hardcoded
+# defaults, once, without setting an env var every session.
+#
+# Parsed as plain KEY=value data, not sourced as shell code — every
+# other file in CONFIG_DIR (ignore, categories/*, launch-history) is
+# inert data the user's own edits can't turn into something that
+# executes, and this stays consistent with that rather than becoming
+# the one file in here that's actually a script.
+CONFIG_FILE="$CONFIG_DIR/config"
+
+CONFIG_TERMINAL=""
+CONFIG_THEME=""
+
+if [[ -f "$CONFIG_FILE" ]]; then
+
+    while IFS='=' read -r config_key config_value; do
+
+        config_key="${config_key#"${config_key%%[![:space:]]*}"}"
+        config_key="${config_key%"${config_key##*[![:space:]]}"}"
+        config_value="${config_value#"${config_value%%[![:space:]]*}"}"
+        config_value="${config_value%"${config_value##*[![:space:]]}"}"
+
+        [[ -z "$config_key" ]] && continue
+        [[ "$config_key" == \#* ]] && continue
+
+        case "$config_key" in
+            TERMINAL) CONFIG_TERMINAL="$config_value" ;;
+            THEME)    CONFIG_THEME="$config_value" ;;
+        esac
+
+    done < "$CONFIG_FILE"
+fi
 
 # One file per category, one command per line — same convention as
 # IGNORE_FILE above. Created/edited in-picker via F6 (Favorites only)
@@ -150,6 +185,17 @@ Terminal:
   BREW_LAUNCHER_TERMINAL=auto     Default behavior
   BREW_LAUNCHER_TERMINAL=current  Run in the current terminal
   BREW_LAUNCHER_TERMINAL=ghostty  Launch in a new Ghostty tab
+
+Theme:
+  BREW_LAUNCHER_THEME=catppuccin  Default
+  BREW_LAUNCHER_THEME=gruvbox
+  BREW_LAUNCHER_THEME=tokyonight
+  BREW_LAUNCHER_THEME=nord
+  BREW_LAUNCHER_THEME=dracula
+
+  Both settings persist without exporting them every session via
+  ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
+  var above always wins over it for that one run.
 
 Keyboard shortcuts:
 
@@ -379,7 +425,7 @@ done
 # Terminal configuration
 # ------------------------------------------------------------
 
-TERMINAL="${BREW_LAUNCHER_TERMINAL:-auto}"
+TERMINAL="${BREW_LAUNCHER_TERMINAL:-${CONFIG_TERMINAL:-auto}}"
 
 case "$TERMINAL" in
     auto|current|ghostty)
@@ -406,6 +452,126 @@ if [[ "$TERMINAL" == "ghostty" ]] &&
     echo "Error: osascript is required when using Ghostty."
     exit 1
 fi
+
+# ------------------------------------------------------------
+# fzf colors
+#
+# THEME_NAME resolves the same way TERMINAL does: an env var for one
+# run, then the config file's persisted choice, then a hardcoded
+# default. Unlike TERMINAL, there's no "auto" — a theme is either
+# picked or it's the default, there's nothing to detect.
+#
+# The five presets are the ones actually popular right now, not a
+# guess: Catppuccin (the existing default), Gruvbox, Tokyo Night,
+# Nord and Dracula, checked against real terminal/editor-theme
+# popularity data rather than picked from memory. Hex values are each
+# theme's own published palette, not approximated.
+# ------------------------------------------------------------
+
+THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
+
+case "$THEME_NAME" in
+    catppuccin)
+        FZF_COLORS='
+fg:#cdd6f4,
+bg:#1e1e2e,
+fg+:#f5e0e6,
+bg+:#313244,
+hl:#89b4fa,
+hl+:#89b4fa,
+info:#a6adc8,
+prompt:#89b4fa,
+pointer:#f38ba8,
+marker:#a6e3a1,
+spinner:#f5c2e7,
+header:#a6adc8,
+border:#45475a,
+label:#89b4fa,
+query:#f5e0e6
+'
+        ;;
+    gruvbox)
+        FZF_COLORS='
+fg:#ebdbb2,
+bg:#282828,
+fg+:#ebdbb2,
+bg+:#3c3836,
+hl:#83a598,
+hl+:#83a598,
+info:#928374,
+prompt:#83a598,
+pointer:#fb4934,
+marker:#b8bb26,
+spinner:#fe8019,
+header:#928374,
+border:#504945,
+label:#83a598,
+query:#ebdbb2
+'
+        ;;
+    tokyonight)
+        FZF_COLORS='
+fg:#c0caf5,
+bg:#24283b,
+fg+:#c0caf5,
+bg+:#292e42,
+hl:#7aa2f7,
+hl+:#7aa2f7,
+info:#565f89,
+prompt:#7aa2f7,
+pointer:#f7768e,
+marker:#9ece6a,
+spinner:#bb9af7,
+header:#565f89,
+border:#292e42,
+label:#7aa2f7,
+query:#c0caf5
+'
+        ;;
+    nord)
+        FZF_COLORS='
+fg:#d8dee9,
+bg:#2e3440,
+fg+:#eceff4,
+bg+:#3b4252,
+hl:#88c0d0,
+hl+:#88c0d0,
+info:#4c566a,
+prompt:#88c0d0,
+pointer:#bf616a,
+marker:#a3be8c,
+spinner:#b48ead,
+header:#4c566a,
+border:#434c5e,
+label:#88c0d0,
+query:#eceff4
+'
+        ;;
+    dracula)
+        FZF_COLORS='
+fg:#f8f8f2,
+bg:#282a36,
+fg+:#f8f8f2,
+bg+:#44475a,
+hl:#bd93f9,
+hl+:#bd93f9,
+info:#6272a4,
+prompt:#bd93f9,
+pointer:#ff79c6,
+marker:#50fa7b,
+spinner:#ffb86c,
+header:#6272a4,
+border:#44475a,
+label:#bd93f9,
+query:#f8f8f2
+'
+        ;;
+    *)
+        echo "Error: unknown theme '$THEME_NAME'."
+        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula."
+        exit 1
+        ;;
+esac
 
 mkdir -p "$CACHE_DIR"
 
@@ -1961,28 +2127,6 @@ FZF_HEADER="$(
         "SIZE" \
         "DESCRIPTION"
 )"
-
-# ------------------------------------------------------------
-# fzf colors
-# ------------------------------------------------------------
-
-FZF_COLORS='
-fg:#cdd6f4,
-bg:#1e1e2e,
-fg+:#f5e0e6,
-bg+:#313244,
-hl:#89b4fa,
-hl+:#89b4fa,
-info:#a6adc8,
-prompt:#89b4fa,
-pointer:#f38ba8,
-marker:#a6e3a1,
-spinner:#f5c2e7,
-header:#a6adc8,
-border:#45475a,
-label:#89b4fa,
-query:#f5e0e6
-'
 
 # ------------------------------------------------------------
 # Launch application in the current terminal
