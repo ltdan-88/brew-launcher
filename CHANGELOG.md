@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] — 2026-08-26
+
+### Added
+
+- **A tenth theme: `red-sands`** — a genuinely red theme (deep brick-red
+  background, warm cream text) rather than a theme that merely uses red
+  as one accent among several, which was every option so far. From the
+  iTerm2-Color-Schemes collection, the reference most terminal color
+  schemes get ported through — checked against real popularity data,
+  including a first candidate (Rosé Pine) that turned out to have a
+  purple background despite its "rose" branding, before settling on
+  this one.
+
 ## [0.19.0] — 2026-08-26
 
 ### Added
