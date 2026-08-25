@@ -4,23 +4,27 @@ Cheat sheet for cutting a new `brew-launcher` release. The Homebrew tap
 (`ltdan-88/homebrew-brew-launcher`) updates itself automatically — you never
 hand-edit its formula or compute a sha256 by hand.
 
+`main` is protected — no direct pushes, even for a release. The version bump
+rides inside the feature/fix PR that earns the release, not a separate commit.
+
 ## Every release
 
-1. **Bump the version** in `bin/brew-launcher`:
+1. **Bump the version** in `bin/brew-launcher`, as part of the PR for
+   whatever you're shipping:
    ```zsh
    VERSION="X.Y.Z"
    ```
-   Update the README too if features/shortcuts changed.
+   Update the README and `CHANGELOG.md` too if features/shortcuts changed.
 
-2. **Commit and push to `main`**:
-   ```bash
-   git add -A
-   git commit -m "Prepare vX.Y.Z release"
-   git push origin main
-   ```
+2. **Branch, commit, push, open a PR, wait for CI, squash-merge** — the
+   normal flow for any change here, nothing release-specific about it.
 
-3. **Tag and push the tag** — this is what triggers everything:
+3. **Tag the merged commit and push the tag** — this is what triggers
+   everything. Tags aren't restricted by branch protection, so this part
+   still pushes directly:
    ```bash
+   git checkout main
+   git pull origin main
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
@@ -86,7 +90,8 @@ If you tagged too early or the tag doesn't match what's on `main`:
 ```bash
 git tag -d vX.Y.Z
 git push origin :refs/tags/vX.Y.Z
-# fix VERSION= / commit / push to main, then re-tag:
+# fix VERSION= via a normal branch/PR/merge (see "Every release" above),
+# then re-tag the corrected commit on main:
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
@@ -97,3 +102,8 @@ git push origin vX.Y.Z
   scoped to `homebrew-brew-launcher` only, Contents: Read and write.
   Expires periodically (recommended: 90 days) — see the "Bad credentials"
   fix above when it lapses.
+
+- Branch protection on `main`: PR required, all CI checks required, no
+  force-pushes or deletions. The repo owner can still bypass it if a real
+  emergency needs a direct push — everyone/everything else goes through a
+  PR. Doesn't restrict tags, so step 3 above is unaffected.
