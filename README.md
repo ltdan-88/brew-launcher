@@ -147,11 +147,21 @@ CLI that prints and exits (`eza`, `jq`, `shellcheck`) — quitting or finishing
 either one leaves you at a normal shell prompt in that tab, exactly like typing
 the command yourself would.
 
-### macOS shortcuts
+### Desktop shortcuts
 
-**F9** writes a `.command` file to `/Applications/TUIs/` — double-click it, drag
-it to the Dock, or bind it to a hotkey in System Settings. Give it a custom icon
-via Finder → Get Info and it behaves like any other app.
+**F9** creates a shortcut so a tool shows up outside the launcher too.
+
+On macOS it writes a `.command` file to `/Applications/TUIs/` — double-click
+it, drag it to the Dock, or bind it to a hotkey in System Settings. Give it a
+custom icon via Finder → Get Info and it behaves like any other app.
+
+On Linux it writes a `.desktop` entry to `~/.local/share/applications/`, which
+every major desktop environment already watches — it appears in your
+application menu with no further setup, launching in your default terminal.
+
+Either way it's the same shell command underneath, so a one-shot CLI's output
+stays readable: the window drops to a live shell afterward instead of closing
+the instant the command finishes.
 
 ### Mouse support
 
@@ -180,7 +190,7 @@ in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | More |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | More |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | More |
-| **F9** / **⌥S** | Create macOS shortcut (macOS only) | More |
+| **F9** / **⌥S** | Create a desktop shortcut (macOS or Linux) | More |
 | **F1** | Open this reference in the launcher | — |
 
 **F1** is deliberately unassigned — it means *help* nearly everywhere, and the
