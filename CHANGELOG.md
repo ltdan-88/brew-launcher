@@ -5,6 +5,41 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] — 2026-08-25
+
+### Added
+
+- **The details pane (`F3`) now shows when you installed a tool, and what
+  version is available if it's outdated.** "Installed" is deliberately not
+  labeled "Released" — it's when *you* ran the install, not when the
+  developers published that version, since Homebrew doesn't track the
+  latter anywhere locally and there's no single consistent place to fetch
+  it from across every formula's own upstream project.
+
+  `Update available` shows the same thing the list's `*` marker already
+  signals, just with the actual version number attached instead of having
+  to go check `brew outdated` yourself.
+
+### Fixed
+
+- **A real desync bug, caught before release**: `rebuild_cache()` and
+  `refresh_outdated_if_stale()` each fetched "what's outdated" independently.
+  When the latter was changed to also capture version numbers, the former
+  kept its own old, name-only fetch — so every fresh cache rebuild silently
+  overwrote the correct data with the old format immediately afterward, and
+  "Update available" would go missing right after the exact refresh meant to
+  populate it. Fixed by consolidating both into one shared
+  `fetch_outdated_formulae()`, which also means this specific class of bug
+  can't recur — there's no longer a second copy to fall out of sync.
+
+- The outdated-info file also gets a format-detection check independent of
+  its normal TTL: an old-format file (no version column) forces an
+  immediate refresh instead of silently reading as "nothing is outdated"
+  for up to the usual 6-hour window.
+
+  Cache format version bumped (metadata labels widen from 12 to 18 columns
+  to fit "Update available"); existing caches rebuild once automatically.
+
 ## [0.10.0] — 2026-08-25
 
 ### Added
@@ -516,6 +551,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.11.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.11.0
 [0.10.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.10.0
 [0.9.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.2
 [0.9.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.1

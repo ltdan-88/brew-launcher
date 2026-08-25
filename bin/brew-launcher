@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.10.0"
+VERSION="0.11.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -47,7 +47,10 @@ STATE_FILE="$CACHE_DIR/state"
 #   7 — a rebuild also writes each formula's install timestamp (9th
 #       column, from Homebrew's own installed[].time), for the
 #       Recently Added view
-CACHE_FORMAT_VERSION=7
+#   8 — details text adds Installed/Update-available lines, and
+#       metadata labels are padded to 18, not 12, to fit
+#       "Update available"
+CACHE_FORMAT_VERSION=8
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -334,7 +337,7 @@ if [[ "$1" == "--internal-preview" ]]; then
     while IFS= read -r preview_line; do
         if [[ "$preview_line" == "$PREVIEW_CATEGORY_MARKER" ]]; then
             (( ${#preview_categories} )) && \
-                printf '  %-12s%s\n' 'Categories' "${(j:, :)preview_categories}"
+                printf '  %-18s%s\n' 'Categories' "${(j:, :)preview_categories}"
         else
             print -r -- "$preview_line"
         fi
@@ -461,6 +464,41 @@ ensure_current_state() {
 }
 
 # ------------------------------------------------------------
+# Fetch outdated formulae as tab-separated "name<TAB>version" lines,
+# written to $1.
+#
+# Shared by rebuild_cache() and refresh_outdated_if_stale() so there's
+# exactly one place that knows the actual command and output format —
+# these drifted out of sync once already, when refresh_outdated_if_
+# stale() switched to --json=v2 for the version string the details
+# pane needed, but rebuild_cache() kept its own separate --quiet,
+# name-only fetch. Every fresh rebuild silently overwrote the correct
+# file with the old format immediately afterward, so a formula's
+# "Update available" line in the details pane would go missing right
+# after the exact refresh that was supposed to populate it.
+# ------------------------------------------------------------
+
+fetch_outdated_formulae() {
+
+    local target_file="$1"
+
+    brew outdated --formula --json=v2 2>/dev/null | python3 -c '
+import json, sys
+
+try:
+    data = json.load(sys.stdin)
+except (ValueError, TypeError):
+    data = {}
+
+for formula in data.get("formulae", []):
+    name = formula.get("name", "")
+    current_version = formula.get("current_version", "")
+    if name and current_version:
+        print(f"{name}\t{current_version}")
+' > "$target_file" || : > "$target_file"
+}
+
+# ------------------------------------------------------------
 # Build cache
 # ------------------------------------------------------------
 
@@ -503,12 +541,10 @@ rebuild_cache() {
     fi
 
     # --------------------------------------------------------
-    # Get outdated formula names.
+    # Get outdated formulae, with the version that's available.
     # --------------------------------------------------------
 
-    if ! brew outdated --formula --quiet > "$tmp_outdated" 2>/dev/null; then
-        : > "$tmp_outdated"
-    fi
+    fetch_outdated_formulae "$tmp_outdated"
 
     # --------------------------------------------------------
     # Determine Homebrew prefix.
@@ -529,6 +565,7 @@ rebuild_cache() {
         "$PREVIEW_DIR" \
         "$PREVIEW_CATEGORY_MARKER" <<'PY'
 
+import datetime
 import json
 import os
 import subprocess
@@ -565,18 +602,26 @@ except Exception:
 leaves = {x.strip() for x in leaves if x.strip()}
 
 # ------------------------------------------------------------
-# Read outdated formula names.
+# Read outdated formula names, mapped to the version that's actually
+# available — used both for the outdated_flag below and, later, to
+# show that version in the details pane. `name in outdated` still
+# works exactly as it did when this was a set: dict membership checks
+# keys the same way.
 # ------------------------------------------------------------
+
+outdated = {}
 
 try:
     with open(outdated_file, "r", encoding="utf-8") as f:
-        outdated = {
-            line.strip()
-            for line in f
-            if line.strip()
-        }
+        for line in f:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            parts = line.split("\t", 1)
+            if len(parts) == 2:
+                outdated[parts[0]] = parts[1]
 except OSError:
-    outdated = set()
+    pass
 
 # ------------------------------------------------------------
 # Read installed formula sizes.
@@ -841,6 +886,27 @@ for formula in formulae:
     version = installed_versions[-1].get("version", "") if installed_versions else ""
     full_name = formula.get("full_name", name)
 
+    # This is when *you* installed the current version, not when its
+    # developers released it — Homebrew doesn't track the latter
+    # anywhere locally, and getting it would mean a live network call
+    # per formula to wherever each one's upstream release actually
+    # lives, which has no single consistent source across formulae.
+    # Labeled "Installed" rather than "Released" so it isn't read as
+    # something it isn't.
+    installed_date = ""
+    if installed_versions:
+        install_time = installed_versions[-1].get("time")
+        if install_time:
+            installed_date = datetime.datetime.fromtimestamp(
+                install_time
+            ).strftime("%b %d, %Y")
+
+    # Same reasoning as the outdated_flag above: brew already has this
+    # locally (this is what refresh_outdated_if_stale() itself fetches
+    # to build `outdated`), so showing which version is available
+    # costs nothing extra to compute here.
+    available_version = outdated.get(name) or outdated.get(full_name)
+
     lines = [f"  {name}  {version}".rstrip(), ""]
 
     desc = formula.get("desc")
@@ -852,9 +918,11 @@ for formula in formulae:
         ("License", formula.get("license")),
         ("Size", sizes.get(full_name) or sizes.get(name)),
         ("Tap", formula.get("tap")),
+        ("Installed", installed_date),
+        ("Update available", available_version),
     ):
         if value:
-            lines.append(f"  {label:<12}{value}")
+            lines.append(f"  {label:<18}{value}")
 
     # Filled in at display time by --internal-preview. Sits here, with
     # the rest of the metadata, so it stays visible without scrolling
@@ -989,6 +1057,13 @@ refresh_outdated_if_stale() {
 
     if [[ "$FORCE_REFRESH" == true ]]; then
         :
+    elif [[ -s "$OUTDATED_FILE" ]] && [[ "$(head -1 "$OUTDATED_FILE")" != *$'\t'* ]]; then
+        # Pre-0.11.0 format: one plain formula name per line, no
+        # version column. Refresh now regardless of TTL, rather than
+        # silently reading an empty "version" for everything (which
+        # reads as false, so the outdated marker would just stop
+        # showing at all) until the TTL happened to expire on its own.
+        :
     elif [[ -f "$OUTDATED_FILE" ]]; then
 
         outdated_mtime="$(file_mtime "$OUTDATED_FILE")"
@@ -999,7 +1074,7 @@ refresh_outdated_if_stale() {
         fi
     fi
 
-    brew outdated --formula --quiet > "$OUTDATED_FILE" 2>/dev/null || : > "$OUTDATED_FILE"
+    fetch_outdated_formulae "$OUTDATED_FILE"
 }
 
 refresh_outdated_if_stale
@@ -1024,17 +1099,22 @@ typeset -A outdated_formulas
 
 # A function rather than inline, so the in-launcher refresh (F5) can
 # re-read it after rebuilding the cache.
+#
+# Values are the available version string, not just "1" — the details
+# pane shows it directly. Every existing truthiness check (`-n
+# "${outdated_formulas[$x]-}"`) still works unchanged: a real version
+# string is non-empty, same as the old sentinel value was.
 load_outdated_formulas() {
 
     outdated_formulas=()
 
     [[ -f "$OUTDATED_FILE" ]] || return
 
-    local outdated_formula
+    local outdated_formula outdated_version
 
-    while IFS= read -r outdated_formula; do
+    while IFS=$'\t' read -r outdated_formula outdated_version; do
         [[ -z "$outdated_formula" ]] && continue
-        outdated_formulas[$outdated_formula]=1
+        outdated_formulas[$outdated_formula]="$outdated_version"
     done < "$OUTDATED_FILE"
 }
 
