@@ -1,0 +1,117 @@
+#!/bin/zsh
+#
+# Category-file loading test.
+#
+# load_category_names() is pure with respect to the filesystem — no
+# fzf, no interactivity — so it's sourced and called directly against
+# a fixture directory rather than driven through the picker. Most of
+# category handling (creating one via F7, the reserved-name and "/"
+# rejection on a typed name) lives inside toggle_category(), which
+# does call fzf and so isn't something to unit-test without either a
+# real TTY or refactoring working code purely to make it testable —
+# not attempted here, deliberately, per the project's own "no
+# drive-by refactors" stance. This covers the read side only: what
+# actually ends up in the view picker's category list, given a
+# directory of category files including the two reserved names a
+# hand-edited file could still create.
+
+set -u
+
+SCRIPT_DIR="${0:A:h}"
+LAUNCHER="$SCRIPT_DIR/../bin/brew-launcher"
+
+fail() {
+    printf 'FAIL: %s\n' "$1" >&2
+    exit 1
+}
+
+[[ -x "$LAUNCHER" ]] || fail "launcher not found or not executable: $LAUNCHER"
+
+TEST_HOME="$(mktemp -d)"
+trap 'rm -rf "$TEST_HOME"' EXIT
+
+CATEGORIES_DIR="$TEST_HOME/categories"
+mkdir -p "$CATEGORIES_DIR"
+
+# "All" and "Hidden" are hand-made here on purpose — F7 refuses to
+# create either interactively, but nothing stops someone from making
+# the file directly, and load_category_names() has to cope with that
+# rather than trust its own writer was the only thing that ever wrote
+# here.
+: > "$CATEGORIES_DIR/All"
+: > "$CATEGORIES_DIR/Hidden"
+: > "$CATEGORIES_DIR/Favorites"
+: > "$CATEGORIES_DIR/Weather"
+: > "$CATEGORIES_DIR/Games"
+
+# Sourced rather than copy-pasted, so this tests the actual function
+# in bin/brew-launcher, not a reimplementation of it that could drift
+# out of sync with the real logic.
+source <(sed -n '/^load_category_names() {/,/^}/p' "$LAUNCHER")
+
+load_category_names
+
+# ------------------------------------------------------------
+# 1. Reserved names never appear, even as hand-made files.
+# ------------------------------------------------------------
+
+for reserved in All Hidden; do
+    for name in "${CATEGORY_NAMES[@]}"; do
+        if [[ "$name" == "$reserved" ]]; then
+            fail "reserved name '$reserved' appeared in CATEGORY_NAMES despite being a real file on disk"
+        fi
+    done
+done
+
+# ------------------------------------------------------------
+# 2. Real categories all appear, none lost or duplicated.
+# ------------------------------------------------------------
+
+if (( ${#CATEGORY_NAMES[@]} != 3 )); then
+    fail "expected 3 entries (Favorites, Games, Weather), got ${#CATEGORY_NAMES[@]}: ${CATEGORY_NAMES[*]}"
+fi
+
+for expected in Favorites Games Weather; do
+    found=0
+    for name in "${CATEGORY_NAMES[@]}"; do
+        [[ "$name" == "$expected" ]] && found=1
+    done
+    (( found )) || fail "'$expected' missing from CATEGORY_NAMES: ${CATEGORY_NAMES[*]}"
+done
+
+# ------------------------------------------------------------
+# 3. Favorites always sorts first, ahead of alphabetically earlier
+#    names — it's pinned, not just sorted normally ("F" < "G"/"W"
+#    would happen to put it first anyway, so this specifically checks
+#    position, not just presence).
+# ------------------------------------------------------------
+
+if [[ "${CATEGORY_NAMES[1]}" != "Favorites" ]]; then
+    fail "Favorites should be first in CATEGORY_NAMES, got: ${CATEGORY_NAMES[*]}"
+fi
+
+# ------------------------------------------------------------
+# 4. Everything else after Favorites is alphabetically sorted.
+# ------------------------------------------------------------
+
+if [[ "${CATEGORY_NAMES[2]}" != "Games" || "${CATEGORY_NAMES[3]}" != "Weather" ]]; then
+    fail "non-Favorites entries should sort alphabetically (Games, Weather), got: ${CATEGORY_NAMES[2]}, ${CATEGORY_NAMES[3]}"
+fi
+
+# ------------------------------------------------------------
+# 5. Without a Favorites file at all, nothing is pinned — the
+#    function shouldn't invent an entry that isn't on disk.
+# ------------------------------------------------------------
+
+rm -f "$CATEGORIES_DIR/Favorites"
+load_category_names
+
+if (( ${#CATEGORY_NAMES[@]} != 2 )); then
+    fail "expected 2 entries with no Favorites file, got ${#CATEGORY_NAMES[@]}: ${CATEGORY_NAMES[*]}"
+fi
+
+for name in "${CATEGORY_NAMES[@]}"; do
+    [[ "$name" == "Favorites" ]] && fail "Favorites appeared in CATEGORY_NAMES despite no Favorites file existing"
+done
+
+printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest\n'

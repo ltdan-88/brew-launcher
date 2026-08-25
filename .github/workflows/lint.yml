@@ -1,6 +1,6 @@
 name: CI
 
-# Two gates on every push/PR:
+# Gates on every push/PR:
 #
 #   1. zsh -n  — syntax. Note ShellCheck is intentionally not used: it
 #      doesn't support zsh (only sh/bash/dash/ksh), and forcing it to
@@ -20,10 +20,16 @@ name: CI
 #      so it exercises hidden-entry filtering and output shape on any
 #      runner, never skipping.
 #
-# All three also run on Linux. The launcher has supported
-# BREW_LAUNCHER_TERMINAL=current there since 0.2.0, but nothing had
-# ever actually run it on Linux in CI — everything above was
-# macos-latest only.
+#   4. category-fixtures — load_category_names() sourced and called
+#      directly against a fixture categories directory, covering
+#      reserved-name skipping and Favorites ordering. No fzf or brew
+#      needed, since it never runs the launcher as a process.
+#
+#   5. linux — 1 and 3 above, run on ubuntu-latest against a Homebrew
+#      installed fresh via Homebrew's own setup-homebrew action, since
+#      Linux runners don't ship it the way macos-latest does. 2 is
+#      left out there: a fresh Linuxbrew has no formulae installed on
+#      request, so it would just skip on every run.
 
 on:
   push:
@@ -66,6 +72,19 @@ jobs:
 
       - name: --list fixture test
         run: zsh test/list-fixtures.sh
+
+  category-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf install needed here — this test sources
+      # load_category_names() directly rather than running the
+      # launcher as a process, so it has no dependency on fzf being
+      # present.
+      - name: Category loading test
+        run: zsh test/category-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

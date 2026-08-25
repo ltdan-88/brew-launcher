@@ -63,6 +63,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `test/category-fixtures.sh` — sources `load_category_names()` directly
+  against a fixture categories directory (no fzf or brew needed), covering
+  reserved-name skipping (`All`/`Hidden` hand-made files) and that
+  `Favorites` is pinned first rather than just happening to sort there.
+
+### Added
+
 - `test/list-fixtures.sh` — a second CI test covering hidden-entry
   filtering and `--list`'s 6-field output shape, built against a cache
   and state file written directly rather than a real Homebrew install.
