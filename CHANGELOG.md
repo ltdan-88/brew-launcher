@@ -63,6 +63,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `test/ignore-fixtures.sh` — hide/unhide round-trips, duplicate-hide is a
+  no-op, blank lines and `#` comments in a hand-edited ignore file are
+  skipped rather than treated as commands.
+- `test/dedup-fixtures.sh` — duplicate command names across formulae are
+  reduced to one entry, with the dropped one(s) still reported.
+
+### Added
+
 - `test/category-fixtures.sh` — sources `load_category_names()` directly
   against a fixture categories directory (no fzf or brew needed), covering
   reserved-name skipping (`All`/`Hidden` hand-made files) and that

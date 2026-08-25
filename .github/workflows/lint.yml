@@ -86,6 +86,24 @@ jobs:
       - name: Category loading test
         run: zsh test/category-fixtures.sh
 
+  ignore-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Hide/unhide test
+        run: zsh test/ignore-fixtures.sh
+
+  dedup-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Duplicate command name test
+        run: zsh test/dedup-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:
