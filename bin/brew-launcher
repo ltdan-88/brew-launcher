@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.13.0"
+VERSION="0.14.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -192,6 +192,8 @@ Theme:
   BREW_LAUNCHER_THEME=tokyonight
   BREW_LAUNCHER_THEME=nord
   BREW_LAUNCHER_THEME=dracula
+  BREW_LAUNCHER_THEME=green      Green-phosphor CRT
+  BREW_LAUNCHER_THEME=amber      Amber-phosphor CRT
 
   Both settings persist without exporting them every session via
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
@@ -462,11 +464,17 @@ fi
 # default. Unlike TERMINAL, there's no "auto" — a theme is either
 # picked or it's the default, there's nothing to detect.
 #
-# The five presets are the ones actually popular right now, not a
-# guess: Catppuccin (the existing default), Gruvbox, Tokyo Night,
-# Nord and Dracula, checked against real terminal/editor-theme
-# popularity data rather than picked from memory. Hex values are each
-# theme's own published palette, not approximated.
+# Five of these are the ones actually popular right now, not a guess:
+# Catppuccin (the existing default), Gruvbox, Tokyo Night, Nord and
+# Dracula, checked against real terminal/editor-theme popularity data
+# rather than picked from memory. Hex values are each theme's own
+# published palette, not approximated.
+#
+# The other two, Green and Amber, are real too, just older — the
+# actual hex values cathode-ray green- and amber-phosphor terminals
+# displayed (verified, not guessed at). Monochrome on purpose: that
+# hardware could only show one hue at varying brightness, so unlike
+# the five above these never reach for an off-hue accent color.
 # ------------------------------------------------------------
 
 THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
@@ -567,9 +575,55 @@ label:#bd93f9,
 query:#f8f8f2
 '
         ;;
+    green)
+        # A real CRT with a green-phosphor tube could only ever show
+        # one hue at different intensities — no red, no blue. Every
+        # slot below stays inside that same green, brightness doing
+        # the work color does in the other themes, rather than
+        # reaching for an off-hue accent the real hardware never had.
+        FZF_COLORS='
+fg:#33ff66,
+bg:#000000,
+fg+:#ccffdd,
+bg+:#003311,
+hl:#33ff66,
+hl+:#ccffdd,
+info:#1f8f42,
+prompt:#33ff66,
+pointer:#ccffdd,
+marker:#33ff66,
+spinner:#33ff66,
+header:#1f8f42,
+border:#114422,
+label:#33ff66,
+query:#ccffdd
+'
+        ;;
+    amber)
+        # Same reasoning as green above — one hue, varied by
+        # intensity, matching what an actual amber-phosphor monitor
+        # (Hercules-style, common on early IBM terminals) could show.
+        FZF_COLORS='
+fg:#ffbf00,
+bg:#000000,
+fg+:#ffe699,
+bg+:#332200,
+hl:#ffbf00,
+hl+:#ffe699,
+info:#996f00,
+prompt:#ffbf00,
+pointer:#ffe699,
+marker:#ffbf00,
+spinner:#ffbf00,
+header:#996f00,
+border:#4d3800,
+label:#ffbf00,
+query:#ffe699
+'
+        ;;
     *)
         echo "Error: unknown theme '$THEME_NAME'."
-        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula."
+        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber."
         exit 1
         ;;
 esac
@@ -1653,12 +1707,23 @@ pick_more_action() {
 
 pick_theme() {
 
-    local -a choices=(catppuccin gruvbox tokyonight nord dracula)
-    local picked
+    # Real name in field 1 (what gets written and compared), a short
+    # description in field 2 — same tab-delimited real/display split
+    # every other picker screen here already uses, via --with-nth=2.
+    local -a choices=(
+        "catppuccin"$'\t'"$(printf '%-13s%s' catppuccin 'Soft pastel colors on a dark purple-blue base')"
+        "gruvbox"$'\t'"$(printf '%-13s%s' gruvbox 'Warm, low-contrast — brown background, retro accents')"
+        "tokyonight"$'\t'"$(printf '%-13s%s' tokyonight 'Cool blues and purples, inspired by Tokyo at night')"
+        "nord"$'\t'"$(printf '%-13s%s' nord 'Muted arctic blues and grays, minimal and cool')"
+        "dracula"$'\t'"$(printf '%-13s%s' dracula 'Vibrant purple and pink on dark gray')"
+        "green"$'\t'"$(printf '%-13s%s' green 'Green-phosphor CRT — black background, bright green text')"
+        "amber"$'\t'"$(printf '%-13s%s' amber 'Amber-phosphor CRT — black background, warm amber text')"
+    )
+    local result picked
 
     rm -f "$FOOTER_CLICK_FILE"
 
-    picked="$(
+    result="$(
         printf '%s\n' "${choices[@]}" |
         fzf \
             --height=100% \
@@ -1669,6 +1734,8 @@ pick_theme() {
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
+            --delimiter=$'\t' \
+            --with-nth=2 \
             --header="Current: $THEME_NAME"$'\n'"Takes effect after a relaunch, not live." \
             --footer='  ↑ ↓  Navigate    Enter  [Choose]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -1677,7 +1744,9 @@ pick_theme() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
-    [[ -z "$picked" ]] && return 1
+    [[ -z "$result" ]] && return 1
+
+    picked="${result%%$'\t'*}"
 
     # Picking the theme you're already on writes the same value back
     # (harmless) but shouldn't then offer to "relaunch to apply" —

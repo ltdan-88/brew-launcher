@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] — 2026-08-25
+
+### Added
+
+- **Two retro monochrome themes: `green` and `amber`** — the real colors
+  green- and amber-phosphor CRT terminals displayed (`#33ff66` and
+  `#ffbf00`, checked against real historical values, not guessed).
+  Deliberately single-hue: every slot in each palette stays inside that one
+  color, varied by brightness, matching what the actual hardware could
+  physically show — no off-hue accent the way the other five themes have.
+
+- **The Theme picker now shows a short description next to each name**
+  (`gruvbox   Warm, low-contrast — brown background, retro accents`), so
+  you don't have to already know what a theme looks like to pick one.
+
 ## [0.13.0] — 2026-08-25
 
 ### Added
@@ -587,6 +602,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.14.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.14.0
 [0.13.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.13.0
 [0.12.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.12.0
 [0.11.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.11.0
