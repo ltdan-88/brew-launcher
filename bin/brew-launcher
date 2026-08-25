@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.18.1"
+VERSION="0.19.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -212,13 +212,15 @@ Presets:
   without leaving the picker.
 
 Theme:
-  BREW_LAUNCHER_THEME=catppuccin  Default
+  BREW_LAUNCHER_THEME=catppuccin       Default
   BREW_LAUNCHER_THEME=gruvbox
   BREW_LAUNCHER_THEME=tokyonight
   BREW_LAUNCHER_THEME=nord
   BREW_LAUNCHER_THEME=dracula
-  BREW_LAUNCHER_THEME=green      Green-phosphor CRT
-  BREW_LAUNCHER_THEME=amber      Amber-phosphor CRT
+  BREW_LAUNCHER_THEME=green            Green-phosphor CRT
+  BREW_LAUNCHER_THEME=amber            Amber-phosphor CRT
+  BREW_LAUNCHER_THEME=solarized-dark   Full color-wheel spread
+  BREW_LAUNCHER_THEME=solarized-light  Same, on a cream background
 
   Both settings persist without exporting them every session via
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
@@ -648,11 +650,21 @@ fi
 # rather than picked from memory. Hex values are each theme's own
 # published palette, not approximated.
 #
-# The other two, Green and Amber, are real too, just older — the
-# actual hex values cathode-ray green- and amber-phosphor terminals
-# displayed (verified, not guessed at). Monochrome on purpose: that
-# hardware could only show one hue at varying brightness, so unlike
-# the five above these never reach for an off-hue accent color.
+# Green and Amber are real too, just older — the actual hex values
+# cathode-ray green- and amber-phosphor terminals displayed (verified,
+# not guessed at). Monochrome on purpose: that hardware could only
+# show one hue at varying brightness, so unlike the five above these
+# never reach for an off-hue accent color.
+#
+# Solarized Dark/Light use Ethan Schoonover's own published hex
+# values (ethanschoonover.com/solarized) — the same 16-color palette
+# and accent set (blue/red/green/orange) in both, only the base tones
+# swap which end is background vs foreground, exactly as the original
+# spec does. Added because every theme above leans blue/purple with
+# no full warm range and no light background option — Solarized's
+# whole design is a curated spread across the color wheel, and it's
+# one of the only well-known palettes that ships an official light
+# variant sharing the same accents as its dark one.
 # ------------------------------------------------------------
 
 THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
@@ -799,9 +811,47 @@ label:#ffbf00,
 query:#ffe699
 '
         ;;
+    solarized-dark)
+        FZF_COLORS='
+fg:#839496,
+bg:#002b36,
+fg+:#93a1a1,
+bg+:#073642,
+hl:#268bd2,
+hl+:#268bd2,
+info:#586e75,
+prompt:#268bd2,
+pointer:#dc322f,
+marker:#859900,
+spinner:#cb4b16,
+header:#586e75,
+border:#073642,
+label:#268bd2,
+query:#93a1a1
+'
+        ;;
+    solarized-light)
+        FZF_COLORS='
+fg:#657b83,
+bg:#fdf6e3,
+fg+:#586e75,
+bg+:#eee8d5,
+hl:#268bd2,
+hl+:#268bd2,
+info:#93a1a1,
+prompt:#268bd2,
+pointer:#dc322f,
+marker:#859900,
+spinner:#cb4b16,
+header:#93a1a1,
+border:#eee8d5,
+label:#268bd2,
+query:#586e75
+'
+        ;;
     *)
         echo "Error: unknown theme '$THEME_NAME'."
-        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber."
+        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber, solarized-dark, solarized-light."
         exit 1
         ;;
 esac
@@ -1900,13 +1950,15 @@ pick_theme() {
     # description in field 2 — same tab-delimited real/display split
     # every other picker screen here already uses, via --with-nth=2.
     local -a choices=(
-        "catppuccin"$'\t'"$(printf '%-13s%s' catppuccin 'Soft pastel colors on a dark purple-blue base')"
-        "gruvbox"$'\t'"$(printf '%-13s%s' gruvbox 'Warm, low-contrast — brown background, retro accents')"
-        "tokyonight"$'\t'"$(printf '%-13s%s' tokyonight 'Cool blues and purples, inspired by Tokyo at night')"
-        "nord"$'\t'"$(printf '%-13s%s' nord 'Muted arctic blues and grays, minimal and cool')"
-        "dracula"$'\t'"$(printf '%-13s%s' dracula 'Vibrant purple and pink on dark gray')"
-        "green"$'\t'"$(printf '%-13s%s' green 'Green-phosphor CRT — black background, bright green text')"
-        "amber"$'\t'"$(printf '%-13s%s' amber 'Amber-phosphor CRT — black background, warm amber text')"
+        "catppuccin"$'\t'"$(printf '%-17s%s' catppuccin 'Soft pastel colors on a dark purple-blue base')"
+        "gruvbox"$'\t'"$(printf '%-17s%s' gruvbox 'Warm, low-contrast — brown background, retro accents')"
+        "tokyonight"$'\t'"$(printf '%-17s%s' tokyonight 'Cool blues and purples, inspired by Tokyo at night')"
+        "nord"$'\t'"$(printf '%-17s%s' nord 'Muted arctic blues and grays, minimal and cool')"
+        "dracula"$'\t'"$(printf '%-17s%s' dracula 'Vibrant purple and pink on dark gray')"
+        "green"$'\t'"$(printf '%-17s%s' green 'Green-phosphor CRT — black background, bright green text')"
+        "amber"$'\t'"$(printf '%-17s%s' amber 'Amber-phosphor CRT — black background, warm amber text')"
+        "solarized-dark"$'\t'"$(printf '%-17s%s' solarized-dark 'Full color-wheel spread — teal background, warm accents')"
+        "solarized-light"$'\t'"$(printf '%-17s%s' solarized-light 'Same accents as Solarized Dark, on a warm cream background')"
     )
     local result picked
 

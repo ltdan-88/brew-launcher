@@ -181,14 +181,17 @@ File format and the `--preset` CLI flag are in [Configuration](#configuration).
 
 ### Color themes
 
-<p align="center"><img src="assets/themes.png" alt="The same list rendered in all seven themes side by side, showing each palette's actual colors"></p>
+<p align="center"><img src="assets/themes.png" alt="The same list rendered in all nine themes side by side, showing each palette's actual colors"></p>
 
-Seven built-in palettes: five popular modern ones — `catppuccin` (the
-default), `gruvbox`, `tokyonight`, `nord`, `dracula` — plus two real, older
-ones, `green` and `amber`, the actual colors green- and amber-phosphor CRT
-terminals displayed. Monochrome on purpose: that hardware could only show one
-hue at varying brightness, so unlike the other five these never reach for a
-second color.
+Nine built-in palettes: five popular modern ones — `catppuccin` (the
+default), `gruvbox`, `tokyonight`, `nord`, `dracula` — `solarized-dark` and
+`solarized-light`, a matched pair sharing the same accent colors, for when
+you want a genuine light background or a fuller spread of hues than the
+mostly blue-and-purple set above — and two real, older ones, `green` and
+`amber`, the actual colors green- and amber-phosphor CRT terminals
+displayed. The CRT pair is monochrome on purpose: that hardware could only
+show one hue at varying brightness, so unlike the rest these never reach
+for a second color.
 
 **F4 → Theme** shows a short description next to each name, so you don't have
 to guess from the name alone. Picking one writes the config file for you — no
@@ -335,8 +338,9 @@ THEME=nord
 ```
 
 Valid names: `catppuccin`, `gruvbox`, `tokyonight`, `nord`, `dracula`,
-`green`, `amber`. An unrecognized name fails fast rather than silently
-falling back, matching `BREW_LAUNCHER_TERMINAL`'s own convention.
+`solarized-dark`, `solarized-light`, `green`, `amber`. An unrecognized name
+fails fast rather than silently falling back, matching
+`BREW_LAUNCHER_TERMINAL`'s own convention.
 
 ### Presets
 
