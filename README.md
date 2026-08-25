@@ -260,11 +260,16 @@ Five built-in palettes — `catppuccin` (the default), `gruvbox`, `tokyonight`,
 not arbitrary — same idea as `Most Used`/`Recently Added`'s naming, checked
 against real usage rather than invented.
 
+Switch from inside the launcher: **F4 → Theme**. It writes the config file for
+you — no terminal needed. Colors are resolved once at startup, so it offers to
+relaunch and apply the change immediately; say no and it's there next time
+regardless.
+
+Or set it yourself:
+
 ```bash
 export BREW_LAUNCHER_THEME=nord   # for one session
 ```
-
-Or set it permanently in the config file:
 
 ```
 # ~/.config/brew-launcher/config

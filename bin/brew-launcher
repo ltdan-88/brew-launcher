@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.12.0"
+VERSION="0.13.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -217,6 +217,7 @@ Keyboard shortcuts:
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
   F9 / ⌥S   Create a macOS or Linux shortcut
+  In the More menu only — Switch color theme
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -1556,6 +1557,7 @@ pick_help() {
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  F9 / ⌥S   Create a shortcut (macOS .command or Linux .desktop)")
     fi
+    rows+=("            Theme  Switch color theme (no key of its own)")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -1608,6 +1610,11 @@ pick_more_action() {
         rows+=("f9"$'\t'"$(printf '%-18s%s' 'Create shortcut' 'F9 / ⌥S')")
     fi
 
+    # No F-key of its own — every F1-F9 is already spoken for, and
+    # this is settings-adjacent rather than something reached for
+    # often enough to need a direct shortcut.
+    rows+=("theme"$'\t'"$(printf '%-18s%s' 'Theme' '')")
+
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -1634,6 +1641,54 @@ pick_more_action() {
     [[ -z "$result" ]] && return 1
 
     printf '%s' "${result%%$'\t'*}"
+}
+
+# ------------------------------------------------------------
+# The Theme screen, reached from the More menu.
+#
+# Doesn't need a selected entry (nothing here is about any one row),
+# so its main-loop dispatch sits with F1/Help rather than falling
+# through to an entry-specific handler the way F6/F7/F8/F9 do.
+# ------------------------------------------------------------
+
+pick_theme() {
+
+    local -a choices=(catppuccin gruvbox tokyonight nord dracula)
+    local picked
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    picked="$(
+        printf '%s\n' "${choices[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' Theme ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --header="Current: $THEME_NAME"$'\n'"Takes effect after a relaunch, not live." \
+            --footer='  ↑ ↓  Navigate    Enter  [Choose]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$picked" ]] && return 1
+
+    # Picking the theme you're already on writes the same value back
+    # (harmless) but shouldn't then offer to "relaunch to apply" —
+    # there's nothing to apply.
+    [[ "$picked" == "$THEME_NAME" ]] && return 0
+
+    set_config_value THEME "$picked"
+
+    if confirm_relaunch "Theme set to \"$picked\"."; then
+        exec "$SCRIPT_PATH"
+    fi
 }
 
 pick_view() {
@@ -2483,6 +2538,85 @@ PY
 }
 
 # ------------------------------------------------------------
+# Set (or replace) one KEY=value line in the config file, preserving
+# every other line — comments and the other setting included.
+#
+# Written generically (any key, any value) even though only THEME
+# calls it today, so persisting a terminal choice from in-app later
+# is a one-line addition, not a new function.
+# ------------------------------------------------------------
+
+set_config_value() {
+
+    local key="$1" value="$2"
+    local tmp_config line line_key found=false
+
+    mkdir -p "$CONFIG_DIR"
+
+    tmp_config="$(mktemp "$CACHE_DIR/config.XXXXXX")" || return 1
+
+    if [[ -f "$CONFIG_FILE" ]]; then
+        while IFS= read -r line; do
+
+            line_key="${line%%=*}"
+            line_key="${line_key#"${line_key%%[![:space:]]*}"}"
+            line_key="${line_key%"${line_key##*[![:space:]]}"}"
+
+            if [[ "$line_key" == "$key" && "$line" != \#* ]]; then
+                print -r -- "$key=$value" >> "$tmp_config"
+                found=true
+            else
+                print -r -- "$line" >> "$tmp_config"
+            fi
+
+        done < "$CONFIG_FILE"
+    fi
+
+    [[ "$found" == false ]] && print -r -- "$key=$value" >> "$tmp_config"
+
+    mv "$tmp_config" "$CONFIG_FILE"
+}
+
+# ------------------------------------------------------------
+# Confirm relaunching to apply a config change that's already been
+# written — colors are resolved once at startup, so nothing on screen
+# updates until the process restarts. Not a destructive action (only
+# the current cursor position/view is lost, not any data), so unlike
+# confirm_delete_category() the safe default isn't "Cancel first" —
+# applying now is the expected, ordinary choice.
+# ------------------------------------------------------------
+
+confirm_relaunch() {
+
+    local message="$1"
+    local answer
+
+    answer="$(
+        printf '%s\n' "Relaunch now" "Not now" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' Apply change ' \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            --header="$message Takes effect on next launch." \
+            `# "Enter chooses" is deliberately not bracketed/clickable:` \
+            `# Enter acts on the highlighted row, so a clickable` \
+            `# [Confirm] would relaunch whenever "Not now" was highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == "Relaunch now" ]]
+}
+
+# ------------------------------------------------------------
 # Toggle an entry's Favorites membership
 #
 # Favorites is an ordinary category file (see load_category_names),
@@ -2946,6 +3080,22 @@ while true; do
         fi
 
         action="$chosen_action"
+    fi
+
+    # --------------------------------------------------------
+    # Theme — only ever reached by resolving through More above,
+    # there's no direct key for it (every F1-F9 is already spoken
+    # for). Purely informational/self-contained like F1/Help, so it
+    # doesn't need a selected entry and doesn't fall through further —
+    # pick_theme() itself handles writing the config file and, if
+    # confirmed, relaunching.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "theme" ]]; then
+
+        pick_theme
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
     fi
 
     if [[ "$action" == "f2" || "$action" == "alt-v" ]]; then
