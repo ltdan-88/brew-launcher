@@ -76,10 +76,12 @@ aren't things you press. Upgrading stays Homebrew's job.
 
 <p align="center"><img src="assets/more.gif" alt="Opening the More menu with F4 and favoriting an entry from it"></p>
 
-The footer shows the three things browsing needs: **Views**, **Details**, and
-**More**. Organizing and maintenance — hide, favorite, categorize, create a
-shortcut — live behind **F4 / ⌥M**, and every one of them still has a
-direct key that works from the list.
+The footer shows what browsing needs — **Views**, **Details**, **Refresh** —
+plus **Presets**, since running one is worth a key of its own. Organizing —
+hide, favorite, categorize — and setup — theme, create a preset, create a
+shortcut — live behind **F4 / ⌥M**. Hide, Favorite and Categorize still have
+a direct key too; the setup actions are More-only, since they're one-time
+rather than everyday.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
@@ -165,7 +167,7 @@ the command yourself would.
 
 ### Desktop shortcuts
 
-**F9** creates a shortcut so a tool shows up outside the launcher too.
+**F4 → More → Create shortcut** makes a tool show up outside the launcher too.
 
 On macOS it writes a `.command` file to `/Applications/TUIs/` — double-click
 it, drag it to the Dock, or bind it to a hotkey in System Settings. Give it a
@@ -203,28 +205,35 @@ in **F4 / ⌥M — More**, and keeps working as a direct key from the list.
 | **Esc** | Go back one level, or quit | footer |
 | **F4** / **⌥M** | Open the More menu | footer |
 | **F5** / **⌥R** | Refresh the cache without leaving | footer |
+| **F9** / **⌥P** | Launch a preset (reattaches if it's already running) | footer |
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | More |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | More |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | More |
-| **F9** / **⌥S** | Create a desktop shortcut (macOS or Linux) | More |
 | **F1** | Open this reference in the launcher | — |
+| — | Switch color theme | More only |
+| — | Create a new preset | More only |
+| — | Create a desktop shortcut (macOS or Linux) | More only |
 
 **F1** is deliberately unassigned — it means *help* nearly everywhere, and the
-launcher may want it later. The first-tier keys sit on **F2**–**F5** because
-those are the ones you press constantly, and they're the easiest to reach on a
-laptop that needs **Fn**. **F5** is Refresh, matching the convention it has in
-every browser and file manager.
+launcher may want it later. The footer keys sit on **F2**–**F5** plus **F9**
+because those are the ones you press constantly, and they're the easiest to
+reach on a laptop that needs **Fn**. **F5** is Refresh, matching the
+convention it has in every browser and file manager.
 
-The split is by what you're doing, not by how often. Finding something and
-running it is what you open the launcher for, so that stays on screen.
-Organizing — hiding, favoriting, categorizing — and maintenance are things you
-do while *setting up*, in bursts, and they were costing six of the seven footer
-slots you look at on every single launch.
+The split is by what you're doing, not by how often. Finding, browsing, and
+running something together with launching a preset are what you open the
+launcher for, so those stay on screen. Organizing — hiding, favoriting,
+categorizing — and setup — theming, building a preset, making a shortcut —
+are things you do in bursts, and they were costing footer slots you'd
+otherwise look at on every single launch. **F9** followed the same logic in
+reverse: unlike making a shortcut (once per tool, rarely repeated), running a
+preset is something you'd reach for over and over, so it earned a footer key
+of its own rather than staying More-only.
 
 The menu lists each action's key beside it, so it teaches its own shortcuts and
 works itself out of a job.
 
-Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥S**hortcut,
+Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
 **⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails — so there are seven
 letters to learn rather than seven arbitrary numbers. They exist because F-keys
 need Fn on most Mac laptops. In stock Terminal.app, enable *Use Option as Meta
@@ -232,8 +241,9 @@ Key* in the profile's Keyboard settings first; Ghostty supports it out of the
 box.
 
 The footer also adapts to the terminal, dropping the marker legend and then the
-Option aliases rather than letting fzf cut an item off mid-word. **F9** isn't
-offered on Linux at all, since shortcuts are macOS-only.
+Option aliases rather than letting fzf cut an item off mid-word. Create
+shortcut isn't offered on any platform besides macOS and Linux, since there's
+nowhere to put the result elsewhere.
 
 ```bash
 brew-launcher --refresh   # rebuild the application cache
@@ -264,7 +274,9 @@ To make a choice permanent without exporting it every session, put it in the
 ## Presets
 
 Launch several tools together — a whole setup in one shot, each in its own
-tmux pane:
+tmux pane. Quickest way in: **F9** in the launcher lists your presets and
+launches the one you pick, reattaching if it's already running. From a
+terminal, name it directly:
 
 ```bash
 brew-launcher --preset devops

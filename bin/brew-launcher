@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.17.0"
+VERSION="0.18.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -207,8 +207,9 @@ Presets:
                                   a tmux session — invoking --preset is
                                   itself the opt-in.
 
-  In the launcher, F4 → Create Preset picks the tools and writes the
-  file for you — no hand-editing required.
+  In the launcher: F4 → Create Preset picks the tools and writes the
+  file for you — no hand-editing required. F9 launches an existing one
+  without leaving the picker.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin  Default
@@ -236,14 +237,15 @@ Keyboard shortcuts:
             categories, dependencies, caveats). Shift-Up/Down scrolls it.
   F4 / ⌥M   Open the More menu — the actions below
   F5 / ⌥R   Refresh the cache without leaving the launcher
+  F9 / ⌥P   Launch a preset — see Presets below
 
   In the More menu, and always available directly:
   F6 / ⌥H   Hide or unhide selected entry
   F7 / ⌥F   Toggle Favorites for selected entry
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
-  F9 / ⌥S   Create a macOS or Linux shortcut
-  In the More menu only — Switch color theme
+  In the More menu only — Switch color theme, Create Preset,
+  Create a macOS or Linux shortcut
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -459,28 +461,42 @@ for dependency in brew fzf python3; do
 done
 
 # ------------------------------------------------------------
-# Presets — exit early, before any of the terminal/theme/cache
-# machinery below, since a preset needs none of it: it's a standalone
-# "start (or reattach to) a tmux session and hand it these commands"
-# operation, invoked directly rather than through the picker.
+# Launch a preset by name — read its command list and start (or
+# reattach to) one tmux session with a pane per command.
+#
+# Shared by both ways to reach a preset: the top-level --preset <name>
+# CLI flag below, and the in-app F9 / Launch Preset action further
+# down — one implementation of "what launching a preset actually
+# does" instead of two. On success this always execs into tmux and
+# never returns. On failure it prints what went wrong, pauses so the
+# message is actually readable, and returns 1 rather than exiting
+# directly — the CLI entry point below turns that into a real exit
+# itself; the in-app action instead falls back to the picker, the same
+# way a failed single-tool launch already does.
 # ------------------------------------------------------------
 
-if [[ "$PRESET_MODE" == true ]]; then
+run_preset() {
+
+    local name="$1"
+    local preset_file="$PRESETS_DIR/$name"
+    local -a preset_commands=()
+    local preset_line preset_session preset_cmd preset_resolved
+    local preset_started=false
 
     if ! command -v tmux >/dev/null 2>&1; then
-        echo "Error: tmux is required to use presets."
-        exit 1
+        printf '\n'
+        printf 'Error: tmux is required to use presets.\n'
+        sleep 2
+        return 1
     fi
-
-    preset_file="$PRESETS_DIR/$PRESET_NAME"
 
     if [[ ! -f "$preset_file" ]]; then
-        echo "Error: preset '$PRESET_NAME' not found."
-        echo "Expected a file at $preset_file — one command per line."
-        exit 1
+        printf '\n'
+        printf 'Error: preset "%s" not found.\n' "$name"
+        printf 'Expected a file at %s — one command per line.\n' "$preset_file"
+        sleep 2
+        return 1
     fi
-
-    preset_commands=()
 
     while IFS= read -r preset_line; do
 
@@ -495,9 +511,11 @@ if [[ "$PRESET_MODE" == true ]]; then
     done < "$preset_file"
 
     if (( ${#preset_commands[@]} == 0 )); then
-        echo "Error: preset '$PRESET_NAME' has no commands in it."
-        echo "Add one command per line to $preset_file."
-        exit 1
+        printf '\n'
+        printf 'Error: preset "%s" has no commands in it.\n' "$name"
+        printf 'Add one command per line to %s\n' "$preset_file"
+        sleep 2
+        return 1
     fi
 
     # Namespaced session name so this can't collide with an unrelated
@@ -506,7 +524,7 @@ if [[ "$PRESET_MODE" == true ]]; then
     # still alive reattaches (or, from inside another tmux session,
     # switches the client) instead of spawning a duplicate — the same
     # check a person would run by hand with `tmux has-session`.
-    preset_session="blpreset-$PRESET_NAME"
+    preset_session="blpreset-$name"
 
     if tmux has-session -t "$preset_session" 2>/dev/null; then
         if [[ -n "$TMUX" ]]; then
@@ -523,14 +541,12 @@ if [[ "$PRESET_MODE" == true ]]; then
     # `command -v` lookup per line instead of depending on that being
     # warm. A command not found on PATH is skipped with a warning
     # rather than aborting the whole preset over one bad line.
-    preset_started=false
-
     for preset_cmd in "${preset_commands[@]}"; do
 
         preset_resolved="$(command -v "$preset_cmd" 2>/dev/null)"
 
         if [[ -z "$preset_resolved" ]]; then
-            echo "Warning: '$preset_cmd' not found on PATH, skipping."
+            printf 'Warning: "%s" not found on PATH, skipping.\n' "$preset_cmd"
             continue
         fi
 
@@ -538,7 +554,7 @@ if [[ "$PRESET_MODE" == true ]]; then
         # the command, then fall through to a fresh interactive shell
         # in the pane, rather than exec-ing straight into it.
         if [[ "$preset_started" == false ]]; then
-            tmux new-session -d -s "$preset_session" -n "$PRESET_NAME" \
+            tmux new-session -d -s "$preset_session" -n "$name" \
                 "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)preset_resolved}"
             preset_started=true
         else
@@ -549,8 +565,10 @@ if [[ "$PRESET_MODE" == true ]]; then
     done
 
     if [[ "$preset_started" == false ]]; then
-        echo "Error: none of the commands in preset '$PRESET_NAME' were found on PATH."
-        exit 1
+        printf '\n'
+        printf 'Error: none of the commands in preset "%s" were found on PATH.\n' "$name"
+        sleep 2
+        return 1
     fi
 
     tmux select-layout -t "$preset_session" tiled
@@ -560,6 +578,15 @@ if [[ "$PRESET_MODE" == true ]]; then
     else
         exec tmux attach-session -t "$preset_session"
     fi
+}
+
+# ------------------------------------------------------------
+# --preset <name> — exit early, before any of the terminal/theme/
+# cache machinery below, since it needs none of it.
+# ------------------------------------------------------------
+
+if [[ "$PRESET_MODE" == true ]]; then
+    run_preset "$PRESET_NAME" || exit 1
 fi
 
 # ------------------------------------------------------------
@@ -1753,16 +1780,19 @@ pick_help() {
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
+    rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
     rows+=("")
     rows+=("Second tier — F4, or press directly at any time")
     rows+=("  F6 / ⌥H   Hide or unhide the selected entry")
     rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
     rows+=("  F8 / ⌥C   Categorize the selected entry")
+    rows+=("")
+    rows+=("F4 only — no direct key")
+    rows+=("            Theme  Switch color theme")
+    rows+=("     Create Preset  Pick tools to save as a new preset")
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("  F9 / ⌥S   Create a shortcut (macOS .command or Linux .desktop)")
+        rows+=("  Create shortcut  macOS .command or Linux .desktop file")
     fi
-    rows+=("            Theme  Switch color theme (no key of its own)")
-    rows+=("     Create Preset  Pick tools to launch together via --preset")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -1807,13 +1837,7 @@ pick_more_action() {
     rows+=("f6"$'\t'"$(printf '%-18s%s' "$hide_label" 'F6 / ⌥H')")
     rows+=("f7"$'\t'"$(printf '%-18s%s' 'Favorite' 'F7 / ⌥F')")
     rows+=("f8"$'\t'"$(printf '%-18s%s' 'Categorize' 'F8 / ⌥C')")
-
-    # Shortcuts are macOS/Linux-only; elsewhere the action can only
-    # refuse, so it isn't offered rather than being offered and
-    # apologising.
-    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("f9"$'\t'"$(printf '%-18s%s' 'Create shortcut' 'F9 / ⌥S')")
-    fi
+    rows+=("f9"$'\t'"$(printf '%-18s%s' 'Launch Preset' 'F9 / ⌥P')")
 
     # No F-key of its own — every F1-F9 is already spoken for, and
     # this is settings-adjacent rather than something reached for
@@ -1822,7 +1846,17 @@ pick_more_action() {
 
     # Same reasoning as Theme above — also setup-adjacent rather than
     # everyday, so it doesn't need a key of its own either.
-    rows+=("preset"$'\t'"$(printf '%-18s%s' 'Create Preset' '')")
+    rows+=("create_preset"$'\t'"$(printf '%-18s%s' 'Create Preset' '')")
+
+    # Shortcuts are macOS/Linux-only; elsewhere the action can only
+    # refuse, so it isn't offered rather than being offered and
+    # apologising. Moved off F9 in favor of Launch Preset above — a
+    # shortcut is made once per tool and rarely touched again, closer
+    # to Theme/Create Preset's usage pattern than to Hide/Favorite/
+    # Categorize's, which get exercised repeatedly as you curate.
+    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
+        rows+=("shortcut"$'\t'"$(printf '%-18s%s' 'Create shortcut' '')")
+    fi
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -3183,10 +3217,63 @@ create_preset() {
 
     printf '\n'
     printf 'Preset "%s" saved with %d command(s).\n' "$preset_name" "${#selected_commands[@]}"
-    printf 'Run: brew-launcher --preset %s\n' "$preset_name"
+    printf 'Launch it with F9, or: brew-launcher --preset %s\n' "$preset_name"
     sleep 2
 
     return 0
+}
+
+# ------------------------------------------------------------
+# Pick a preset and launch it — the in-app entry point to run_preset(),
+# reached via F9. --preset <name> is the other way in, for when you
+# already know the name and would rather skip the picker.
+# ------------------------------------------------------------
+
+launch_preset() {
+
+    local -a existing_presets=()
+    local line preset_name
+
+    if [[ -d "$PRESETS_DIR" ]]; then
+        for line in "$PRESETS_DIR"/*; do
+            [[ -f "$line" ]] || continue
+            existing_presets+=("${line:t}")
+        done
+    fi
+
+    if (( ${#existing_presets[@]} == 0 )); then
+        printf '\n'
+        printf 'No presets yet — F4 → Create Preset makes one.\n'
+        sleep 2
+        return 1
+    fi
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    preset_name="$(
+        printf '%s\n' "${existing_presets[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label=' Launch Preset ' \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --footer='  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$preset_name" ]] && return 1
+
+    # run_preset() only ever returns on failure (success execs into
+    # tmux and never comes back) — its own error message and pause
+    # already happened, so there's nothing more to add here.
+    run_preset "$preset_name"
 }
 
 
@@ -3197,22 +3284,22 @@ create_preset() {
 # ------------------------------------------------------------
 # Footer text, sized to the terminal.
 #
-# fzf truncates a footer that doesn't fit, and does it silently: the
-# full line needs 138 columns, so at 100 the last two items simply
-# vanish and at 80 three do — including keys a beginner has no other
-# way to discover. The footer is therefore built to fit, giving up
-# the cheapest thing first.
+# fzf truncates a footer that doesn't fit, and does it silently — a
+# beginner would just lose keys off the end with no sign anything was
+# cut. build_footer() tries progressively narrower renderings instead
+# of ever handing fzf something that might get chopped:
 #
-# Drop order, cheapest loss first:
-#   1. [Shortcut] off macOS — there it can only print "not supported"
-#   2. the marker legend    — explanation, not actions
-#   3. the ⌥ aliases        — keeps every *action* visible, and the
-#                             F-keys are the half that works without
-#                             the "Option as Meta" terminal setting
-#   4. [Shortcut]           — the rarest action
-#   5. [Refresh]            — last: it's the escape hatch for the
-#                             cache TTL ("I just installed it, where
-#                             is it?"), so it earns its place
+#   1. every item, with ⌥ aliases, widest gap   (needs ~93 cols)
+#   2. every item, F-keys only, widest gap      (needs ~78 cols)
+#   3. every item, F-keys only, narrowest gap   (needs ~70 cols)
+#
+# The ⌥ aliases go first since the F-keys alone already work without
+# the "Option as Meta" terminal setting — losing them costs nothing
+# a plain F-key press can't already do. No item is ever dropped
+# outright; (3) is the floor, so anything narrower than it (under
+# about 74 columns) is the one case this still hands fzf a line that
+# can get silently truncated — well under the ~80-column terminal
+# width this project otherwise assumes as a baseline.
 # ------------------------------------------------------------
 
 terminal_width() {
@@ -3242,12 +3329,15 @@ footer_actions() {
     local with_alt="$1" gap="$2"
     local -a parts=()
 
-    # First tier only: what browsing needs. Everything else lives in
-    # the [More] menu, which is itself the third item here.
+    # Browsing/navigation, plus the one organizing action that's worth
+    # reaching for repeatedly rather than tucked away in [More] —
+    # Presets, since running one is a recurring thing, not a one-time
+    # setup step. Everything else still lives behind [More].
     parts+=("$(footer_key F2 V $with_alt)  [Views]")
     parts+=("$(footer_key F3 D $with_alt)  [Details]")
     parts+=("$(footer_key F4 M $with_alt)  [More]")
     parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
+    parts+=("$(footer_key F9 P $with_alt)  [Presets]")
 
     local separator="${(l:$gap:: :)}"
     local out="" part
@@ -3274,10 +3364,10 @@ build_footer() {
     (( ${#line1} > width )) && line1="$nav_short"
 
     # Tried in order; the last one stands if nothing fits, which is
-    # still better than letting fzf cut an item off mid-word.
-    # Fields are: ⌥ aliases, gap between items. Since the second tier
-    # moved into [More] this line fits everywhere down to about 50
-    # columns, so it rarely gets past the first attempt.
+    # still better than letting fzf cut an item off mid-word. Fields
+    # are: ⌥ aliases, gap between items. Fits at 100 columns and up on
+    # the first attempt; see the comment above footer_actions() for
+    # the three widths this actually degrades through.
     local line2 attempt
     for attempt in "1 4" "0 4" "0 2"; do
         line2="$(footer_actions ${=attempt})"
@@ -3386,7 +3476,7 @@ while true; do
         run_fzf \
             "$border_label" \
             "$(build_footer "$esc_hint")" \
-            'enter,f1,f2,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-s,alt-r,alt-f,alt-c,alt-m,alt-?,esc' \
+            'enter,f1,f2,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-p,alt-r,alt-f,alt-c,alt-m,alt-?,esc' \
             "$restore_position"
     )"
 
@@ -3432,7 +3522,7 @@ while true; do
         case "$clicked_word" in
             '[Hide]'|Hide|'[Unhide]'|Unhide|F6/⌥H|F6) action="f6" ;;
             '[Views]'|Views|F2/⌥V|F2) action="f2" ;;
-            '[Shortcut]'|Shortcut|F9/⌥S|F9) action="f9" ;;
+            '[Presets]'|Presets|F9/⌥P|F9) action="f9" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) action="f5" ;;
             '[Favorite]'|Favorite|F7/⌥F|F7) action="f7" ;;
             '[Categorize]'|Categorize|F8/⌥C|F8) action="f8" ;;
@@ -3462,13 +3552,14 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # F9 / ⌥M — the [More] menu.
+    # F4 / ⌥M — the [More] menu.
     #
     # Resolves to one of the second-tier actions and then falls
     # through to that action's normal handler below, so each action
     # has exactly one implementation no matter how it was reached.
     # This block therefore has to sit above every handler it can
-    # resolve to, including F5's.
+    # resolve to, including F9's (Launch Preset is offered here too,
+    # alongside its direct key, same as F6/F7/F8 already are).
     # --------------------------------------------------------
 
     if [[ "$action" == "f4" || "$action" == "alt-m" ]]; then
@@ -3508,9 +3599,25 @@ while true; do
     # it was afterward rather than falling through further.
     # --------------------------------------------------------
 
-    if [[ "$action" == "preset" ]]; then
+    if [[ "$action" == "create_preset" ]]; then
 
         create_preset
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # F9 / ⌥P — Launch Preset. Direct key, not just via More: unlike
+    # Create Preset (a one-time setup step), running a preset is
+    # something to reach for repeatedly, closer in spirit to F6/F7/F8
+    # than to Theme/Create Preset. launch_preset() does its own picker
+    # and, on success, execs into tmux and never returns — a failure
+    # (or Esc) falls back to the picker, same as any other action here.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f9" || "$action" == "alt-p" ]]; then
+
+        launch_preset
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
@@ -3625,10 +3732,12 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # F4 / ⌥S = create macOS .command shortcut.
+    # Create shortcut — reached only through More now, not a direct
+    # key. Made once per tool and rarely touched again, so it moved
+    # off F9 in favor of Launch Preset; see pick_more_action().
     # --------------------------------------------------------
 
-    if [[ "$action" == "f9" || "$action" == "alt-s" ]]; then
+    if [[ "$action" == "shortcut" ]]; then
 
         create_shortcut "$command" "$formula"
         restore_position="$(find_entry_position "$command")"
