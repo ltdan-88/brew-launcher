@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] — 2026-08-25
+
+### Fixed
+
+- **The launcher could fail to start on Linux at all.** The shebang was a
+  hardcoded `#!/bin/zsh`; most Linux distros either don't install zsh by
+  default or put it at `/usr/bin/zsh` instead. Changed to
+  `#!/usr/bin/env zsh`, and the Homebrew tap formula now declares
+  `depends_on "zsh"` on Linux (macOS already ships it, so this was never
+  needed there).
+
+- **Cache freshness checks crashed on Linux with "bad math expression".**
+  `stat -f %m` (BSD/macOS) and `stat -c %Y` (GNU/Linux) were tried in one
+  line joined by `||`, assuming the wrong one would simply fail. It
+  doesn't: GNU `stat -f` is a real, different flag ("filesystem status"
+  instead of "format string") — it prints an unrelated multi-line dump to
+  stdout before exiting non-zero, and since it failed, the `||` fallback
+  ran too and appended its own output, leaving a mix of both results
+  where a single timestamp was expected. Found by the first real CI run
+  on a Linux runner, added in this same release. Fixed with an explicit
+  `uname -s` branch instead of the try-both assumption.
+
 ## [Unreleased]
 
 ### Added
@@ -377,6 +399,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.8.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.1
 [0.8.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.0
 [0.7.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.2
 [0.7.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.1

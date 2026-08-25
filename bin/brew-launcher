@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
 
 # ============================================================
 # brew-launcher
@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.8.0"
+VERSION="0.8.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -382,6 +382,31 @@ if [[ "$TERMINAL" == "ghostty" ]] &&
 fi
 
 mkdir -p "$CACHE_DIR"
+
+# ------------------------------------------------------------
+# Portable file mtime, as a Unix timestamp.
+#
+# `stat -f %m` and `stat -c %Y` were tried in one line with `||`
+# between them (BSD/macOS stat, then GNU/Linux stat), on the
+# assumption that whichever flag the platform doesn't support would
+# simply fail and fall through. That assumption was wrong: GNU stat's
+# `-f` is a real, different flag ("filesystem status" instead of
+# "format string"), so it doesn't error on Linux — it silently prints
+# something else, which then reached an `(( ))` arithmetic context as
+# non-numeric garbage and crashed with "bad math expression". Caught
+# by the first real CI run on a Linux runner. Branching on `uname -s`
+# explicitly, matching how the rest of the script already tells macOS
+# and Linux apart, is correct where "try both and hope one errors"
+# wasn't.
+# ------------------------------------------------------------
+
+file_mtime() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        stat -f %m "$1" 2>/dev/null
+    else
+        stat -c %Y "$1" 2>/dev/null
+    fi
+}
 
 # ------------------------------------------------------------
 # Homebrew state
@@ -866,7 +891,7 @@ if [[ "$FORCE_REFRESH" == false &&
         # frequent launches would keep pushing the deadline out and the
         # cache would never be re-verified. As written, at most one
         # real check happens per TTL window.
-        state_mtime="$(stat -f %m "$STATE_FILE" 2>/dev/null || stat -c %Y "$STATE_FILE" 2>/dev/null)"
+        state_mtime="$(file_mtime "$STATE_FILE")"
         state_age=$(( $(date +%s) - ${state_mtime:-0} ))
 
         if (( state_age < STATE_TTL )); then
@@ -911,14 +936,19 @@ fi
 
 refresh_outdated_if_stale() {
 
-    local file_mtime file_age
+    # Named distinctly from the file_mtime() helper it calls — a
+    # local variable shadowing a function of the same name is safe in
+    # zsh (separate namespaces) but reads exactly like the collision
+    # that caused the v0.4.2 cursor bug, so it's avoided on sight
+    # rather than relied on being technically fine.
+    local outdated_mtime file_age
 
     if [[ "$FORCE_REFRESH" == true ]]; then
         :
     elif [[ -f "$OUTDATED_FILE" ]]; then
 
-        file_mtime="$(stat -f %m "$OUTDATED_FILE" 2>/dev/null || stat -c %Y "$OUTDATED_FILE" 2>/dev/null)"
-        file_age=$(( $(date +%s) - ${file_mtime:-0} ))
+        outdated_mtime="$(file_mtime "$OUTDATED_FILE")"
+        file_age=$(( $(date +%s) - ${outdated_mtime:-0} ))
 
         if (( file_age < OUTDATED_TTL )); then
             return 0

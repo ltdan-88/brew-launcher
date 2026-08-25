@@ -19,6 +19,11 @@ name: CI
 #      state file written directly rather than a real `brew` install,
 #      so it exercises hidden-entry filtering and output shape on any
 #      runner, never skipping.
+#
+# All three also run on Linux. The launcher has supported
+# BREW_LAUNCHER_TERMINAL=current there since 0.2.0, but nothing had
+# ever actually run it on Linux in CI — everything above was
+# macos-latest only.
 
 on:
   push:
@@ -61,3 +66,34 @@ jobs:
 
       - name: --list fixture test
         run: zsh test/list-fixtures.sh
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ubuntu-latest images have shipped zsh historically, but that's
+      # not a documented guarantee — installed explicitly rather than
+      # assumed, since apt-get is idempotent and cheap if it's already
+      # there.
+      - name: Install zsh
+        run: sudo apt-get update -y && sudo apt-get install -y zsh
+
+      - name: zsh -n bin/brew-launcher
+        run: zsh -n bin/brew-launcher
+
+      # Nothing preinstalls Homebrew on Linux runners, unlike
+      # macos-latest. This is Homebrew's own action for exactly that.
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: --list fixture test
+        run: zsh test/list-fixtures.sh
+
+      # Not cache-roundtrip.sh here: it needs real installed formulae,
+      # and a fresh Linuxbrew has none installed on request — it would
+      # just skip every run, so it isn't worth the added job time.
