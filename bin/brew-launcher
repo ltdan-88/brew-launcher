@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.18.0"
+VERSION="0.18.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -333,7 +333,7 @@ if [[ "$1" == "--internal-footer-click" ]]; then
     case "$FZF_CLICK_FOOTER_WORD" in
         '[Hide]'|Hide|'[Unhide]'|Unhide|F6/⌥H|F6| \
         '[Views]'|Views|F2/⌥V|F2| \
-        '[Shortcut]'|Shortcut|F9/⌥S|F9| \
+        '[Presets]'|Presets|F9/⌥P|F9| \
         '[Refresh]'|Refresh|F5/⌥R|F5| \
         '[Favorite]'|Favorite|F7/⌥F|F7| \
         '[Categorize]'|Categorize|F8/⌥C|F8| \

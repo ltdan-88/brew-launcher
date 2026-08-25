@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.1] — 2026-08-25
+
+### Fixed
+
+- **Clicking `[Presets]` in the footer did nothing.** The F9 → Launch Preset
+  swap in v0.18.0 updated the footer text and the action it should trigger,
+  but missed a separate list that decides which clicked footer words are
+  recognized at all — it still only recognized F9's old label
+  ("Shortcut"), so a real mouse click on the new "[Presets]" word was
+  silently ignored while the direct F9 keypress worked fine. Found by a
+  user testing mouse support after the update.
+
 ## [0.18.0] — 2026-08-25
 
 ### Added
