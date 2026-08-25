@@ -30,6 +30,11 @@ name: CI
 #      Linux runners don't ship it the way macos-latest does. 2 is
 #      left out there: a fresh Linuxbrew has no formulae installed on
 #      request, so it would just skip on every run.
+#
+#   6. preset-fixtures — --preset's CLI error paths (missing name,
+#      unknown preset, a preset with no real commands in it), plus a
+#      real tmux session: right pane count on first launch, reattach
+#      instead of duplicating on a second one while it's still alive.
 
 on:
   push:
@@ -124,6 +129,18 @@ jobs:
 
       - name: Theme and config file test
         run: zsh test/theme-config-fixtures.sh
+
+  preset-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf and tmux
+        run: brew install fzf tmux
+
+      - name: Preset (--preset) test
+        run: zsh test/preset-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
