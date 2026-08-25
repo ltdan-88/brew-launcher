@@ -23,7 +23,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.8.1"
+VERSION="0.9.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -144,7 +144,7 @@ Keyboard shortcuts:
   F7 / ⌥F   Toggle Favorites for selected entry
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
-  F9 / ⌥S   Create a macOS shortcut
+  F9 / ⌥S   Create a macOS or Linux shortcut
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -1232,8 +1232,8 @@ pick_help() {
     rows+=("  F6 / ⌥H   Hide or unhide the selected entry")
     rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
     rows+=("  F8 / ⌥C   Categorize the selected entry")
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        rows+=("  F9 / ⌥S   Create a macOS shortcut")
+    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
+        rows+=("  F9 / ⌥S   Create a shortcut (macOS .command or Linux .desktop)")
     fi
     rows+=("")
     rows+=("Details pane, once open")
@@ -1280,9 +1280,10 @@ pick_more_action() {
     rows+=("f7"$'\t'"$(printf '%-18s%s' 'Favorite' 'F7 / ⌥F')")
     rows+=("f8"$'\t'"$(printf '%-18s%s' 'Categorize' 'F8 / ⌥C')")
 
-    # Shortcuts are macOS-only; elsewhere the action can only refuse,
-    # so it isn't offered rather than being offered and apologising.
-    if [[ "$(uname -s)" == "Darwin" ]]; then
+    # Shortcuts are macOS/Linux-only; elsewhere the action can only
+    # refuse, so it isn't offered rather than being offered and
+    # apologising.
+    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("f9"$'\t'"$(printf '%-18s%s' 'Create shortcut' 'F9 / ⌥S')")
     fi
 
@@ -1784,12 +1785,22 @@ create_shortcut() {
     local command="$1"
     local formula="$2"
 
-    if [[ "$(uname -s)" != "Darwin" ]]; then
-        printf '\n'
-        printf 'Shortcuts are only supported on macOS.\n'
-        sleep 1
-        return 1
-    fi
+    case "$(uname -s)" in
+        Darwin) create_macos_shortcut "$command" "$formula" ;;
+        Linux)  create_linux_shortcut "$command" "$formula" ;;
+        *)
+            printf '\n'
+            printf 'Shortcuts are only supported on macOS and Linux.\n'
+            sleep 1
+            return 1
+            ;;
+    esac
+}
+
+create_macos_shortcut() {
+
+    local command="$1"
+    local formula="$2"
 
     local shortcut_dir="/Applications/TUIs"
 
@@ -1830,9 +1841,14 @@ create_shortcut() {
         return 1
     fi
 
+    # Same fix as launch_in_current_terminal / launch_in_ghostty
+    # (0.8.0): run the command, then fall through to a fresh
+    # interactive shell, rather than exec-ing straight into it. A
+    # one-shot CLI shortcut would otherwise print its output and close
+    # the Terminal.app window before you could read it.
     if ! cat > "$shortcut_path" <<EOF
 #!/bin/zsh
-exec "$command_path"
+exec zsh -c '"\$1"; exec zsh' -- "$command_path"
 EOF
     then
         printf '\n'
@@ -1841,10 +1857,10 @@ EOF
         sleep 2
         return 1
     fi
-    
+
     if ! chmod +x "$shortcut_path"; then
         rm -f "$shortcut_path"
-    
+
         printf '\n'
         printf 'Unable to make shortcut executable:\n'
         printf '%s\n' "$shortcut_path"
@@ -1855,6 +1871,129 @@ EOF
     printf '\n'
     printf 'Created shortcut:\n'
     printf '%s\n' "$shortcut_path"
+    sleep 2
+}
+
+create_linux_shortcut() {
+
+    local command="$1"
+    local formula="$2"
+
+    # ~/.local/share/applications is the XDG-conventional location for
+    # user-installed .desktop entries — every major desktop environment
+    # (GNOME, KDE, XFCE, ...) already watches it and lists what's there
+    # in its application menu with no further setup, matching what
+    # /Applications/TUIs gives on macOS.
+    local apps_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+
+    # The wrapper script lives separately from the .desktop file itself
+    # (same idea as the macOS .command file) rather than embedding the
+    # launch command directly in the .desktop's Exec= line. Exec= isn't
+    # run through a shell by the spec, and its quoting rules are a
+    # genuine source of bugs across desktop environments — a bare path
+    # to a real, self-contained script sidesteps that entirely.
+    local scripts_dir="${XDG_DATA_HOME:-$HOME/.local/share}/brew-launcher/shortcuts"
+
+    if ! mkdir -p "$apps_dir" "$scripts_dir" 2>/dev/null; then
+        printf '\n'
+        printf 'Unable to create shortcut directories:\n'
+        printf '%s\n' "$apps_dir"
+        printf '%s\n' "$scripts_dir"
+        sleep 2
+        return 1
+    fi
+
+    local basename
+
+    if [[ "$formula" == "$command" ]]; then
+        basename="$formula"
+    else
+        basename="${formula}-${command}"
+    fi
+
+    local desktop_path="${apps_dir}/brew-launcher-${basename}.desktop"
+    local script_path="${scripts_dir}/${basename}.sh"
+
+    if [[ -e "$desktop_path" ]]; then
+        printf '\n'
+        printf 'Shortcut already exists:\n'
+        printf '%s\n' "$desktop_path"
+        sleep 2
+        return 0
+    fi
+
+    local command_path
+    command_path="$(command -v "$command" 2>/dev/null)"
+
+    if [[ -z "$command_path" ]]; then
+        printf '\n'
+        printf 'Unable to find command: %s\n' "$command"
+        sleep 2
+        return 1
+    fi
+
+    local display_name="$formula"
+    [[ "$formula" != "$command" ]] && display_name="$formula ($command)"
+
+    # Same fix as create_macos_shortcut and both launch_in_* functions
+    # (0.8.0): run the command, then fall through to a fresh
+    # interactive shell in the same terminal window, rather than
+    # exec-ing straight into it — otherwise a one-shot CLI prints its
+    # output and the window closes before there's anything to read.
+    if ! cat > "$script_path" <<EOF
+#!/usr/bin/env zsh
+exec zsh -c '"\$1"; exec zsh' -- "$command_path"
+EOF
+    then
+        printf '\n'
+        printf 'Unable to create shortcut:\n'
+        printf '%s\n' "$script_path"
+        sleep 2
+        return 1
+    fi
+
+    if ! chmod +x "$script_path"; then
+        rm -f "$script_path"
+
+        printf '\n'
+        printf 'Unable to make shortcut executable:\n'
+        printf '%s\n' "$script_path"
+        sleep 2
+        return 1
+    fi
+
+    # Terminal=true is what tells the desktop environment to open this
+    # inside its configured terminal emulator rather than trying to run
+    # a windowless process — without it, a TUI or CLI launched from the
+    # applications menu would have nowhere to show its output at all.
+    # Icon is a generic, near-universally-present freedesktop icon name
+    # rather than nothing; a missing icon theme entry fails silently,
+    # it doesn't break the shortcut.
+    if ! cat > "$desktop_path" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$display_name
+Comment=Launch $display_name via brew-launcher
+Exec=$script_path
+Terminal=true
+Categories=Utility;
+Icon=utilities-terminal
+EOF
+    then
+        rm -f "$script_path"
+
+        printf '\n'
+        printf 'Unable to create shortcut:\n'
+        printf '%s\n' "$desktop_path"
+        sleep 2
+        return 1
+    fi
+
+    chmod +x "$desktop_path" 2>/dev/null
+
+    printf '\n'
+    printf 'Created shortcut:\n'
+    printf '%s\n' "$desktop_path"
     sleep 2
 }
 

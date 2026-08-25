@@ -5,6 +5,38 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-08-25
+
+### Added
+
+- **Linux desktop shortcuts.** `F9` previously only worked on macOS; it now
+  writes a `.desktop` entry to `~/.local/share/applications/` on Linux, the
+  XDG-conventional location every major desktop environment already watches
+  — the tool appears in the application menu with no further setup, opening
+  in the default terminal (`Terminal=true`). Verified against a real
+  `desktop-file-validate` run, not just written to spec from memory.
+
+  The actual launch command lives in a small companion script rather than
+  directly in the `.desktop` file's `Exec=` line — that field isn't run
+  through a shell per the XDG spec, and its quoting rules are a real source
+  of cross-desktop-environment bugs. A plain path to a self-contained script
+  sidesteps that entirely, mirroring how the macOS `.command` file already
+  works.
+
+### Fixed
+
+- **A shortcut for a one-shot CLI closed its window instead of showing the
+  output.** Both `create_macos_shortcut` and the new Linux path used a bare
+  `exec` into the command — the same bug already fixed for the two
+  interactive launch paths in 0.8.0, just not yet applied here. Same fix:
+  run the command, then fall through to a fresh interactive shell in the
+  same window, rather than exec-ing straight into it.
+
+  **Existing shortcuts made before this release still have the old
+  behavior** — regenerating one means deleting the file and pressing `F9`
+  again; there's no way to patch an existing shortcut in place from inside
+  the launcher.
+
 ## [0.8.1] — 2026-08-25
 
 ### Fixed
@@ -399,6 +431,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial release — fzf-based picker over installed Homebrew CLI applications.
 
+[0.9.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.9.0
 [0.8.1]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.1
 [0.8.0]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.8.0
 [0.7.2]: https://github.com/ltdan-88/brew-launcher/releases/tag/v0.7.2
