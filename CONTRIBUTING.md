@@ -24,16 +24,21 @@ XDG_CACHE_HOME=/tmp/bl-test/cache \
 
 ## Before opening a PR
 
-Both gates run in CI on every pull request:
+`main` is protected — every change goes through a PR with CI passing, no
+direct pushes (the repo owner can still push directly in a real emergency;
+nothing else can). CI runs `zsh -n` plus a full suite of fixture-based
+behavior tests — see [.github/workflows/lint.yml](.github/workflows/lint.yml)
+for what each job covers. You can run the whole suite locally too:
 
 ```bash
-zsh -n bin/brew-launcher      # syntax
-zsh test/cache-roundtrip.sh   # behavior
+zsh -n bin/brew-launcher
+for t in test/*.sh; do zsh "$t"; done
 ```
 
-`cache-roundtrip.sh` covers the cache write/read path via `--list`, which needs
-no TTY. It exists because a syntax check alone missed a bug that made the
-alphabetically-last tool invisible everywhere in the app.
+The fixture tests exist because a syntax check alone once missed a real bug
+(a cache-writing bug that made the alphabetically-last tool invisible
+everywhere in the app) — each one guards a specific failure shape that's
+already happened once.
 
 Interactive behavior can't be covered by CI — if you change anything in the fzf
 loop, please actually run it and say so in the PR.
@@ -43,8 +48,11 @@ loop, please actually run it and say so in the PR.
 This project is deliberately small. It's one zsh script plus a Python helper for
 parsing Homebrew's JSON, and it should stay that way:
 
-- **No new runtime dependencies.** zsh, python3, fzf and the Homebrew CLI only —
-  no Node, Rust, Go, SQLite, or background daemons.
+- **No new required runtime dependencies.** zsh, python3, fzf and the
+  Homebrew CLI only — no Node, Rust, Go, SQLite, or background daemons.
+  tmux is the one exception, and it's optional: only needed if you actually
+  use the tmux terminal backend or presets, checked for and errored on
+  clearly if missing, never assumed.
 - **It's a launcher, not a package manager.** Installing, upgrading and removing
   packages is Homebrew's job. The `*` update marker is informational.
 - **Prefer the simple option.** When a clever feature and a simple one both
@@ -67,5 +75,5 @@ that habit.
 
 ## Releases
 
-See [RELEASING.md](RELEASING.md). Tagging is all that's needed — the Homebrew
-tap updates itself.
+See [RELEASING.md](RELEASING.md). Once your PR is merged, tagging the merged
+commit is all that's needed — the Homebrew tap updates itself.
