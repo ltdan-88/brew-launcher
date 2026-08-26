@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.27.0"
+VERSION="0.28.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -244,9 +244,12 @@ Presets:
 
   In the launcher: F4 → Create Preset picks the tools and writes the
   file for you — no hand-editing required. F9 launches an existing one
-  without leaving the picker. Both stay visible even if tmux isn't
-  installed — pressing either then explains what to install rather
-  than being hidden outright, so the feature is still discoverable.
+  without leaving the picker; Ctrl-D there deletes the highlighted
+  preset instead, asking first and showing how many commands it holds
+  — the one action here you can't undo. Both F4 and F9 stay visible
+  even if tmux isn't installed — pressing either then explains what to
+  install rather than being hidden outright, so the feature is still
+  discoverable.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin       Default
@@ -310,7 +313,8 @@ Keyboard shortcuts:
             categories, dependencies, caveats). Shift-Up/Down scrolls it.
   F4 / ⌥M   Open the More menu — the actions below
   F5 / ⌥R   Refresh the cache without leaving the launcher
-  F9 / ⌥P   Launch a preset — see Presets below
+  F9 / ⌥P   Launch a preset — see Presets below. Ctrl-D in that
+            picker deletes the highlighted preset instead.
 
   F4 and F5 also work from inside the view picker (F2) itself, not
   just the main list — no entry needs to be highlighted for either.
@@ -2319,6 +2323,7 @@ pick_help() {
     rows+=("            Both also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
+        rows+=("            Ctrl-D there deletes the highlighted preset instead")
     else
         rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
     fi
@@ -4207,16 +4212,62 @@ create_preset() {
     return 0
 }
 
+# Same convention as confirm_delete_category() — Cancel listed first so
+# it's the default and Esc also cancels, count shown so "Delete
+# devops?" is real information rather than noise.
+confirm_delete_preset() {
+
+    local name="$1"
+    local file="$PRESETS_DIR/$name"
+    local count=0
+    local answer
+
+    [[ -f "$file" ]] && count="$(grep -cv '^[[:space:]]*#\|^[[:space:]]*$' "$file" 2>/dev/null)"
+
+    local noun="commands"
+    (( count == 1 )) && noun="command"
+
+    answer="$(
+        printf '%s\n' "Cancel" "Delete \"$name\" and its $count $noun" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Delete preset')" \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            --header="This can't be undone." \
+            `# "Enter chooses" is deliberately not bracketed/clickable, same` \
+            `# reason as confirm_delete_category(): Enter acts on whichever` \
+            `# row is highlighted, so a clickable [Confirm] would cancel` \
+            `# whenever Cancel happened to be highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == Delete* ]]
+}
+
 # ------------------------------------------------------------
 # Pick a preset and launch it — the in-app entry point to run_preset(),
 # reached via F9. --preset <name> is the other way in, for when you
 # already know the name and would rather skip the picker.
+#
+# Ctrl-D deletes the highlighted preset instead of launching it — same
+# key, same confirm-first pattern pick_view() already uses to delete a
+# category, so nothing new to learn if you've used that one.
 # ------------------------------------------------------------
 
 launch_preset() {
 
     local -a existing_presets=()
-    local line preset_name
+    local -a result_lines=()
+    local line preset_name result pick_action clicked_word
 
     if [[ -d "$PRESETS_DIR" ]]; then
         for line in "$PRESETS_DIR"/*; do
@@ -4234,7 +4285,7 @@ launch_preset() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
-    preset_name="$(
+    result="$(
         printf '%s\n' "${existing_presets[@]}" |
         fzf \
             --height=100% \
@@ -4245,14 +4296,48 @@ launch_preset() {
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
-            --footer='  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
+            --footer='  ↑ ↓  Navigate    Enter  [Launch]    Ctrl-D  [Delete]    Esc  [Cancel]' \
+            --expect=enter,ctrl-d \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
 
     rm -f "$FOOTER_CLICK_FILE"
 
+    [[ -z "$result" ]] && return 1
+
+    result_lines=("${(@f)result}")
+    pick_action="${result_lines[1]}"
+    preset_name="${result_lines[2]}"
+
+    if [[ -f "$FOOTER_CLICK_FILE" ]]; then
+        clicked_word="$(sed -n '1p' "$FOOTER_CLICK_FILE")"
+        rm -f "$FOOTER_CLICK_FILE"
+
+        case "$clicked_word" in
+            '[Delete]'|Delete) pick_action="ctrl-d" ;;
+            '[Launch]'|Launch) pick_action="enter" ;;
+        esac
+    fi
+
     [[ -z "$preset_name" ]] && return 1
+
+    if [[ "$pick_action" == "ctrl-d" ]]; then
+
+        if confirm_delete_preset "$preset_name"; then
+            rm -f "$PRESETS_DIR/$preset_name"
+            printf '\n'
+            printf 'Preset "%s" deleted.\n' "$preset_name"
+            sleep 1
+        fi
+
+        # Loop back in rather than return — same pattern pick_view()
+        # uses after a category delete, so the list redraws (one preset
+        # shorter, or back to the "no presets yet" message) instead of
+        # dropping you out to the main list.
+        launch_preset
+        return $?
+    fi
 
     # run_preset() only ever returns on failure (success execs into
     # tmux and never comes back) — its own error message and pause

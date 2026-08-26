@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] — 2026-08-26
+
+### Added
+
+- **Delete a preset from the launcher.** F9 (Launch Preset) now accepts
+  Ctrl-D on the highlighted preset as well as Enter — same key, same
+  confirm-first pattern the view picker already uses to delete a
+  category (Cancel listed first and selected by default, count of
+  commands shown so the prompt is real information, nothing deleted
+  without a second step). Previously the only way to remove a preset
+  was `rm ~/.config/brew-launcher/presets/<name>` by hand.
+
 ## [0.27.0] — 2026-08-26
 
 ### Changed
