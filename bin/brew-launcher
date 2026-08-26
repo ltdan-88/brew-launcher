@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.25.0"
+VERSION="0.25.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -2577,11 +2577,17 @@ pick_view() {
     # outdated), and reusing them for a different meaning on this
     # screen would confuse more than it clarifies.
     #
-    # Every row except "All" also gets a count. "All" is left out
-    # deliberately: it's not a filtered subset the way the others are,
-    # so a count there would just repeat the total the main screen's
-    # own header already shows once you're in it.
-    choices=("All"$'\t'"All")
+    # Every row gets a count, including "All" — it used to be left out
+    # on the theory that fzf's own inline counter repeats it once
+    # you're actually in that view, but from this screen every other
+    # row has a number and All didn't, which reads as something
+    # missing rather than intentional. "All" excludes hidden entries,
+    # same as the real view does — it was never literally everything
+    # installed, just everything you haven't hidden.
+    total_count="$(grep -c '' "$CACHE_FILE" 2>/dev/null)"
+    count=$(( ${total_count:-0} - ${#hidden_commands[@]} ))
+    (( count < 0 )) && count=0
+    choices=("All"$'\t'"All ($count)")
 
     compute_category_counts
 
@@ -2605,7 +2611,8 @@ pick_view() {
     (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
     choices+=("Most Used"$'\t'"Most Used ($count)")
 
-    total_count="$(grep -c '' "$CACHE_FILE" 2>/dev/null)"
+    # Same total-minus-hidden figure the "All" row above already
+    # computed — recomputing it here would just repeat the same grep.
     count=$(( ${total_count:-0} - ${#hidden_commands[@]} ))
     (( count < 0 )) && count=0
     (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
