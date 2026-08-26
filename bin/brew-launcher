@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.28.0"
+VERSION="0.29.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -250,6 +250,12 @@ Presets:
   even if tmux isn't installed — pressing either then explains what to
   install rather than being hidden outright, so the feature is still
   discoverable.
+
+  Mouse mode is on for every preset session (that session only, not
+  your tmux config) — click a pane to focus it, drag a border to
+  resize. Editing a preset while its session is still running rebuilds
+  it with the new pane count next launch, instead of reattaching to
+  the stale one from before the edit.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin       Default
@@ -589,6 +595,7 @@ run_preset() {
     local -a preset_commands=()
     local preset_line preset_session preset_cmd preset_resolved
     local preset_started=false preset_pane_count
+    local preset_hash preset_stored_hash
 
     if ! command -v tmux >/dev/null 2>&1; then
         printf '\n'
@@ -633,12 +640,34 @@ run_preset() {
     # check a person would run by hand with `tmux has-session`.
     preset_session="blpreset-$name"
 
+    # Fingerprint of the command list, stashed on the session itself so
+    # a later run can tell whether the preset was edited since this
+    # session was built. Without this, editing a preset (say, from 4
+    # tools down to 3 via Create Preset's "replace it") while its old
+    # session was still running would just reattach to that stale
+    # session unchanged — still 4 panes, not the 3 the file says now.
+    # cksum, not a real hash: this only needs to detect "did the list
+    # change", not resist tampering, and it ships on macOS and Linux
+    # already, no new dependency.
+    preset_hash="$(printf '%s\n' "${preset_commands[@]}" | cksum)"
+
     if tmux has-session -t "$preset_session" 2>/dev/null; then
-        if [[ -n "$TMUX" ]]; then
-            exec tmux switch-client -t "$preset_session"
-        else
-            exec tmux attach-session -t "$preset_session"
+
+        preset_stored_hash="$(tmux show-environment -t "$preset_session" BL_PRESET_HASH 2>/dev/null)"
+        preset_stored_hash="${preset_stored_hash#BL_PRESET_HASH=}"
+
+        if [[ "$preset_stored_hash" == "$preset_hash" ]]; then
+            if [[ -n "$TMUX" ]]; then
+                exec tmux switch-client -t "$preset_session"
+            else
+                exec tmux attach-session -t "$preset_session"
+            fi
         fi
+
+        # Command list no longer matches (or this session predates the
+        # fingerprint) — rebuild fresh below instead of reattaching to
+        # a pane count that no longer matches the file.
+        tmux kill-session -t "$preset_session" 2>/dev/null
     fi
 
     # First live command becomes the session's initial pane; every one
@@ -694,6 +723,16 @@ run_preset() {
     else
         tmux select-layout -t "$preset_session" tiled
     fi
+
+    # Session-scoped, not global (-g) — this turns mouse support on for
+    # just this preset's panes (click to switch focus, drag a border to
+    # resize) without silently changing mouse behavior in the rest of
+    # your tmux, if you use it for other things and have it off there.
+    tmux set-option -t "$preset_session" mouse on
+
+    # Stashed so the next run of this same preset can tell whether the
+    # command list changed since — see the fingerprint comment above.
+    tmux set-environment -t "$preset_session" BL_PRESET_HASH "$preset_hash"
 
     if [[ -n "$TMUX" ]]; then
         exec tmux switch-client -t "$preset_session"
