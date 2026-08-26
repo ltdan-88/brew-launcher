@@ -5,6 +5,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] — 2026-08-26
+
+### Added
+
+- **"Open to Categories"** (`More`, off by default; `OPEN_TO_CATEGORIES=on`
+  in config). Opens straight to the view picker on launch instead of
+  `All` — makes sense once your categories are actually populated
+  (bundled, manual, or both), which the bundled-defaults feature makes
+  true from a fresh install onward. Reuses `pick_view()` exactly as-is
+  rather than a separate startup path, so typing to search, the
+  per-category counts, and Esc falling back to `All` all come free and
+  can't drift out of sync with the F2 screen itself. Off by default —
+  unlike the two bundled-data switches, this changes the very first
+  screen you see, so it stays opt-in rather than changing anyone's
+  launch experience out from under them.
+
 ## [0.24.2] — 2026-08-26
 
 ### Fixed

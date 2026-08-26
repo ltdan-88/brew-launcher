@@ -115,6 +115,11 @@ shows how many entries the category holds — every other action here is a toggl
 you can undo with the same key, so this is the one worth pausing on. `All`,
 `Hidden`, `Favorites`, `Most Used` and `Recently Added` can't be deleted.
 
+Once your categories are actually populated, **F4 → More → Open to Categories**
+opens straight into this picker on every launch instead of `All` — a long flat
+list stops being the first thing you see. Esc from it still falls back to
+`All`, exactly like pressing Esc from F2 any other time.
+
 ### Favorites
 
 <p align="center"><img src="assets/favorites.gif" alt="Toggling a favorite with F7; the marker appears and the cursor stays put"></p>
@@ -272,6 +277,7 @@ reference below, from inside the launcher.
 | — | Switch color theme | More only |
 | — | Create a new preset | More only |
 | — | Toggle Default Categories / Default Hidden | More only |
+| — | Toggle Open to Categories | More only |
 | — | Create a desktop shortcut (macOS or Linux) | More only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
@@ -330,7 +336,7 @@ plain text if you'd rather edit them directly, one setting or command per
 line, `#` comments and blank lines ignored:
 
 ```
-~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN= — see below
+~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, OPEN_TO_CATEGORIES= — see below
 ~/.config/brew-launcher/ignore               # hidden entries
 ~/.config/brew-launcher/shown                # bundled-hidden commands you F6'd back visible
 ~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8
