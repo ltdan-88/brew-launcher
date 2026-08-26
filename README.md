@@ -226,7 +226,10 @@ your morning setup in one shot instead of launching each tool by hand.
 **F4 → Create Preset** picks the tools (Tab marks, Enter confirms) and names
 it for you. **F9** lists your presets and launches the one you pick,
 reattaching to it if it's already running rather than opening a second copy.
-File format and the `--preset` CLI flag are in [Configuration](#configuration).
+**Ctrl-D** on a highlighted preset deletes it instead — same confirm-first
+prompt as deleting a category, showing how many commands it holds before
+anything's removed. File format and the `--preset` CLI flag are in
+[Configuration](#configuration).
 
 Presets need [tmux](#terminal-backends). Both stay visible in the footer and
 More menu either way — the More menu's hint reads "needs tmux" in place of the
