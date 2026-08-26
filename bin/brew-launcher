@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.24.2"
+VERSION="0.25.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -102,6 +102,7 @@ CONFIG_TERMINAL=""
 CONFIG_THEME=""
 CONFIG_DEFAULT_CATEGORIES=""
 CONFIG_DEFAULT_HIDDEN=""
+CONFIG_OPEN_TO_CATEGORIES=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
 
@@ -120,6 +121,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             THEME)               CONFIG_THEME="$config_value" ;;
             DEFAULT_CATEGORIES)  CONFIG_DEFAULT_CATEGORIES="$config_value" ;;
             DEFAULT_HIDDEN)      CONFIG_DEFAULT_HIDDEN="$config_value" ;;
+            OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
         esac
 
     done < "$CONFIG_FILE"
@@ -264,6 +266,13 @@ Theme:
   holds DEFAULT_CATEGORIES and DEFAULT_HIDDEN (each on|off, default
   on), toggled from More → Default Categories / Default Hidden — see
   "Bundled defaults" below.
+
+  OPEN_TO_CATEGORIES=on (default off, toggled from More → Open to
+  Categories) opens straight to the view picker on launch instead of
+  All — worth turning on once your categories are actually populated
+  (bundled, manual, or both), since an empty category list has nothing
+  useful to open to. Esc from that first screen falls back to All,
+  same as pressing it from F2 any other time.
 
 Bundled defaults:
   A curated set of well-known formula -> category mappings, and a
@@ -2298,6 +2307,7 @@ pick_help() {
     fi
     rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
+    rows+=("Open to Categories  Start on the view picker instead of All")
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create shortcut  macOS .command or Linux .desktop file")
     fi
@@ -2381,6 +2391,16 @@ pick_more_action() {
     local hidden_state='On'
     [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && hidden_state='Off'
     rows+=("toggle_default_hidden"$'\t'"$(printf '%-20s%s' 'Default Hidden' "$hidden_state")")
+
+    # Opt-in, unlike the two above — this changes the very first thing
+    # you see on launch, so it defaults to the familiar "All" list
+    # rather than switching everyone's startup screen out from under
+    # them. Only worth turning on once categories are actually
+    # populated (bundled, manual, or both); an empty category list
+    # would just show a picker with nothing useful in it.
+    local open_to_categories_state='Off'
+    [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
+    rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
 
     # Shortcuts are macOS/Linux-only; elsewhere the action can only
     # refuse, so it isn't offered rather than being offered and
@@ -3081,6 +3101,18 @@ build_entries() {
         done
     fi
 }
+
+# Opt-in (More → Open to Categories) — shows the view picker as the
+# very first screen instead of "All", so a launch lands you straight
+# in your categories rather than a long flat list. Only makes sense
+# once categories are actually populated (bundled, manual, or both);
+# reuses pick_view() as-is rather than a separate startup path, so
+# every behavior it already has — typing to search, Esc falling back
+# to "All", counts reflecting hidden/bundled state — comes for free
+# and can never drift out of sync with the F2 screen itself.
+if [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]]; then
+    pick_view
+fi
 
 build_entries
 
@@ -4403,6 +4435,18 @@ while true; do
         [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && new_value='on'
         set_config_value DEFAULT_HIDDEN "$new_value"
         CONFIG_DEFAULT_HIDDEN="$new_value"
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
+
+    # Opt-in (default off), so the flip direction here is the reverse
+    # of the two toggles above — starts by turning on, not off.
+    if [[ "$action" == "toggle_open_to_categories" ]]; then
+
+        local new_value='on'
+        [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
+        set_config_value OPEN_TO_CATEGORIES "$new_value"
+        CONFIG_OPEN_TO_CATEGORIES="$new_value"
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
