@@ -459,8 +459,20 @@ aspect ratio, which wastes a wide monitor for the most common preset size.
 `BREW_LAUNCHER_TERMINAL=tmux` above,
 naming a preset on the command line *is* the opt-in — it always starts (or
 reattaches to) a tmux session, no ambiguity about whether tmux gets
-bootstrapped. Re-running the same preset while it's still running reattaches
-you to it rather than spawning a duplicate.
+bootstrapped. Re-running an unchanged preset while it's still running
+reattaches you to it rather than spawning a duplicate; editing the preset
+first (fewer or more commands) rebuilds the session fresh instead, so the
+pane count always matches what the file says now.
+
+Mouse mode is turned on for every preset session (scoped to that session
+only — it won't change mouse behavior anywhere else you use tmux), so you
+can click a pane to focus it or drag a border to resize it. Two built-in
+tmux keys are usually more useful than resizing by hand, mouse or otherwise:
+**prefix + z** zooms the focused pane to fill the whole window and back
+(the fastest way to focus on one tool without reshaping the layout for
+everyone else), and **prefix + Ctrl-arrow** nudges a border a cell at a
+time if you do want to reshape it. Default prefix is Ctrl-b unless your
+tmux config remaps it.
 
 </details>
 

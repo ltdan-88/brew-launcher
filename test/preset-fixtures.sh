@@ -118,6 +118,30 @@ session_count="$(tmux list-sessions 2>/dev/null | grep -c '^blpreset-preset-fixt
 [[ "$session_count" == "1" ]] ||
     fail "re-invoking a running preset should not spawn a second session, got: $session_count"
 
+mouse_option="$(tmux show-options -t "$SESSION" mouse 2>/dev/null)"
+[[ "$mouse_option" == "mouse on" ]] ||
+    fail "preset session should have mouse mode on, got: $mouse_option"
+
+# ------------------------------------------------------------
+# 5. Editing the preset file while its session is still running
+#    should rebuild with the new pane count on the next invocation,
+#    not reattach to the stale session from before the edit.
+# ------------------------------------------------------------
+
+cat > "$PRESETS_DIR/preset-fixtures-test" <<'EOF'
+cat
+EOF
+
+"$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
+
+pane_count_edited="$(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
+[[ "$pane_count_edited" == "1" ]] ||
+    fail "editing a running preset down to 1 command should rebuild with 1 pane, got: $pane_count_edited"
+
+session_count_edited="$(tmux list-sessions 2>/dev/null | grep -c '^blpreset-preset-fixtures-test:')"
+[[ "$session_count_edited" == "1" ]] ||
+    fail "rebuilding an edited preset should still leave exactly one session, got: $session_count_edited"
+
 tmux kill-session -t "$SESSION" 2>/dev/null
 
-printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count, re-invoking reattaches instead of duplicating\n'
+printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count, re-invoking reattaches instead of duplicating, mouse mode is on, editing a running preset rebuilds instead of staying stale\n'

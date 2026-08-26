@@ -5,6 +5,30 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] — 2026-08-26
+
+### Added
+
+- **Mouse mode is on by default in every preset's tmux session** —
+  click a pane to focus it, drag a border to resize. Scoped to that
+  session only (`tmux set-option -t <session> mouse on`, no `-g`), so
+  it never changes mouse behavior anywhere else you use tmux.
+
+### Fixed
+
+- **Editing a preset while its tmux session was still running left the
+  session unchanged** — reported live: a preset trimmed from 4 tools
+  down to 3 still opened with 4 panes. Root cause: reattaching to an
+  already-running preset session skipped rebuilding entirely, so it
+  never noticed the file had changed. `run_preset()` now stashes a
+  fingerprint of the command list on the session itself
+  (`BL_PRESET_HASH`, via `tmux set-environment`) when it's built;
+  the next launch compares the current file against that fingerprint
+  and only reattaches if it still matches, killing and rebuilding the
+  session otherwise. Re-running an unedited preset still reattaches to
+  the exact same panes as before — verified live that the pane's PID
+  doesn't change in that case.
+
 ## [0.28.0] — 2026-08-26
 
 ### Added
