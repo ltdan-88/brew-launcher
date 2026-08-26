@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.30.0"
+VERSION="0.30.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -4513,14 +4513,20 @@ launch_preset() {
             --color="$FZF_COLORS"
     )"
 
-    rm -f "$FOOTER_CLICK_FILE"
-
     [[ -z "$result" ]] && return 1
 
     result_lines=("${(@f)result}")
     pick_action="${result_lines[1]}"
     preset_name="${result_lines[2]}"
 
+    # Deliberately not cleared right after fzf exits, unlike most
+    # screens here — a footer click reports through this same file
+    # (see --internal-footer-click), and a click never lands in
+    # --expect's key list, so pick_action above is empty on a click and
+    # this is the only way to recover which word was actually clicked.
+    # Clearing it before this check (as this function used to) meant a
+    # "[Delete]" click always fell through to launching the preset
+    # instead — reported live as "delete in brackets is not clickable."
     if [[ -f "$FOOTER_CLICK_FILE" ]]; then
         clicked_word="$(sed -n '1p' "$FOOTER_CLICK_FILE")"
         rm -f "$FOOTER_CLICK_FILE"
