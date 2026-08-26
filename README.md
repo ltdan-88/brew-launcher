@@ -218,18 +218,22 @@ the command yourself would.
 
 ### Launch several tools together
 
-<p align="center"><img src="assets/presets.gif" alt="Creating a preset by multi-selecting tools with Tab, naming it, then launching it with F9"></p>
+<p align="center"><img src="assets/presets.gif" alt="Creating a preset by marking tools with Tab, naming it, then launching it with F9"></p>
 
 A preset is a named group of tools that all open together, one per tmux pane —
 your morning setup in one shot instead of launching each tool by hand.
 
-**F4 → Create Preset** picks the tools (Tab marks, Enter confirms) and names
-it for you. **F9** lists your presets and launches the one you pick,
-reattaching to it if it's already running rather than opening a second copy.
-**Ctrl-D** on a highlighted preset deletes it instead — same confirm-first
-prompt as deleting a category, showing how many commands it holds before
-anything's removed. File format and the `--preset` CLI flag are in
-[Configuration](#configuration).
+**F4 → Create Preset** picks the tools: **Tab** marks one and shows a number
+badge for the order it'll launch in (top to bottom, left to right in the
+tmux layout), Tab again on a marked tool unmarks it and renumbers the rest
+down, and **Enter** saves them in that exact order — not the alphabetical
+order they're listed in. Enter with nothing marked shows an error rather
+than quietly saving a one-tool "preset." **F9** lists your presets and
+launches the one you pick, reattaching to it if it's already running rather
+than opening a second copy. **Ctrl-D** on a highlighted preset deletes it
+instead — same confirm-first prompt as deleting a category, showing how
+many commands it holds before anything's removed. File format and the
+`--preset` CLI flag are in [Configuration](#configuration).
 
 Presets need [tmux](#terminal-backends). Both stay visible in the footer and
 More menu either way — the More menu's hint reads "needs tmux" in place of the
