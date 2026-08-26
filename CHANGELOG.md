@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.1] — 2026-08-27
+
+### Fixed
+
+- **Clicking `[Delete]` in the Launch Preset (F9) screen launched the
+  preset instead of deleting it.** Reported live: "i noticed that
+  delete preset in brackets is not clickable." A footer click reports
+  through a small side-channel file since it never matches `--expect`'s
+  key list directly — `launch_preset()` was clearing that file right
+  after fzf exited, before ever checking it, so the click was silently
+  lost and fell through to whatever the empty default action was
+  (launching). The check now runs before the file gets cleared, the
+  same order the view picker's own (unaffected) `[Delete]` click
+  already used. Verified live via simulated mouse clicks at the exact
+  footer coordinates: `[Delete]` now opens the confirm screen,
+  `[Launch]` still launches.
+
 ## [0.30.0] — 2026-08-27
 
 ### Added
