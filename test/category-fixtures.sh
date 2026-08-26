@@ -54,6 +54,7 @@ typeset -A default_category_commands
 # in bin/brew-launcher, not a reimplementation of it that could drift
 # out of sync with the real logic.
 source <(sed -n '/^load_category_names() {/,/^}/p' "$LAUNCHER")
+source <(sed -n '/^compute_category_counts() {/,/^}/p' "$LAUNCHER")
 
 load_category_names
 
@@ -151,4 +152,40 @@ for name in "${CATEGORY_NAMES[@]}"; do
 done
 (( found )) || fail "bundled-only category 'System Monitoring' (no real file) should still be browsable: ${CATEGORY_NAMES[*]}"
 
-printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest, merges bundled categories without duplicating\n'
+# ------------------------------------------------------------
+# 7. compute_category_counts() — the view-picker's per-category count
+#    has to match what the filtered view will actually show, not just
+#    how many lines mention that category. Real bug (reported live):
+#    a plain `grep -c` on the real file counted hidden and no-longer-
+#    installed entries, and the bundled tally didn't check hidden
+#    either — so a category containing any hidden command always
+#    showed a higher count than it actually displayed.
+# ------------------------------------------------------------
+
+CACHE_FILE="$TEST_HOME/entries"
+cat > "$CACHE_FILE" <<CACHE
+age	desc	age	1.0	1MB	0	age	/opt/homebrew/bin/age	0	-	0
+age-inspect	desc	age	1.0	1MB	0	age	/opt/homebrew/bin/age-inspect	0	Security	1
+age-keygen	desc	age	1.0	1MB	0	age	/opt/homebrew/bin/age-keygen	0	Security	0
+CACHE
+
+: > "$CATEGORIES_DIR/Security"
+printf 'age\nage-inspect\nuninstalled-tool\n' > "$CATEGORIES_DIR/Security"
+default_category_commands=([age-keygen]=Security)
+
+typeset -A hidden_commands category_counts
+hidden_commands=([age-inspect]=1)
+
+# CATEGORY_NAMES drives which category files compute_category_counts()
+# even looks at — needs a fresh load now that "Security" exists.
+load_category_names
+compute_category_counts
+
+# Expected: age (real, visible) + age-keygen (bundled, visible) = 2.
+# age-inspect is real but hidden, uninstalled-tool isn't in the cache
+# at all — neither should count.
+if [[ "${category_counts[Security]:-0}" != "2" ]]; then
+    fail "expected Security count 2 (age + age-keygen; age-inspect hidden, uninstalled-tool not cached), got ${category_counts[Security]:-0}"
+fi
+
+printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest, merges bundled categories without duplicating, counts exclude hidden/uninstalled entries\n'

@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.24.1"
+VERSION="0.24.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -2485,6 +2485,56 @@ pick_theme() {
     fi
 }
 
+# Populates category_counts with exactly what each category's filtered
+# view will actually show — not just "how many lines mention this
+# category". A plain `grep -c` on the real file over-counts blank/
+# comment lines and entries that are hidden or no longer installed, and
+# a bundled tally on its own can't know a bundled member is hidden
+# either. Both matter: several bundled-hidden commands (age-inspect,
+# calcurse-caldav/-upgrade/-vdir) share a formula with a bundled
+# category (Security, Productivity), so without this check those
+# categories always showed a higher count than they actually displayed
+# — the real bug report that led to this function existing.
+typeset -A category_counts
+
+compute_category_counts() {
+
+    category_counts=()
+
+    local name count_file count_member bundled_command known_command
+    typeset -A known_commands
+
+    while IFS=$'\t' read -r known_command _; do
+        [[ -n "$known_command" ]] && known_commands[$known_command]=1
+    done < "$CACHE_FILE"
+
+    for name in "${CATEGORY_NAMES[@]}"; do
+
+        count_file="$CATEGORIES_DIR/$name"
+
+        [[ -f "$count_file" ]] || continue
+
+        while IFS= read -r count_member; do
+
+            count_member="${count_member#"${count_member%%[![:space:]]*}"}"
+            count_member="${count_member%"${count_member##*[![:space:]]}"}"
+
+            [[ -z "$count_member" ]] && continue
+            [[ "$count_member" == \#* ]] && continue
+            [[ -z "${known_commands[$count_member]-}" ]] && continue
+            [[ -n "${hidden_commands[$count_member]-}" ]] && continue
+
+            (( category_counts[$name]++ ))
+
+        done < "$count_file"
+    done
+
+    for bundled_command in "${(k)default_category_commands[@]}"; do
+        [[ -n "${hidden_commands[$bundled_command]-}" ]] && continue
+        (( category_counts[${default_category_commands[$bundled_command]}]++ ))
+    done
+}
+
 pick_view() {
 
     local choices result result_lines pick_action picked clicked_word
@@ -2513,21 +2563,11 @@ pick_view() {
     # own header already shows once you're in it.
     choices=("All"$'\t'"All")
 
-    # Bundled members (see load_bundled_categories) don't live in the
-    # real file grep -c counts below — tallied once here and added in,
-    # so a bundled-only category (no real file at all yet) still shows
-    # its real count instead of "(0)".
-    typeset -A bundled_category_counts
-    local bundled_command
-    for bundled_command in "${(k)default_category_commands[@]}"; do
-        (( bundled_category_counts[${default_category_commands[$bundled_command]}]++ ))
-    done
+    compute_category_counts
 
     for name in "${CATEGORY_NAMES[@]}"; do
 
-        count="$(grep -c '' "$CATEGORIES_DIR/$name" 2>/dev/null)"
-        count="${count:-0}"
-        (( count += ${bundled_category_counts[$name]:-0} ))
+        count="${category_counts[$name]:-0}"
 
         if [[ "$name" == "Favorites" ]]; then
             choices+=("$name"$'\t'"$name ($count)")
