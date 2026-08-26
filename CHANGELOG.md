@@ -5,6 +5,92 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.1] — 2026-08-26
+
+### Fixed
+
+- **A 2-pane preset now opens side by side instead of stacked.**
+  `tmux select-layout tiled` grids panes by character-cell shape, not
+  screen aspect ratio, so for exactly 2 panes it splits top/bottom even
+  on a wide monitor (confirmed directly: two 200-column panes came out
+  200x24 and 200x25, one above the other). Switched to
+  `even-horizontal` specifically for the 2-pane case, which is the
+  actual side-by-side split — the most common preset size benefits
+  most from a widescreen layout. 3+ panes are unaffected; `tiled`'s
+  grid behavior is still the right call once a single row or column
+  stops making sense.
+
+## [0.24.0] — 2026-08-26
+
+### Added
+
+- **Bundled default categories and hidden commands.** A curated,
+  hand-reviewed dataset now ships with the launcher: a formula ->
+  category mapping for ~140 well-known CLI/TUI tools across 18
+  categories, and a short list of commands that are genuinely just a
+  multi-command formula's minor helper scripts (`age-inspect`,
+  `calcurse-upgrade`, `chkfont`, `figlist`, `showfigfonts`, `podboat`,
+  and a few others — each reviewed individually against what it
+  actually does, not filtered by a generic naming rule; a blanket
+  heuristic here was already considered and rejected once before, see
+  CONTRIBUTING.md). Both apply automatically on every cache rebuild to
+  anything not already categorized/hidden by hand, so a fresh install
+  already looks organized. Controlled by the two switches added in
+  0.23.0 (`More → Default Categories` / `Default Hidden`), which were
+  genuinely no-ops until this data existed to turn on or off.
+  Read straight from two new cache fields (CACHE_FORMAT_VERSION 8→9),
+  computed at rebuild time regardless of the on/off setting so
+  toggling either takes effect immediately, no rebuild required.
+- A category that's entirely bundled (no real category file behind it
+  yet) shows up in the view picker like any other and takes a normal
+  F8 press — pressing it again on a bundled-only membership writes to
+  a new `category-exclude` file rather than a redundant real line,
+  since there's no real line to remove. F6 on a bundled-hidden command
+  works the same way via a new `shown` file. Your own F6/F8 choice on
+  any individual entry always overrides the bundled default regardless
+  of the global switch, exactly as promised when the switches shipped.
+- The F3 details pane now shows a bundled category too, marked
+  `(default)`, when nothing's filed by hand — same place the pane
+  already names manually-assigned categories.
+
+### Fixed
+
+- A genuinely empty tab-separated cache field silently swallowed the
+  tab next to it under zsh's `read` — `IFS=$'\t'` still applies the
+  "collapse runs of IFS whitespace" rule tab itself qualifies for, the
+  same behavior that collapses runs of spaces, so an empty field
+  shifted every field after it left by one. Every existing field
+  happened to always be non-empty in practice, so this had never
+  surfaced before the new (usually-empty) default_category field
+  exposed it. Fixed by never emitting an empty field — a `-`
+  placeholder stands in for "no bundled category" instead.
+
+## [0.23.0] — 2026-08-26
+
+### Changed
+
+- **Presets/Create Preset are visible again even without tmux**,
+  reversing 0.21.0's hiding. Hiding them solved "don't offer what can
+  only fail," but created a worse problem: someone who never had tmux
+  installed had no way to discover Presets existed at all short of
+  reading the README. Now both stay in the footer, More menu, and F1
+  Help at all times; the More menu's hint column reads "needs tmux"
+  in place of the usual keybind so the requirement is visible without
+  pressing anything, and selecting either still explains the exact
+  install command rather than silently failing.
+
+### Added
+
+- **Two new More-menu switches, Default Categories and Default
+  Hidden** (`DEFAULT_CATEGORIES` / `DEFAULT_HIDDEN` in
+  `~/.config/brew-launcher/config`, each `on`/`off`, default `on`).
+  Reserved for a curated, bundled set of category and pre-hidden-
+  command defaults shipping separately — flipping either is a no-op
+  until that data exists, but the on/off mechanism (and its escape
+  hatch for someone who wants a blank slate from the start) needed to
+  be settled first. A user's own F3/F8 choice on any individual entry
+  will always override the bundled data regardless of this setting.
+
 ## [0.22.0] — 2026-08-26
 
 ### Added

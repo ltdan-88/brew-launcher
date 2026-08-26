@@ -76,26 +76,39 @@ if [[ "$(tail -c 1 "$CACHE_FILE" | xxd -p)" != "0a" ]]; then
 fi
 
 # ------------------------------------------------------------
-# 2. Every cached entry must survive the round trip.
+# 2. Every cached entry must survive the round trip, minus whatever
+#    the bundled default-hidden list (see "Bundled defaults")
+#    legitimately excludes.
 #
-# No ignore file exists in this isolated config, so nothing is
-# legitimately hidden and the counts must match exactly.
+# No ignore file exists in this isolated config, so IGNORE_FILE
+# contributes nothing here — but the bundled hidden list applies
+# regardless of user config, so counts only match after subtracting
+# field 11 (default_hidden) rows, not exactly.
 # ------------------------------------------------------------
 
 cache_count="$(grep -c '' "$CACHE_FILE")"
 list_count="$(grep -c '' "$OUTPUT")"
+bundled_hidden_count="$(awk -F'\t' '$11 == "1" { c++ } END { print c+0 }' "$CACHE_FILE")"
+expected_count=$(( cache_count - bundled_hidden_count ))
 
-if [[ "$cache_count" != "$list_count" ]]; then
-    fail "cache has $cache_count entries but --list emitted $list_count"
+if [[ "$expected_count" != "$list_count" ]]; then
+    fail "cache has $cache_count entries ($bundled_hidden_count bundled-hidden) but --list emitted $list_count, expected $expected_count"
 fi
 
 # ------------------------------------------------------------
 # 3. The last entry specifically — the one the original bug ate.
+#
+# Skips backward past any bundled-hidden row (field 11 == "1") —
+# those are legitimately absent from --list regardless of this bug,
+# so the real regression check needs the last row that's actually
+# supposed to appear.
 # ------------------------------------------------------------
 
-last_cached="$(tail -1 "$CACHE_FILE" | cut -f1)"
+last_cached="$(awk -F'\t' '$11 != "1" { line = $1 } END { print line }' "$CACHE_FILE")"
 
-if ! cut -f1 "$OUTPUT" | grep -qxF -- "$last_cached"; then
+if [[ -z "$last_cached" ]]; then
+    echo "SKIP: every cached entry is bundled-hidden, nothing to check here"
+elif ! cut -f1 "$OUTPUT" | grep -qxF -- "$last_cached"; then
     fail "last cache entry '$last_cached' is missing from --list output"
 fi
 

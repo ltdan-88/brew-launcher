@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.22.0"
+VERSION="0.24.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -51,7 +51,10 @@ STATE_FILE="$CACHE_DIR/state"
 #   8 — details text adds Installed/Update-available lines, and
 #       metadata labels are padded to 18, not 12, to fit
 #       "Update available"
-CACHE_FORMAT_VERSION=8
+#   9 — two new trailing fields per entry, default_category and
+#       default_hidden, feeding the bundled curated data (see
+#       "Bundled defaults" below)
+CACHE_FORMAT_VERSION=9
 
 # Side-channel for the footer mouse-click handler: which word was
 # clicked, and which footer line it was on (for words that mean
@@ -69,6 +72,20 @@ export FOOTER_CLICK_FILE="${FOOTER_CLICK_FILE:-$CACHE_DIR/footer-click.$$}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
 
+# Override files for the bundled curated data (see "Bundled defaults"
+# below) — both are the same one-command-per-line shape as IGNORE_FILE,
+# just inverted in meaning:
+#   SHOWN_FILE            force-show a command the bundled data hides
+#                          by default (F6 on an entry hidden only
+#                          because of that, never IGNORE_FILE)
+#   CATEGORY_EXCLUDE_FILE force-exclude a command from every bundled
+#                          category assignment (F8 "remove" on an entry
+#                          whose only category membership is bundled)
+# Neither is ever written to for a command the user hid/categorized
+# themselves — those already have their own real, unambiguous file.
+SHOWN_FILE="$CONFIG_DIR/shown"
+CATEGORY_EXCLUDE_FILE="$CONFIG_DIR/category-exclude"
+
 # Persisted defaults for things an env var can already override for one
 # run — BREW_LAUNCHER_TERMINAL and BREW_LAUNCHER_THEME still win if
 # set, this is just what to fall back to instead of the hardcoded
@@ -83,6 +100,8 @@ CONFIG_FILE="$CONFIG_DIR/config"
 
 CONFIG_TERMINAL=""
 CONFIG_THEME=""
+CONFIG_DEFAULT_CATEGORIES=""
+CONFIG_DEFAULT_HIDDEN=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
 
@@ -97,8 +116,10 @@ if [[ -f "$CONFIG_FILE" ]]; then
         [[ "$config_key" == \#* ]] && continue
 
         case "$config_key" in
-            TERMINAL) CONFIG_TERMINAL="$config_value" ;;
-            THEME)    CONFIG_THEME="$config_value" ;;
+            TERMINAL)            CONFIG_TERMINAL="$config_value" ;;
+            THEME)               CONFIG_THEME="$config_value" ;;
+            DEFAULT_CATEGORIES)  CONFIG_DEFAULT_CATEGORIES="$config_value" ;;
+            DEFAULT_HIDDEN)      CONFIG_DEFAULT_HIDDEN="$config_value" ;;
         esac
 
     done < "$CONFIG_FILE"
@@ -221,9 +242,9 @@ Presets:
 
   In the launcher: F4 → Create Preset picks the tools and writes the
   file for you — no hand-editing required. F9 launches an existing one
-  without leaving the picker. Both are hidden from the footer and More
-  menu if tmux isn't installed, since neither could do anything useful
-  without it.
+  without leaving the picker. Both stay visible even if tmux isn't
+  installed — pressing either then explains what to install rather
+  than being hidden outright, so the feature is still discoverable.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin       Default
@@ -239,7 +260,28 @@ Theme:
 
   Both settings persist without exporting them every session via
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
-  var above always wins over it for that one run.
+  var above always wins over it for that one run. The same file also
+  holds DEFAULT_CATEGORIES and DEFAULT_HIDDEN (each on|off, default
+  on), toggled from More → Default Categories / Default Hidden — see
+  "Bundled defaults" below.
+
+Bundled defaults:
+  A curated set of well-known formula -> category mappings, and a
+  short hand-reviewed list of genuinely auxiliary commands (a multi-
+  command formula's minor helper scripts, not its main tool), ships
+  with the launcher and applies automatically to anything you haven't
+  categorized or hidden yourself.
+
+  Your own F6 (hide) or F8 (categorize) choice on any individual entry
+  always overrides the bundled data for that entry, regardless of the
+  two settings above. DEFAULT_CATEGORIES=off / DEFAULT_HIDDEN=off are
+  only for someone who wants none of it applied, anywhere, from the
+  start.
+
+  A category that's entirely bundled (no real file yet) still shows up
+  in the view picker and gets a real F8 press like any other — F8
+  "remove" on a bundled-only membership excludes just that command from
+  the bundled category rather than creating a redundant file entry.
 
 Keyboard shortcuts:
 
@@ -427,10 +469,35 @@ if [[ "$1" == "--internal-preview" ]]; then
         fi
     fi
 
+    # Nothing manual on this command — fall back to the bundled default
+    # category (see "Bundled defaults"), same on/off and exclusion
+    # rules the main list itself applies. A single grep against the
+    # already-cached entries line is cheap enough for a per-keystroke
+    # preview; no need to duplicate the category into every preview
+    # file just to avoid it.
+    preview_default_category=""
+
+    if (( ${#preview_categories} == 0 )) &&
+       [[ "$CONFIG_DEFAULT_CATEGORIES" != off && -n "$preview_command" ]] &&
+       ! grep -Fqx "$preview_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null; then
+
+        preview_default_category="$(
+            awk -F'\t' -v cmd="$preview_command" \
+                '$1 == cmd { print $10; exit }' "$CACHE_FILE" 2>/dev/null
+        )"
+
+        # "-" is the cache's own placeholder for "no bundled category"
+        # (see rebuild_cache) — treat it the same as empty here.
+        [[ "$preview_default_category" == "-" ]] && preview_default_category=""
+    fi
+
     while IFS= read -r preview_line; do
         if [[ "$preview_line" == "$PREVIEW_CATEGORY_MARKER" ]]; then
-            (( ${#preview_categories} )) && \
+            if (( ${#preview_categories} )); then
                 printf '  %-18s%s\n' 'Categories' "${(j:, :)preview_categories}"
+            elif [[ -n "$preview_default_category" ]]; then
+                printf '  %-18s%s (default)\n' 'Categories' "$preview_default_category"
+            fi
         else
             print -r -- "$preview_line"
         fi
@@ -499,7 +566,7 @@ run_preset() {
     local preset_file="$PRESETS_DIR/$name"
     local -a preset_commands=()
     local preset_line preset_session preset_cmd preset_resolved
-    local preset_started=false
+    local preset_started=false preset_pane_count
 
     if ! command -v tmux >/dev/null 2>&1; then
         printf '\n'
@@ -589,7 +656,22 @@ run_preset() {
         return 1
     fi
 
-    tmux select-layout -t "$preset_session" tiled
+    # tmux's own "tiled" algorithm picks a grid based on the terminal's
+    # character-cell shape, not its pixel aspect ratio — cells are
+    # taller than they are wide, so for exactly 2 panes it stacks them
+    # top/bottom rather than side by side, even on a wide monitor
+    # (confirmed directly: tiled put two 200-column panes at 200x24
+    # and 200x25, one above the other). even-horizontal gives the
+    # side-by-side split that's actually the better default at 2 —
+    # tiled's grid behavior is the right call again from 3 panes up,
+    # where a single row or column stops making sense.
+    preset_pane_count="$(tmux list-panes -t "$preset_session" 2>/dev/null | wc -l)"
+
+    if (( preset_pane_count == 2 )); then
+        tmux select-layout -t "$preset_session" even-horizontal
+    else
+        tmux select-layout -t "$preset_session" tiled
+    fi
 
     if [[ -n "$TMUX" ]]; then
         exec tmux switch-client -t "$preset_session"
@@ -1092,6 +1174,192 @@ preview_dir = sys.argv[6]
 category_marker = sys.argv[7]
 
 # ------------------------------------------------------------
+# Bundled curated data — see "Bundled defaults" in the README.
+#
+# DEFAULT_CATEGORIES: formula name -> category name, for well-known
+# tools a beginner would otherwise have to discover and file away by
+# hand. Applied at rebuild time regardless of the DEFAULT_CATEGORIES
+# config setting — that switch is checked zsh-side instead, so turning
+# it on doesn't require a rebuild to take effect.
+#
+# DEFAULT_HIDDEN: exact command names for genuinely auxiliary/minor
+# commands a multi-command formula installs alongside its main one
+# (e.g. age's own key-generation plugin helper, calcurse's one-time
+# migration script) — reviewed one at a time, not a blanket rule. A
+# command belongs here only if it was actually checked, not guessed;
+# see CONTRIBUTING.md for why a generic heuristic was rejected instead.
+#
+# Both are keyed independently of whatever the user has done by hand —
+# see load_bundled_categories()/load_hidden_commands() in the main
+# script for how a manual F3/F8 choice always overrides these.
+# ------------------------------------------------------------
+
+_DEFAULT_CATEGORIES_RAW = """
+irssi\tChat
+weechat\tChat
+awscli\tCloud & DevOps
+docker\tCloud & DevOps
+k9s\tCloud & DevOps
+lazydocker\tCloud & DevOps
+litecli\tDatabases
+mycli\tDatabases
+pgcli\tDatabases
+redis\tDatabases
+act\tDev Tools
+direnv\tDev Tools
+entr\tDev Tools
+grex\tDev Tools
+httpie\tDev Tools
+hyperfine\tDev Tools
+jless\tDev Tools
+just\tDev Tools
+shellcheck\tDev Tools
+tokei\tDev Tools
+watchexec\tDev Tools
+zoxide\tDev Tools
+diskus\tDisk Usage
+duf\tDisk Usage
+dust\tDisk Usage
+gdu\tDisk Usage
+ncdu\tDisk Usage
+helix\tEditors
+kakoune\tEditors
+micro\tEditors
+neovim\tEditors
+vim\tEditors
+broot\tFile Manager
+lf\tFile Manager
+midnight-commander\tFile Manager
+nnn\tFile Manager
+ranger\tFile Manager
+superfile\tFile Manager
+vifm\tFile Manager
+xplr\tFile Manager
+yazi\tFile Manager
+asciiquarium\tFun & Toys
+astroterm\tFun & Toys
+boxes\tFun & Toys
+cbonsai\tFun & Toys
+cmatrix\tFun & Toys
+cowsay\tFun & Toys
+daylight\tFun & Toys
+figlet\tFun & Toys
+lolcat\tFun & Toys
+pipes-sh\tFun & Toys
+satellite-tracker\tFun & Toys
+sl\tFun & Toys
+toilet\tFun & Toys
+tty-clock\tFun & Toys
+bastet\tGames
+c2048\tGames
+moon-buggy\tGames
+nethack\tGames
+ninvaders\tGames
+nsnake\tGames
+robotfindskitten\tGames
+difftastic\tGit & Version Control
+gh\tGit & Version Control
+git-absorb\tGit & Version Control
+git-delta\tGit & Version Control
+git-quick-stats\tGit & Version Control
+gitui\tGit & Version Control
+lazygit\tGit & Version Control
+onefetch\tGit & Version Control
+tig\tGit & Version Control
+cava\tMedia & Visuals
+chafa\tMedia & Visuals
+cmus\tMedia & Visuals
+ffmpeg\tMedia & Visuals
+kew\tMedia & Visuals
+mpv\tMedia & Visuals
+viu\tMedia & Visuals
+yt-dlp\tMedia & Visuals
+curlie\tNetworking
+doggo\tNetworking
+iperf3\tNetworking
+mtr\tNetworking
+ngrep\tNetworking
+nmap\tNetworking
+speedtest-cli\tNetworking
+whois\tNetworking
+calcurse\tProductivity
+task\tProductivity
+timewarrior\tProductivity
+todo-txt\tProductivity
+when\tProductivity
+wordgrinder\tProductivity
+cheat\tReading & Reference
+glow\tReading & Reference
+lynx\tReading & Reference
+mdcat\tReading & Reference
+navi\tReading & Reference
+newsboat\tReading & Reference
+pandoc\tReading & Reference
+tldr\tReading & Reference
+w3m\tReading & Reference
+ack\tSearch & Text Tools
+bat\tSearch & Text Tools
+choose-rust\tSearch & Text Tools
+eza\tSearch & Text Tools
+fd\tSearch & Text Tools
+fzf\tSearch & Text Tools
+gron\tSearch & Text Tools
+jq\tSearch & Text Tools
+ripgrep\tSearch & Text Tools
+sd\tSearch & Text Tools
+the_silver_searcher\tSearch & Text Tools
+tree\tSearch & Text Tools
+visidata\tSearch & Text Tools
+yq\tSearch & Text Tools
+age\tSecurity
+gnupg\tSecurity
+pass\tSecurity
+pwgen\tSecurity
+sops\tSecurity
+fastfetch\tSystem Info
+inxi\tSystem Info
+macmon\tSystem Info
+bandwhich\tSystem Monitoring
+bottom\tSystem Monitoring
+btop\tSystem Monitoring
+ctop\tSystem Monitoring
+glances\tSystem Monitoring
+gping\tSystem Monitoring
+gtop\tSystem Monitoring
+htop\tSystem Monitoring
+iftop\tSystem Monitoring
+lnav\tSystem Monitoring
+mole\tSystem Monitoring
+procs\tSystem Monitoring
+screen\tTerminal Utility
+tmux\tTerminal Utility
+zellij\tTerminal Utility
+"""
+
+_DEFAULT_HIDDEN_RAW = """
+age-inspect
+age-plugin-batchpass
+calcurse-caldav
+calcurse-upgrade
+calcurse-vdir
+chkfont
+figlist
+showfigfonts
+podboat
+"""
+
+default_categories = {}
+for _line in _DEFAULT_CATEGORIES_RAW.strip("\n").splitlines():
+    _formula, _category = _line.split("\t", 1)
+    default_categories[_formula] = _category
+
+default_hidden = {
+    _line.strip()
+    for _line in _DEFAULT_HIDDEN_RAW.strip("\n").splitlines()
+    if _line.strip()
+}
+
+# ------------------------------------------------------------
 # Read Homebrew metadata.
 # ------------------------------------------------------------
 
@@ -1295,6 +1563,19 @@ for formula in formulae:
             or full_name in outdated
         ) else "0"
 
+        # "-" rather than "" for "no bundled category": zsh's `read`
+        # collapses adjacent tabs the same way it collapses runs of
+        # ordinary whitespace even with IFS explicitly set to a single
+        # tab, so a genuinely empty field here (the common case — most
+        # formulae have no bundled category) silently swallows the tab
+        # on one side of it and shifts every field after it left by
+        # one. A one-character placeholder sidesteps that entirely;
+        # every zsh-side reader checks for "-" instead of emptiness.
+        default_category = default_categories.get(
+            name, default_categories.get(full_name, "")
+        ) or "-"
+        default_hidden_flag = "1" if command in default_hidden else "0"
+
         entries.append(
             "\t".join([
                 command,
@@ -1306,6 +1587,8 @@ for formula in formulae:
                 full_name,
                 resolved_path,
                 install_time,
+                default_category,
+                default_hidden_flag,
             ])
         )
 
@@ -1637,6 +1920,49 @@ load_outdated_formulas() {
 
 load_outdated_formulas
 
+# The bundled curated list of genuinely auxiliary commands (see
+# "Bundled defaults") — read straight from the cache's default_hidden
+# field (field 11), which rebuild_cache() already stamped on every
+# entry regardless of the DEFAULT_HIDDEN config setting. Kept separate
+# from hidden_commands below so hide_entry()/unhide_entry() can tell
+# "hidden because bundled" apart from "hidden because IGNORE_FILE
+# says so" — they need different files to write to.
+typeset -A bundled_hidden_commands
+
+load_bundled_hidden_commands() {
+
+    bundled_hidden_commands=()
+
+    [[ -f "$CACHE_FILE" ]] || return
+
+    local raw_command raw_default_hidden
+    local _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 _f10
+
+    while IFS=$'\t' read -r raw_command _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 _f10 raw_default_hidden; do
+        [[ "$raw_default_hidden" == "1" ]] && bundled_hidden_commands[$raw_command]=1
+    done < "$CACHE_FILE"
+}
+
+# Commands force-shown despite being in bundled_hidden_commands above
+# — the one place F6 records "I actually want this one," since there's
+# no line in bundled_hidden_commands to remove the way there would be
+# for an ordinary IGNORE_FILE entry.
+typeset -A shown_commands
+
+load_shown_commands() {
+
+    shown_commands=()
+
+    [[ -f "$SHOWN_FILE" ]] || return
+
+    local member
+
+    while IFS= read -r member; do
+        [[ -z "$member" ]] && continue
+        shown_commands[$member]=1
+    done < "$SHOWN_FILE"
+}
+
 typeset -A hidden_commands
 
 load_hidden_commands() {
@@ -1656,6 +1982,24 @@ load_hidden_commands() {
             hidden_commands[$hidden_command]=1
 
         done < "$IGNORE_FILE"
+    fi
+
+    # Layer the bundled defaults on top, unless the user's own F6 press
+    # already showed this one despite the bundled data (SHOWN_FILE) or
+    # the whole feature is switched off. Reloaded here rather than
+    # trusted from an earlier call — this function already gets called
+    # fresh after anything that could change hiding state, and doing
+    # the same for its two inputs keeps that one guarantee in one place
+    # instead of every call site remembering to pair it up itself.
+    load_bundled_hidden_commands
+    load_shown_commands
+
+    if [[ "$CONFIG_DEFAULT_HIDDEN" != off ]]; then
+        local bundled_command
+        for bundled_command in "${(k)bundled_hidden_commands[@]}"; do
+            [[ -n "${shown_commands[$bundled_command]-}" ]] && continue
+            hidden_commands[$bundled_command]=1
+        done
     fi
 }
 
@@ -1727,32 +2071,58 @@ load_category_names() {
 
     CATEGORY_NAMES=()
 
-    [[ -d "$CATEGORIES_DIR" ]] || return
-
     local file name has_favorites=false
     local -a others
+    typeset -A seen_names
 
-    for file in "$CATEGORIES_DIR"/*; do
+    if [[ -d "$CATEGORIES_DIR" ]]; then
 
-        [[ -f "$file" ]] || continue
+        for file in "$CATEGORIES_DIR"/*; do
 
-        name="${file:t}"
+            [[ -f "$file" ]] || continue
 
-        # These are all built-in view names. F7 refuses to create a
-        # category with any of them, but a hand-made file could still
-        # exist — skip it rather than listing a duplicate row that the
-        # built-in view would shadow anyway.
-        if [[ "$name" == "All" || "$name" == "Hidden" \
-              || "$name" == "Most Used" || "$name" == "Recently Added" ]]; then
-            continue
-        fi
+            name="${file:t}"
 
-        if [[ "$name" == "Favorites" ]]; then
-            has_favorites=true
-            continue
-        fi
+            # These are all built-in view names. F7 refuses to create a
+            # category with any of them, but a hand-made file could still
+            # exist — skip it rather than listing a duplicate row that the
+            # built-in view would shadow anyway.
+            if [[ "$name" == "All" || "$name" == "Hidden" \
+                  || "$name" == "Most Used" || "$name" == "Recently Added" ]]; then
+                continue
+            fi
 
-        others+=("$name")
+            if [[ "$name" == "Favorites" ]]; then
+                has_favorites=true
+                continue
+            fi
+
+            others+=("$name")
+            seen_names[$name]=1
+        done
+    fi
+
+    # Bundled-only categories (see load_bundled_categories) don't have
+    # a real file yet, but still need to be browsable — merge in any
+    # category name they reference that a real file hasn't already
+    # added above. No dependency on CATEGORIES_DIR existing at all:
+    # a totally fresh install with zero user categories still gets a
+    # full set of bundled ones to browse.
+    #
+    # Built up in two steps rather than one nested expansion — a
+    # `${(u)${(v)assoc}}` chained inline silently skipped the dedupe
+    # flag in testing, while assigning the values to a plain array
+    # first and applying (u) to that worked correctly.
+    local bundled_category
+    local -a bundled_category_values bundled_category_names
+
+    bundled_category_values=("${(@v)default_category_commands}")
+    bundled_category_names=("${(u)bundled_category_values[@]}")
+
+    for bundled_category in "${bundled_category_names[@]}"; do
+        [[ -n "${seen_names[$bundled_category]-}" ]] && continue
+        others+=("$bundled_category")
+        seen_names[$bundled_category]=1
     done
 
     others=("${(@o)others}")
@@ -1764,8 +2134,6 @@ load_category_names() {
     fi
 }
 
-load_category_names
-
 load_category_members() {
 
     category_members=()
@@ -1776,20 +2144,31 @@ load_category_members() {
     local category_file="$CATEGORIES_DIR/$CURRENT_VIEW"
     local member
 
-    [[ -f "$category_file" ]] || return
+    if [[ -f "$category_file" ]]; then
+        while IFS= read -r member; do
 
-    while IFS= read -r member; do
+            # Remove leading and trailing whitespace.
+            member="${member#"${member%%[![:space:]]*}"}"
+            member="${member%"${member##*[![:space:]]}"}"
 
-        # Remove leading and trailing whitespace.
-        member="${member#"${member%%[![:space:]]*}"}"
-        member="${member%"${member##*[![:space:]]}"}"
+            [[ -z "$member" ]] && continue
+            [[ "$member" == \#* ]] && continue
 
-        [[ -z "$member" ]] && continue
-        [[ "$member" == \#* ]] && continue
+            category_members[$member]=1
 
-        category_members[$member]=1
+        done < "$category_file"
+    fi
 
-    done < "$category_file"
+    # Bundled members (see load_bundled_categories) — added on top of
+    # whatever the real file above already contributed, so a category
+    # that's part real, part bundled shows both. Works even when the
+    # file above doesn't exist at all, which is exactly the bundled-
+    # only case load_category_names() added this name to browse in
+    # the first place.
+    for member in "${(k)default_category_commands[@]}"; do
+        [[ "${default_category_commands[$member]}" == "$CURRENT_VIEW" ]] && \
+            category_members[$member]=1
+    done
 }
 
 # Confirm before deleting a category. Returns 0 to proceed.
@@ -1901,6 +2280,8 @@ pick_help() {
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
+    else
+        rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
     fi
     rows+=("")
     rows+=("Second tier — F4, or press directly at any time")
@@ -1912,7 +2293,11 @@ pick_help() {
     rows+=("            Theme  Switch color theme")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("     Create Preset  Pick tools to save as a new preset")
+    else
+        rows+=("     Create Preset  needs tmux: brew install tmux")
     fi
+    rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
+    rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create shortcut  macOS .command or Linux .desktop file")
     fi
@@ -1957,29 +2342,45 @@ pick_more_action() {
     local -a rows=()
     local result chosen clicked_word
 
-    rows+=("f6"$'\t'"$(printf '%-18s%s' "$hide_label" 'F6 / ⌥H')")
-    rows+=("f7"$'\t'"$(printf '%-18s%s' 'Favorite' 'F7 / ⌥F')")
-    rows+=("f8"$'\t'"$(printf '%-18s%s' 'Categorize' 'F8 / ⌥C')")
+    rows+=("f6"$'\t'"$(printf '%-20s%s' "$hide_label" 'F6 / ⌥H')")
+    rows+=("f7"$'\t'"$(printf '%-20s%s' 'Favorite' 'F7 / ⌥F')")
+    rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
 
-    # Both preset actions are hidden without tmux — same "don't offer
-    # what can only fail" reasoning as Create Shortcut below. Creating
-    # a preset without tmux wouldn't itself error, but it would only
-    # ever produce something that errors the moment it's used, so
-    # there's no point offering it either.
-    if [[ "$TMUX_AVAILABLE" == true ]]; then
-        rows+=("f9"$'\t'"$(printf '%-18s%s' 'Launch Preset' 'F9 / ⌥P')")
+    # Always shown, even without tmux — see footer_actions() for why
+    # we moved away from hiding these outright. The hint column
+    # doubles as the discovery mechanism: it shows the normal keybind
+    # when tmux is present, or "needs tmux" when it isn't, so the
+    # requirement is visible at a glance without pressing anything.
+    local preset_hint='F9 / ⌥P'
+    local create_preset_hint=''
+    if [[ "$TMUX_AVAILABLE" == false ]]; then
+        preset_hint='needs tmux'
+        create_preset_hint='needs tmux'
     fi
+    rows+=("f9"$'\t'"$(printf '%-20s%s' 'Launch Preset' "$preset_hint")")
 
     # No F-key of its own — every F1-F9 is already spoken for, and
     # this is settings-adjacent rather than something reached for
     # often enough to need a direct shortcut.
-    rows+=("theme"$'\t'"$(printf '%-18s%s' 'Theme' '')")
+    rows+=("theme"$'\t'"$(printf '%-20s%s' 'Theme' '')")
 
-    if [[ "$TMUX_AVAILABLE" == true ]]; then
-        # Same reasoning as Theme above — also setup-adjacent rather
-        # than everyday, so it doesn't need a key of its own either.
-        rows+=("create_preset"$'\t'"$(printf '%-18s%s' 'Create Preset' '')")
-    fi
+    # Same reasoning as Theme above — also setup-adjacent rather than
+    # everyday, so it doesn't need a key of its own either.
+    rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
+
+    # Global overrides for the bundled curated defaults (categories and
+    # pre-hidden commands). Off means "don't apply the bundled data to
+    # anything I haven't touched myself" — a user's own F3/F8 choice on
+    # any individual entry always wins regardless of this setting, so
+    # this is only an escape hatch for someone who wants a blank slate
+    # from the start, not the everyday way to override one entry.
+    local categories_state='On'
+    [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && categories_state='Off'
+    rows+=("toggle_default_categories"$'\t'"$(printf '%-20s%s' 'Default Categories' "$categories_state")")
+
+    local hidden_state='On'
+    [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && hidden_state='Off'
+    rows+=("toggle_default_hidden"$'\t'"$(printf '%-20s%s' 'Default Hidden' "$hidden_state")")
 
     # Shortcuts are macOS/Linux-only; elsewhere the action can only
     # refuse, so it isn't offered rather than being offered and
@@ -1988,7 +2389,7 @@ pick_more_action() {
     # to Theme/Create Preset's usage pattern than to Hide/Favorite/
     # Categorize's, which get exercised repeatedly as you curate.
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("shortcut"$'\t'"$(printf '%-18s%s' 'Create shortcut' '')")
+        rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create shortcut' '')")
     fi
 
     rm -f "$FOOTER_CLICK_FILE"
@@ -2112,10 +2513,21 @@ pick_view() {
     # own header already shows once you're in it.
     choices=("All"$'\t'"All")
 
+    # Bundled members (see load_bundled_categories) don't live in the
+    # real file grep -c counts below — tallied once here and added in,
+    # so a bundled-only category (no real file at all yet) still shows
+    # its real count instead of "(0)".
+    typeset -A bundled_category_counts
+    local bundled_command
+    for bundled_command in "${(k)default_category_commands[@]}"; do
+        (( bundled_category_counts[${default_category_commands[$bundled_command]}]++ ))
+    done
+
     for name in "${CATEGORY_NAMES[@]}"; do
 
         count="$(grep -c '' "$CATEGORIES_DIR/$name" 2>/dev/null)"
         count="${count:-0}"
+        (( count += ${bundled_category_counts[$name]:-0} ))
 
         if [[ "$name" == "Favorites" ]]; then
             choices+=("$name"$'\t'"$name ($count)")
@@ -2208,8 +2620,21 @@ pick_view() {
         elif confirm_delete_category "$picked"; then
 
             rm -f "$CATEGORIES_DIR/$picked"
-            load_category_names
-            load_categorized_commands
+
+            # A bundled-only category (see load_bundled_categories) has
+            # no real file to remove — deleting it here means excluding
+            # every command it currently contributes, or it would just
+            # reappear unchanged on the very next refresh.
+            local exclude_command
+            mkdir -p "$CONFIG_DIR"
+            for exclude_command in "${(k)default_category_commands[@]}"; do
+                if [[ "${default_category_commands[$exclude_command]}" == "$picked" ]] &&
+                   ! grep -Fqx "$exclude_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null; then
+                    printf '%s\n' "$exclude_command" >> "$CATEGORY_EXCLUDE_FILE"
+                fi
+            done
+
+            refresh_category_state
 
             # If the deleted category was the active view, that view no
             # longer exists.
@@ -2251,36 +2676,117 @@ load_favorite_commands() {
 
 load_favorite_commands
 
-# Union of every category's membership except Favorites (which has
-# its own tracking above) — powers the "#" marker. Scans all category
-# files, not just the currently active one, since like the favorite
-# marker this needs to show regardless of which view is active.
+# Union of every REAL category file's membership except Favorites
+# (which has its own tracking above) — the "manually categorized" set
+# that decides whether a bundled default category (see below) still
+# applies to a given command. Globs CATEGORIES_DIR directly rather
+# than looping CATEGORY_NAMES, so it has no ordering dependency on
+# that list being built first — load_bundled_categories() below needs
+# this result before CATEGORY_NAMES can even be finalized, since a
+# bundled-only category name has to be added to that list too.
+#
+# Also powers the "#" marker, but not alone — load_bundled_categories()
+# adds to this same array for bundled-only assignments too, so the
+# marker shows for those as well. Only *this* array's membership (the
+# real-file scan) is what counts as "manually categorized" elsewhere;
+# see default_category_commands below for that distinction.
 typeset -A categorized_commands
+typeset -A manually_categorized_commands
 
 load_categorized_commands() {
 
     categorized_commands=()
+    manually_categorized_commands=()
 
-    local name category_file member i
+    local file name member
 
-    for (( i = 1; i <= ${#CATEGORY_NAMES[@]}; i++ )); do
+    [[ -d "$CATEGORIES_DIR" ]] || return
 
-        name="${CATEGORY_NAMES[$i]}"
+    for file in "$CATEGORIES_DIR"/*; do
 
+        [[ -f "$file" ]] || continue
+
+        name="${file:t}"
         [[ "$name" == "Favorites" ]] && continue
-
-        category_file="$CATEGORIES_DIR/$name"
-
-        [[ -f "$category_file" ]] || continue
 
         while IFS= read -r member; do
             [[ -z "$member" ]] && continue
             categorized_commands[$member]=1
-        done < "$category_file"
+            manually_categorized_commands[$member]=1
+        done < "$file"
     done
 }
 
-load_categorized_commands
+# Commands explicitly excluded from every bundled category assignment
+# — written when F8 "removes" an entry whose only membership in the
+# category being viewed was the bundled default, not a real file line
+# (see toggle_category_direct/toggle_category).
+typeset -A category_excluded_commands
+
+load_category_excluded_commands() {
+
+    category_excluded_commands=()
+
+    [[ -f "$CATEGORY_EXCLUDE_FILE" ]] || return
+
+    local member
+
+    while IFS= read -r member; do
+        [[ -z "$member" ]] && continue
+        category_excluded_commands[$member]=1
+    done < "$CATEGORY_EXCLUDE_FILE"
+}
+
+# The bundled curated category for every installed command that isn't
+# already manually categorized (see "Bundled defaults") — read from
+# the cache's default_category field (field 10), which rebuild_cache()
+# stamps on every entry regardless of the DEFAULT_CATEGORIES config
+# setting; that switch, and the exclude list above, are both applied
+# here instead, so toggling either takes effect without a rebuild.
+#
+# Also adds its members to categorized_commands (the "#" marker set) —
+# a beginner is meant to feel pre-organized, so the marker shouldn't
+# distinguish "the app filed this for you" from "you filed this
+# yourself." manually_categorized_commands is what still tells them
+# apart internally, for the eligibility check below.
+typeset -A default_category_commands
+
+load_bundled_categories() {
+
+    default_category_commands=()
+
+    [[ -f "$CACHE_FILE" ]] || return
+    [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && return
+
+    local raw_command raw_category
+    local _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 _f11
+
+    while IFS=$'\t' read -r raw_command _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 raw_category _f11; do
+
+        [[ -z "$raw_category" || "$raw_category" == "-" ]] && continue
+        [[ -n "${manually_categorized_commands[$raw_command]-}" ]] && continue
+        [[ -n "${category_excluded_commands[$raw_command]-}" ]] && continue
+
+        default_category_commands[$raw_command]="$raw_category"
+        categorized_commands[$raw_command]=1
+
+    done < "$CACHE_FILE"
+}
+
+# Runs the four loads above in the only order that actually works:
+# manual membership and the exclude list have to be known before the
+# bundled pass can decide what's still eligible, and CATEGORY_NAMES
+# has to come last since a bundled-only category needs to be added to
+# it too. Every call site that used to call load_categorized_commands
+# (alone, or paired with load_category_names) now calls this instead.
+refresh_category_state() {
+    load_categorized_commands
+    load_category_excluded_commands
+    load_bundled_categories
+    load_category_names
+}
+
+refresh_category_state
 
 # ------------------------------------------------------------
 # --list: plain tab-separated output, no fzf.
@@ -2907,6 +3413,41 @@ EOF
 }
 
 # ------------------------------------------------------------
+# Remove one exact line from a plain one-command-per-line file, if
+# present. Shared by unhide_entry (IGNORE_FILE) and hide_entry
+# (SHOWN_FILE) — same operation, just reversing whichever kind of
+# hidden state is currently in play for that command.
+# ------------------------------------------------------------
+
+remove_line_from_file() {
+
+    local file="$1" target="$2" tmp
+
+    [[ -f "$file" ]] || return 0
+
+    tmp="$(mktemp "$CACHE_DIR/removeline.XXXXXX")" || return 1
+
+    python3 - "$file" "$tmp" "$target" <<'PY'
+import sys
+
+source_file = sys.argv[1]
+output_file = sys.argv[2]
+target = sys.argv[3]
+
+with open(source_file, "r", encoding="utf-8") as f:
+    lines = f.readlines()
+
+with open(output_file, "w", encoding="utf-8") as f:
+    for line in lines:
+        if line.strip() == target:
+            continue
+        f.write(line)
+PY
+
+    mv "$tmp" "$file"
+}
+
+# ------------------------------------------------------------
 # Hide an application entry
 # ------------------------------------------------------------
 
@@ -2915,6 +3456,15 @@ hide_entry() {
     local command="$1"
 
     mkdir -p "$CONFIG_DIR"
+
+    # Hidden only via the bundled default, currently overridden to show
+    # (see SHOWN_FILE) — hiding it again just means dropping that
+    # override and reverting to the bundled default, not also adding a
+    # redundant IGNORE_FILE line for a command that's already hidden.
+    if [[ -n "${bundled_hidden_commands[$command]-}" && -n "${shown_commands[$command]-}" ]]; then
+        remove_line_from_file "$SHOWN_FILE" "$command"
+        return 0
+    fi
 
     # Do not add the same command more than once.
     if [[ -f "$IGNORE_FILE" ]] &&
@@ -2933,35 +3483,21 @@ hide_entry() {
 unhide_entry() {
 
     local command="$1"
-    local tmp_ignore
 
-    if [[ ! -f "$IGNORE_FILE" ]]; then
+    if [[ -f "$IGNORE_FILE" ]] && grep -Fqx "$command" "$IGNORE_FILE" 2>/dev/null; then
+        remove_line_from_file "$IGNORE_FILE" "$command"
         return 0
     fi
 
-    tmp_ignore="$(mktemp "$CACHE_DIR/ignore.XXXXXX")" || return 1
-
-    python3 - "$IGNORE_FILE" "$tmp_ignore" "$command" <<'PY'
-import sys
-
-ignore_file = sys.argv[1]
-output_file = sys.argv[2]
-target = sys.argv[3]
-
-with open(ignore_file, "r", encoding="utf-8") as f:
-    lines = f.readlines()
-
-with open(output_file, "w", encoding="utf-8") as f:
-    for line in lines:
-        stripped = line.strip()
-
-        if stripped == target:
-            continue
-
-        f.write(line)
-PY
-
-    mv "$tmp_ignore" "$IGNORE_FILE"
+    # Not in IGNORE_FILE — the only other way this could be hidden is
+    # the bundled default, so "unhiding" means recording an explicit
+    # override instead of editing a line that was never there.
+    if [[ -n "${bundled_hidden_commands[$command]-}" ]]; then
+        mkdir -p "$CONFIG_DIR"
+        if ! grep -Fqx "$command" "$SHOWN_FILE" 2>/dev/null; then
+            printf '%s\n' "$command" >> "$SHOWN_FILE"
+        fi
+    fi
 }
 
 # ------------------------------------------------------------
@@ -3096,6 +3632,18 @@ toggle_category_direct() {
         grep -Fvx "$command" "$category_file" > "$tmp_category" 2>/dev/null
         mv "$tmp_category" "$category_file"
 
+    elif [[ "${default_category_commands[$command]-}" == "$category_name" ]]; then
+
+        # Only a member here via the bundled default (see
+        # load_bundled_categories) — there's no real line to remove,
+        # so "removing" it means excluding it from the bundled
+        # assignment instead. Adding a real line here would just leave
+        # it looking unchanged, since it was already showing up.
+        mkdir -p "$CONFIG_DIR"
+        if ! grep -Fqx "$command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null; then
+            printf '%s\n' "$command" >> "$CATEGORY_EXCLUDE_FILE"
+        fi
+
     else
 
         printf '%s\n' "$command" >> "$category_file"
@@ -3206,6 +3754,17 @@ toggle_category() {
         mv "$tmp_category" "$category_file"
         return 2
 
+    elif [[ "${default_category_commands[$command]-}" == "$category_name" ]]; then
+
+        # Same bundled-only case as toggle_category_direct above —
+        # picking the category it's already (virtually) in means
+        # excluding it, not adding a redundant real line.
+        mkdir -p "$CONFIG_DIR"
+        if ! grep -Fqx "$command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null; then
+            printf '%s\n' "$command" >> "$CATEGORY_EXCLUDE_FILE"
+        fi
+        return 2
+
     else
 
         printf '%s\n' "$command" >> "$category_file"
@@ -3221,6 +3780,18 @@ toggle_category() {
 # ------------------------------------------------------------
 
 create_preset() {
+
+    # Reachable directly from More even without tmux now (see
+    # footer_actions() for why that's shown rather than hidden) — a
+    # preset built without tmux would only ever error the moment
+    # someone tried to launch it, so this is where that gets explained
+    # instead, same message as the F9/Launch Preset fallback.
+    if [[ "$TMUX_AVAILABLE" == false ]]; then
+        printf '\n'
+        printf 'Presets need tmux: brew install tmux\n'
+        sleep 2
+        return 1
+    fi
 
     local saved_view="$CURRENT_VIEW"
     local -a selected_commands=()
@@ -3474,12 +4045,14 @@ footer_actions() {
     parts+=("$(footer_key F4 M $with_alt)  [More]")
     parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
 
-    # Hidden entirely without tmux, same as Create Shortcut is hidden
-    # on unsupported platforms — an action that can only ever fail
-    # isn't offered in the first place.
-    if [[ "$TMUX_AVAILABLE" == true ]]; then
-        parts+=("$(footer_key F9 P $with_alt)  [Presets]")
-    fi
+    # Always shown, even without tmux — unlike Create Shortcut on an
+    # unsupported platform, this isn't a dead end: pressing it without
+    # tmux explains exactly what to install rather than failing
+    # silently, and hiding it entirely turned out to mean someone who
+    # never had tmux would never learn Presets exist at all. The
+    # More-menu row carries the "needs tmux" indicator; the footer
+    # stays terse like every other entry here.
+    parts+=("$(footer_key F9 P $with_alt)  [Presets]")
 
     local separator="${(l:$gap:: :)}"
     local out="" part
@@ -3767,6 +4340,34 @@ while true; do
     fi
 
     # --------------------------------------------------------
+    # Default Categories / Default Hidden — plain on/off switches for
+    # whether the bundled curated data applies to anything the user
+    # hasn't categorized/hidden themselves. Flips in place and returns
+    # straight to More rather than the main list, since that's where it
+    # was pressed from and its own label already shows the new state.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "toggle_default_categories" ]]; then
+
+        local new_value='off'
+        [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && new_value='on'
+        set_config_value DEFAULT_CATEGORIES "$new_value"
+        CONFIG_DEFAULT_CATEGORIES="$new_value"
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
+
+    if [[ "$action" == "toggle_default_hidden" ]]; then
+
+        local new_value='off'
+        [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && new_value='on'
+        set_config_value DEFAULT_HIDDEN "$new_value"
+        CONFIG_DEFAULT_HIDDEN="$new_value"
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
+
+    # --------------------------------------------------------
     # F9 / ⌥P — Launch Preset. Direct key, not just via More: unlike
     # Create Preset (a one-time setup step), running a preset is
     # something to reach for repeatedly, closer in spirit to F6/F7/F8
@@ -3777,10 +4378,10 @@ while true; do
 
     if [[ "$action" == "f9" || "$action" == "alt-p" ]]; then
 
-        # F9 stays bound (it's still in --expect) even though the
-        # footer/menu already hide it without tmux — this is the
-        # fallback for that direct keypress, so it fails as cleanly as
-        # the footer/menu already imply it would rather than opening
+        # Same message shown whether reached via direct keypress or via
+        # the footer/More entry — Presets stay visible everywhere even
+        # without tmux (see footer_actions()), so this is the one place
+        # that actually explains the requirement instead of opening
         # launch_preset()'s own picker only to error once something's
         # actually selected.
         if [[ "$TMUX_AVAILABLE" == false ]]; then
@@ -3823,8 +4424,7 @@ while true; do
         if rebuild_cache; then
             load_outdated_formulas
             load_hidden_commands
-            load_category_names
-            load_categorized_commands
+            refresh_category_state
             load_favorite_commands
             load_category_members
             build_entries
@@ -3927,8 +4527,7 @@ while true; do
         # creating the Favorites file (which reorders CATEGORY_NAMES)
         # can't shift what we're looking at.
         toggle_favorite "$command"
-        load_category_names
-        load_categorized_commands
+        refresh_category_state
         load_favorite_commands
         load_category_members
         build_entries
@@ -3963,8 +4562,7 @@ while true; do
             toggle_category "$command"
         fi
 
-        load_category_names
-        load_categorized_commands
+        refresh_category_state
         load_favorite_commands
         load_category_members
 

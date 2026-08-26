@@ -44,6 +44,12 @@ mkdir -p "$CATEGORIES_DIR"
 : > "$CATEGORIES_DIR/Weather"
 : > "$CATEGORIES_DIR/Games"
 
+# load_category_names() merges in any bundled category (see "Bundled
+# defaults") that isn't already a real file — declared here, empty, so
+# this test exercises pure real-file loading without pulling in the
+# actual bundled dataset (that's covered separately).
+typeset -A default_category_commands
+
 # Sourced rather than copy-pasted, so this tests the actual function
 # in bin/brew-launcher, not a reimplementation of it that could drift
 # out of sync with the real logic.
@@ -114,4 +120,35 @@ for name in "${CATEGORY_NAMES[@]}"; do
     [[ "$name" == "Favorites" ]] && fail "Favorites appeared in CATEGORY_NAMES despite no Favorites file existing"
 done
 
-printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest\n'
+# ------------------------------------------------------------
+# 6. Bundled categories (see "Bundled defaults") merge in without
+#    duplicating a name that already has a real file, and a bundled-
+#    only name (no real file at all) still shows up so it's browsable.
+# ------------------------------------------------------------
+
+rm -f "$CATEGORIES_DIR/Weather"
+: > "$CATEGORIES_DIR/Games"
+default_category_commands=(
+    [nsnake]=Games
+    [btop]="System Monitoring"
+)
+
+load_category_names
+
+if (( ${#CATEGORY_NAMES[@]} != 2 )); then
+    fail "expected 2 entries (Games, System Monitoring), got ${#CATEGORY_NAMES[@]}: ${CATEGORY_NAMES[*]}"
+fi
+
+games_seen=0
+for name in "${CATEGORY_NAMES[@]}"; do
+    [[ "$name" == "Games" ]] && (( games_seen++ ))
+done
+(( games_seen == 1 )) || fail "'Games' should appear exactly once (real file + bundled member), saw $games_seen: ${CATEGORY_NAMES[*]}"
+
+found=0
+for name in "${CATEGORY_NAMES[@]}"; do
+    [[ "$name" == "System Monitoring" ]] && found=1
+done
+(( found )) || fail "bundled-only category 'System Monitoring' (no real file) should still be browsable: ${CATEGORY_NAMES[*]}"
+
+printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest, merges bundled categories without duplicating\n'
