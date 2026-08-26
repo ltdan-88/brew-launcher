@@ -74,6 +74,10 @@ Three markers tell you the state of a row at a glance:
 Both `+` and `#` can appear together (`+#`). These describe *state* — they
 aren't things you press. Upgrading stays Homebrew's job.
 
+The top border also shows how much disk space Homebrew's own installs are
+using and how much is still free on the volume — visible on `All`, hidden on
+filtered views to leave room for the view's own name.
+
 ### Two tiers of keys
 
 <p align="center"><img src="assets/more.gif" alt="Opening the More menu with F4 and favoriting an entry from it"></p>

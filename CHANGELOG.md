@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] — 2026-08-26
+
+### Added
+
+- **The border now shows disk usage** on the `All` view: how much space
+  Homebrew's own installs are using, and how much is still free on the
+  volume. Free space is checked live every launch (a single `df`, cheap
+  enough not to matter). Homebrew's own usage needs a real `du` walk of
+  the Cellar — measured at ~0.28s against a real ~3GB install, a cost
+  this project's "instant startup" bar doesn't take on lightly — so
+  it's cached and only recomputed when the cache itself rebuilds, since
+  a local install/uninstall is the only thing that actually changes it.
+  Hidden on filtered views to leave room for the view's own name.
+
 ## [0.21.0] — 2026-08-26
 
 ### Changed

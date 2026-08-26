@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.21.0"
+VERSION="0.22.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -138,6 +138,17 @@ COMPUTED_VIEW_LIMIT=15
 # go stale for days just because nothing locally installed has changed.
 OUTDATED_FILE="$CACHE_DIR/outdated"
 OUTDATED_TTL=21600  # 6 hours
+
+# Homebrew's own on-disk footprint (the Cellar), for the border label.
+# Unlike free disk space (a single fast syscall via `df`, cheap enough
+# to check on every launch), this needs `du` to actually walk the
+# Cellar tree — measured at ~0.28s against a real ~3GB/113-formula
+# install, a real cost against this project's own "instant startup"
+# bar. Cached here and only recomputed when rebuild_cache() runs,
+# since a local install/uninstall is the only thing that changes it —
+# no separate TTL needed, the existing cache-rebuild trigger already
+# lines up exactly with when this number could actually be different.
+HOMEBREW_USAGE_FILE="$CACHE_DIR/homebrew-usage"
 
 # One plain-text file per formula, written during a cache rebuild from
 # the JSON already fetched there. The preview pane just cats one of
@@ -1462,6 +1473,11 @@ PY
         # Reuse the outdated snapshot already fetched above instead of
         # making refresh_outdated_if_stale() fetch it again right after.
         cp "$tmp_outdated" "$OUTDATED_FILE" 2>/dev/null
+
+        du -sh "$(brew --prefix)/Cellar" 2>/dev/null |
+            awk '{print $1}' |
+            sed -E 's/([0-9])([KMGT])i?$/\1\2/' \
+            > "$HOMEBREW_USAGE_FILE"
 
     else
 
@@ -3564,6 +3580,18 @@ run_fzf() {
 
 
 # ------------------------------------------------------------
+# Disk usage for the border label — computed once here, not inside
+# the loop below, since neither value would meaningfully change
+# within a single session (free space is a live `df`, cheap enough to
+# check at all; Homebrew's own usage is the value rebuild_cache()
+# cached, read fresh here so it reflects the cache this launch is
+# actually using).
+# ------------------------------------------------------------
+
+FREE_SPACE="$(df -h "$(brew --prefix)" 2>/dev/null | awk 'NR==2 {print $4}' | sed -E 's/([0-9])([KMGT])i?$/\1\2/')"
+HOMEBREW_USAGE="$(cat "$HOMEBREW_USAGE_FILE" 2>/dev/null)"
+
+# ------------------------------------------------------------
 # Launcher loop
 # ------------------------------------------------------------
 
@@ -3584,7 +3612,13 @@ while true; do
         continue
     fi
 
+    # Disk usage only appears on "All" — a filtered view's border
+    # already carries the view name, and both together risks crowding
+    # or truncating a border label on a narrower terminal.
     border_label=" 󰣇  Homebrew CLI v$VERSION "
+    if [[ -n "$HOMEBREW_USAGE" && -n "$FREE_SPACE" ]]; then
+        border_label=" 󰣇  Homebrew CLI v$VERSION · ${HOMEBREW_USAGE} brew · ${FREE_SPACE} free "
+    fi
     esc_hint="Quit"
     hide_label="Hide"
 
