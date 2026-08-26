@@ -153,7 +153,9 @@ entry is filed somewhere, but not *where* — the pane names the categories, so
 you don't have to go hunting through **F2** to find out. That line is omitted
 when an entry isn't filed anywhere (so the `#` marker tells you which rows will
 have it) and read fresh each time rather than cached, so it's correct the
-moment you press **F7** or **F8**.
+moment you press **F7** or **F8**. If nothing's filed by hand but the [bundled
+defaults](#bundled-defaults) place it somewhere, that shows too, marked
+`(default)` so it's never confused with a category you actually chose.
 
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
 stays closed until you ask for it.
@@ -183,10 +185,10 @@ it for you. **F9** lists your presets and launches the one you pick,
 reattaching to it if it's already running rather than opening a second copy.
 File format and the `--preset` CLI flag are in [Configuration](#configuration).
 
-Presets need [tmux](#terminal-backends), and both of these disappear from the
-footer and More menu if it isn't installed — same as Create Shortcut already
-does on platforms where it can't work, rather than being offered and then
-failing.
+Presets need [tmux](#terminal-backends). Both stay visible in the footer and
+More menu either way — the More menu's hint reads "needs tmux" in place of the
+usual keybind when it's missing, and pressing either explains the exact
+install command rather than silently failing.
 
 ### Color themes
 
@@ -253,6 +255,7 @@ reference below, from inside the launcher.
 | **F1** | Open this reference in the launcher | — |
 | — | Switch color theme | More only |
 | — | Create a new preset | More only |
+| — | Toggle Default Categories / Default Hidden | More only |
 | — | Create a desktop shortcut (macOS or Linux) | More only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
@@ -305,8 +308,10 @@ them directly, one setting or command per line, `#` comments and blank lines
 ignored:
 
 ```
-~/.config/brew-launcher/config              # TERMINAL=, THEME= — see below
+~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN= — see below
 ~/.config/brew-launcher/ignore               # hidden entries
+~/.config/brew-launcher/shown                # bundled-hidden commands you F6'd back visible
+~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8
 ~/.config/brew-launcher/categories/<name>    # one file per category
 ~/.config/brew-launcher/categories/Favorites
 ~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used
@@ -352,6 +357,32 @@ Valid names: `catppuccin`, `gruvbox`, `tokyonight`, `nord`, `dracula`,
 unrecognized name fails fast rather than silently falling back, matching
 `BREW_LAUNCHER_TERMINAL`'s own convention.
 
+### Bundled defaults
+
+A curated, hand-reviewed dataset ships with the launcher: a formula ->
+category mapping for ~140 well-known CLI/TUI tools, and a short list of
+commands that are genuinely just a multi-command formula's minor helper
+scripts rather than something worth surfacing on its own (`age-inspect`,
+`calcurse-upgrade`, `chkfont`, and a handful of others — reviewed one at a
+time, not filtered by a generic naming rule; see
+[CONTRIBUTING.md](CONTRIBUTING.md) for why a blanket heuristic was rejected
+instead). Both apply automatically, on every cache rebuild, to anything you
+haven't already touched yourself — a fresh install already looks organized
+without any setup.
+
+Two switches control it: `More → Default Categories` and
+`More → Default Hidden` (`DEFAULT_CATEGORIES` / `DEFAULT_HIDDEN` in
+`config`, each `on`/`off`, default `on`). Your own F6 (hide) or F8
+(categorize) choice on any individual entry always overrides the bundled
+data for that entry, no matter what these two settings say — they're only
+an escape hatch for someone who wants none of it applied, anywhere, from
+the start.
+
+A category that's entirely bundled (no real file behind it yet) still
+shows up in the view picker and takes an F8 press like any other one:
+pressing it again on a bundled-only membership excludes just that command
+from the bundled category, rather than writing a redundant real entry.
+
 ### Presets
 
 ```bash
@@ -367,8 +398,12 @@ lazygit
 lazydocker
 ```
 
-Every command opens as its own pane in one tmux session, tiled evenly
-(`tmux select-layout tiled`). Unlike `BREW_LAUNCHER_TERMINAL=tmux` above,
+Every command opens as its own pane in one tmux session. Exactly 2 panes go
+side by side (`even-horizontal`) — tmux's own "tiled" layout stacks a pair
+top-to-bottom instead, since it grids by character cells rather than screen
+aspect ratio, which wastes a wide monitor for the most common preset size.
+3 or more panes still use `tiled`, where a grid is the right call. Unlike
+`BREW_LAUNCHER_TERMINAL=tmux` above,
 naming a preset on the command line *is* the opt-in — it always starts (or
 reattaches to) a tmux session, no ambiguity about whether tmux gets
 bootstrapped. Re-running the same preset while it's still running reattaches
@@ -422,11 +457,11 @@ Automation).
 that from inside an existing tmux session (`$TMUX` set); otherwise it falls
 back to launching in place, same as `current`.
 
-**I don't see Presets (F9) or Create Preset anywhere.** Both need tmux, so
-they're hidden from the footer and More menu if it isn't installed — install
-it with `brew install tmux` and they'll appear on the next launch.
-`--preset` from a terminal still says so explicitly either way, since typing
-that flag already implies you know what it needs.
+**Presets/Create Preset say "needs tmux."** Install it with
+`brew install tmux`; the moment it's on `$PATH` both work normally, no
+restart required beyond the next launch. `--preset` from a terminal says so
+explicitly too, since typing that flag already implies you know what it
+needs.
 
 **Versions look out of date.** The update check runs on a timer, not every
 launch. `brew-launcher --refresh` forces it.
