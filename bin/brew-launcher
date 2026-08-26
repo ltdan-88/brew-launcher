@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.26.0"
+VERSION="0.27.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -312,13 +312,22 @@ Keyboard shortcuts:
   F5 / ⌥R   Refresh the cache without leaving the launcher
   F9 / ⌥P   Launch a preset — see Presets below
 
+  F4 and F5 also work from inside the view picker (F2) itself, not
+  just the main list — no entry needs to be highlighted for either.
+
   In the More menu, and always available directly:
   F6 / ⌥H   Hide or unhide selected entry
   F7 / ⌥F   Toggle Favorites for selected entry
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
-  In the More menu only — Switch color theme, Create Preset,
-  Create a macOS or Linux shortcut
+
+  In the More menu only — Launch Preset (same as F9), switch color
+  theme, the three toggles under "Bundled defaults" below, Create
+  Preset, Create a macOS or Linux shortcut. None of these need a
+  highlighted entry, so they're also offered when More is opened from
+  the view picker (Hide/Favorite/Categorize/Create shortcut are not,
+  since those act on a specific entry). Esc from any of them returns
+  to the More menu, not out to the main list.
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -2307,6 +2316,7 @@ pick_help() {
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
+    rows+=("            Both also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
     else
@@ -2320,20 +2330,21 @@ pick_help() {
     rows+=("")
     rows+=("F4 only — no direct key")
     rows+=("            Theme  Switch color theme")
+    rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
+    rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
+    rows+=("Open to Categories  Start on the view picker instead of All")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("     Create Preset  Pick tools to save as a new preset")
     else
         rows+=("     Create Preset  needs tmux: brew install tmux")
     fi
-    rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
-    rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
-    rows+=("Open to Categories  Start on the view picker instead of All")
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create shortcut  macOS .command or Linux .desktop file")
     fi
     rows+=("")
     rows+=("The three toggles above flip with Space, not just Enter, and stay")
-    rows+=("on this menu afterward — everything else here exits back to the list.")
+    rows+=("on this menu afterward. Theme and Create Preset return to this")
+    rows+=("menu too once done — only Create shortcut exits back to the list.")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -2373,18 +2384,30 @@ pick_help() {
 pick_more_action() {
 
     local hide_label="$1"
+    # Entry-scoped rows (Hide/Favorite/Categorize/Create shortcut all
+    # act on whatever row was highlighted) only make sense when there
+    # is a highlighted row to act on — false when More is reached from
+    # a screen with no entry of its own, like the view picker. Defaults
+    # true so every existing call site (all from the main list) is
+    # unaffected without having to pass it explicitly.
+    local has_entry="${2:-true}"
     local -a rows=()
     local result chosen clicked_word
 
-    rows+=("f6"$'\t'"$(printf '%-20s%s' "$hide_label" 'F6 / ⌥H')")
-    rows+=("f7"$'\t'"$(printf '%-20s%s' 'Favorite' 'F7 / ⌥F')")
-    rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
+    if [[ "$has_entry" == true ]]; then
+        rows+=("f6"$'\t'"$(printf '%-20s%s' "$hide_label" 'F6 / ⌥H')")
+        rows+=("f7"$'\t'"$(printf '%-20s%s' 'Favorite' 'F7 / ⌥F')")
+        rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
+    fi
 
-    # Always shown, even without tmux — see footer_actions() for why
-    # we moved away from hiding these outright. The hint column
-    # doubles as the discovery mechanism: it shows the normal keybind
-    # when tmux is present, or "needs tmux" when it isn't, so the
-    # requirement is visible at a glance without pressing anything.
+    # Launch Preset doesn't actually need a highlighted row — it opens
+    # its own picker — so it's offered regardless of has_entry, same
+    # as the settings/setup rows below. Always shown even without
+    # tmux — see footer_actions() for why we moved away from hiding
+    # these outright. The hint column doubles as the discovery
+    # mechanism: it shows the normal keybind when tmux is present, or
+    # "needs tmux" when it isn't, so the requirement is visible at a
+    # glance without pressing anything.
     local preset_hint='F9 / ⌥P'
     local create_preset_hint=''
     if [[ "$TMUX_AVAILABLE" == false ]]; then
@@ -2398,16 +2421,16 @@ pick_more_action() {
     # often enough to need a direct shortcut.
     rows+=("theme"$'\t'"$(printf '%-20s%s' 'Theme' '')")
 
-    # Same reasoning as Theme above — also setup-adjacent rather than
-    # everyday, so it doesn't need a key of its own either.
-    rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
-
-    # Global overrides for the bundled curated defaults (categories and
-    # pre-hidden commands). Off means "don't apply the bundled data to
-    # anything I haven't touched myself" — a user's own F3/F8 choice on
-    # any individual entry always wins regardless of this setting, so
-    # this is only an escape hatch for someone who wants a blank slate
-    # from the start, not the everyday way to override one entry.
+    # Grouped with Theme rather than off on their own — all four are
+    # "adjust something, then get back to what you were doing" in the
+    # same way, unlike Create Preset/Create shortcut below, which each
+    # build a brand new thing from scratch. Global overrides for the
+    # bundled curated defaults (categories and pre-hidden commands).
+    # Off means "don't apply the bundled data to anything I haven't
+    # touched myself" — a user's own F3/F8 choice on any individual
+    # entry always wins regardless of this setting, so this is only an
+    # escape hatch for someone who wants a blank slate from the start,
+    # not the everyday way to override one entry.
     local categories_state='On'
     [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && categories_state='Off'
     rows+=("toggle_default_categories"$'\t'"$(printf '%-20s%s' 'Default Categories' "$categories_state")")
@@ -2426,13 +2449,21 @@ pick_more_action() {
     [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
     rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
 
+    # Same reasoning as Theme above — also setup-adjacent rather than
+    # everyday, so it doesn't need a key of its own either. Grouped
+    # with Create shortcut below rather than up near Theme: both build
+    # something new from scratch (a preset, a shortcut file) instead
+    # of adjusting a setting, and Launch Preset doesn't need a
+    # highlighted row so it's offered here regardless of has_entry.
+    rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
+
     # Shortcuts are macOS/Linux-only; elsewhere the action can only
     # refuse, so it isn't offered rather than being offered and
-    # apologising. Moved off F9 in favor of Launch Preset above — a
-    # shortcut is made once per tool and rarely touched again, closer
-    # to Theme/Create Preset's usage pattern than to Hide/Favorite/
-    # Categorize's, which get exercised repeatedly as you curate.
-    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
+    # apologising. Entry-scoped (a shortcut is made *for* the
+    # highlighted row), so also gated on has_entry like Hide/Favorite/
+    # Categorize above.
+    if [[ "$has_entry" == true ]] &&
+       [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create shortcut' '')")
     fi
 
@@ -2462,6 +2493,84 @@ pick_more_action() {
     [[ -z "$result" ]] && return 1
 
     printf '%s' "${result%%$'\t'*}"
+}
+
+# ------------------------------------------------------------
+# Runs the More menu to completion — loops on pick_more_action() so
+# the three settings toggles (and now Theme/Create Preset/Launch
+# Preset, none of which need a highlighted row either) flip or run in
+# place and reopen More right after, rather than dropping back to
+# whatever screen called this. Reused from both the main list (with an
+# entry) and the view picker (without one), so this behavior can't
+# drift apart between the two.
+#
+# Returns 1 if Esc was pressed with nothing left to do — the caller
+# just redraws whatever it was already showing. Returns 2 only when
+# has_entry is true and one of the entry-scoped rows (Hide/Favorite/
+# Categorize/Create shortcut) was picked; MORE_MENU_FALLTHROUGH_ACTION
+# holds which one, since only the caller has the entry context (the
+# selected command/formula) needed to actually run it. With
+# has_entry=false those rows are never offered in the first place, so
+# this case can't happen — callers without an entry never need to
+# check for it.
+# ------------------------------------------------------------
+
+MORE_MENU_FALLTHROUGH_ACTION=""
+
+open_more_menu() {
+
+    local hide_label="$1" has_entry="$2"
+    local chosen_action new_value
+
+    while true; do
+
+        chosen_action="$(pick_more_action "$hide_label" "$has_entry")"
+
+        [[ -z "$chosen_action" ]] && return 1
+
+        case "$chosen_action" in
+            toggle_default_categories)
+                new_value='off'
+                [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && new_value='on'
+                set_config_value DEFAULT_CATEGORIES "$new_value"
+                CONFIG_DEFAULT_CATEGORIES="$new_value"
+                continue
+                ;;
+            toggle_default_hidden)
+                new_value='off'
+                [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && new_value='on'
+                set_config_value DEFAULT_HIDDEN "$new_value"
+                CONFIG_DEFAULT_HIDDEN="$new_value"
+                continue
+                ;;
+            toggle_open_to_categories)
+                # Opt-in (default off), so the flip direction here is
+                # the reverse of the two toggles above — starts by
+                # turning on, not off.
+                new_value='on'
+                [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
+                set_config_value OPEN_TO_CATEGORIES "$new_value"
+                CONFIG_OPEN_TO_CATEGORIES="$new_value"
+                continue
+                ;;
+            theme)
+                pick_theme
+                continue
+                ;;
+            create_preset)
+                create_preset
+                continue
+                ;;
+            f9)
+                launch_preset
+                continue
+                ;;
+        esac
+
+        # Only reachable when has_entry=true: f6/f7/f8/shortcut.
+        MORE_MENU_FALLTHROUGH_ACTION="$chosen_action"
+        return 2
+    done
 }
 
 # ------------------------------------------------------------
@@ -2660,8 +2769,8 @@ pick_view() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    Ctrl-D  [Delete]    Esc  [Back]' \
-            --expect=enter,ctrl-d \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F4  [More]    F5  [Refresh]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --expect=enter,ctrl-d,f4,f5 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -2685,7 +2794,29 @@ pick_view() {
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[View]'|View) pick_action="enter" ;;
+            '[More]'|More|F4/⌥M|F4) pick_action="f4" ;;
+            '[Refresh]'|Refresh|F5/⌥R|F5) pick_action="f5" ;;
         esac
+    fi
+
+    # Neither needs a picked row — More and Refresh both work the same
+    # regardless of which view is highlighted when you press them, so
+    # this checks before the "nothing picked" guard below (which would
+    # otherwise treat highlighting nothing yet as a reason to bail).
+    # Redraws by calling back into this same function, exactly like
+    # the Ctrl-D delete flow below already does — the view picker really
+    # is the hub it's described as elsewhere, so More and Refresh need
+    # to work here the same as they do on the main list.
+    if [[ "$pick_action" == "f4" ]]; then
+        open_more_menu "" false
+        pick_view
+        return $?
+    fi
+
+    if [[ "$pick_action" == "f5" ]]; then
+        refresh_cache_and_state
+        pick_view
+        return $?
     fi
 
     [[ -z "$picked" ]] && return 1
@@ -3132,6 +3263,48 @@ build_entries() {
             (( sort_index++ ))
         done
     fi
+}
+
+# ------------------------------------------------------------
+# F5's actual work, pulled out so both the main list and the view
+# picker can trigger a real refresh without duplicating this sequence.
+# Doesn't need a selected entry. Returns 0 on success (entries/state
+# reloaded, ready to redraw) or 1 on failure (already reported to the
+# terminal, caller should just redraw with the existing state).
+#
+# Defined here — before the Open to Categories block below — rather
+# than down by the main loop, because when that startup toggle is on,
+# pick_view() (and therefore F5 inside it) can run before the launcher
+# loop is ever reached. Defining it any later left F5 from that very
+# first screen failing with "command not found".
+# ------------------------------------------------------------
+
+refresh_cache_and_state() {
+
+    printf '\n'
+    printf 'Refreshing…\n'
+
+    # Clear the memoised state so rebuild_cache re-reads Homebrew
+    # rather than reusing whatever was captured at startup, which may
+    # be minutes old. Re-reading is the point of pressing F5.
+    CURRENT_STATE=""
+
+    # rebuild_cache always rebuilds — it doesn't consult FORCE_REFRESH
+    # — and it refreshes the outdated snapshot as a side effect, so
+    # there's nothing else to force here.
+    if rebuild_cache; then
+        load_outdated_formulas
+        load_hidden_commands
+        refresh_category_state
+        load_favorite_commands
+        load_category_members
+        build_entries
+        return 0
+    fi
+
+    printf 'Refresh failed — keeping the existing list.\n'
+    sleep 2
+    return 1
 }
 
 # Opt-in (More → Open to Categories) — shows the view picker as the
@@ -4403,95 +4576,27 @@ while true; do
     # --------------------------------------------------------
     # F4 / ⌥M — the [More] menu.
     #
-    # Resolves to one of the second-tier actions and then falls
-    # through to that action's normal handler below, so each action
-    # has exactly one implementation no matter how it was reached.
-    # This block therefore has to sit above every handler it can
-    # resolve to, including F9's (Launch Preset is offered here too,
-    # alongside its direct key, same as F6/F7/F8 already are).
+    # open_more_menu() runs the whole menu to completion, including
+    # the toggle-and-reopen loop for the settings rows — see its own
+    # comment. It only ever returns here for two reasons: Esc with
+    # nothing left to do (return 1), or one of the entry-scoped rows
+    # (Hide/Favorite/Categorize/Create shortcut) that needs this
+    # screen's own $command/$formula to run (return 2) — so those four
+    # still fall through to their normal handler below exactly as
+    # before, and this block still has to sit above them.
     # --------------------------------------------------------
 
     if [[ "$action" == "f4" || "$action" == "alt-m" ]]; then
 
-        # Looped rather than a single pick_more_action() call: the
-        # three settings toggles flip in place and reopen More again,
-        # since there's often more than one you want to touch in the
-        # same visit and dropping back to the full list after each one
-        # would mean pressing F4 all over again for the next. Every
-        # other action here is a one-off, so it still breaks out and
-        # falls through to that action's own handler below exactly as
-        # before.
-        while true; do
+        open_more_menu "$hide_label" true
+        more_menu_status=$?
 
-            chosen_action="$(pick_more_action "$hide_label")"
+        if (( more_menu_status != 2 )); then
+            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+            continue
+        fi
 
-            if [[ -z "$chosen_action" ]]; then
-                # Cancelled: redraw where we were instead of letting the
-                # cursor snap back to the top of the list.
-                restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-                continue 2
-            fi
-
-            case "$chosen_action" in
-                toggle_default_categories)
-                    local new_value='off'
-                    [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && new_value='on'
-                    set_config_value DEFAULT_CATEGORIES "$new_value"
-                    CONFIG_DEFAULT_CATEGORIES="$new_value"
-                    continue
-                    ;;
-                toggle_default_hidden)
-                    local new_value='off'
-                    [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && new_value='on'
-                    set_config_value DEFAULT_HIDDEN "$new_value"
-                    CONFIG_DEFAULT_HIDDEN="$new_value"
-                    continue
-                    ;;
-                toggle_open_to_categories)
-                    # Opt-in (default off), so the flip direction here
-                    # is the reverse of the two toggles above — starts
-                    # by turning on, not off.
-                    local new_value='on'
-                    [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
-                    set_config_value OPEN_TO_CATEGORIES "$new_value"
-                    CONFIG_OPEN_TO_CATEGORIES="$new_value"
-                    continue
-                    ;;
-            esac
-
-            action="$chosen_action"
-            break
-        done
-    fi
-
-    # --------------------------------------------------------
-    # Theme — only ever reached by resolving through More above,
-    # there's no direct key for it (every F1-F9 is already spoken
-    # for). Purely informational/self-contained like F1/Help, so it
-    # doesn't need a selected entry and doesn't fall through further —
-    # pick_theme() itself handles writing the config file and, if
-    # confirmed, relaunching.
-    # --------------------------------------------------------
-
-    if [[ "$action" == "theme" ]]; then
-
-        pick_theme
-        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-        continue
-    fi
-
-    # --------------------------------------------------------
-    # Create Preset — same reasoning as Theme just above: reached only
-    # through More, self-contained (create_preset() does its own
-    # multi-select, naming and file-writing), so it just redraws where
-    # it was afterward rather than falling through further.
-    # --------------------------------------------------------
-
-    if [[ "$action" == "create_preset" ]]; then
-
-        create_preset
-        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-        continue
+        action="$MORE_MENU_FALLTHROUGH_ACTION"
     fi
 
     # --------------------------------------------------------
@@ -4550,29 +4655,7 @@ while true; do
 
     if [[ "$action" == "f5" || "$action" == "alt-r" ]]; then
 
-        printf '\n'
-        printf 'Refreshing…\n'
-
-        # Clear the memoised state so rebuild_cache re-reads Homebrew
-        # rather than reusing whatever was captured at startup, which
-        # may be minutes old. Re-reading is the point of pressing F5.
-        CURRENT_STATE=""
-
-        # rebuild_cache always rebuilds — it doesn't consult
-        # FORCE_REFRESH — and it refreshes the outdated snapshot as a
-        # side effect, so there's nothing else to force here.
-        if rebuild_cache; then
-            load_outdated_formulas
-            load_hidden_commands
-            refresh_category_state
-            load_favorite_commands
-            load_category_members
-            build_entries
-        else
-            printf 'Refresh failed — keeping the existing list.\n'
-            sleep 2
-        fi
-
+        refresh_cache_and_state
         continue
     fi
 

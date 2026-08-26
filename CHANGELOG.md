@@ -5,6 +5,40 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] — 2026-08-26
+
+### Changed
+
+- **F4 (More) and F5 (Refresh) now work from inside the view picker
+  (F2) itself**, not just the main list. Reported live: the view picker's
+  own code comment called it "the main navigation hub," but it couldn't
+  actually reach either. More opened from there now offers only the
+  actions that don't need a highlighted row (Launch Preset, Theme, the
+  three toggles, Create Preset) — Hide/Favorite/Categorize/Create
+  shortcut are entry-scoped and stay main-list-only. New shared
+  `open_more_menu()` (used by both call sites) and `refresh_cache_and_state()`
+  (extracted from the old F5 handler) back this without duplicating either
+  flow.
+- **Esc from Theme (or any other loop-back More action) now returns to
+  the More menu, not out to `All`.** Reported live: closing Theme used
+  to dump you all the way out. Theme, Create Preset, and Launch Preset
+  don't need a highlighted row either, so they're now handled inside
+  `open_more_menu()`'s own loop, which reopens More after each one
+  instead of falling through to whatever screen called it.
+- **More menu reorganized** into three groups: entry-scoped actions
+  (Hide, Favorite, Categorize) plus Launch Preset first; Theme and the
+  three Default/Open-to-Categories toggles — "adjust something, then
+  come back" — next; Create Preset and Create shortcut — "build
+  something new" — last.
+
+### Fixed
+
+- **F5 from the view picker's very first appearance failed with
+  `command not found: refresh_cache_and_state`** when Open to
+  Categories is on, since that startup screen runs before the launcher
+  reaches the point in the file where the function used to be defined.
+  Moved the definition earlier, ahead of that startup call.
+
 ## [0.26.0] — 2026-08-26
 
 ### Changed
