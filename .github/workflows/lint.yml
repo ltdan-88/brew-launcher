@@ -35,6 +35,13 @@ name: CI
 #      unknown preset, a preset with no real commands in it), plus a
 #      real tmux session: right pane count on first launch, reattach
 #      instead of duplicating on a second one while it's still alive.
+#
+#   7. preset-order-fixtures — --internal-preset-tab, the handler
+#      behind Create Preset's numbered Tab marking: marks build up in
+#      order, unmarking one renumbers the rest down rather than
+#      leaving a gap, and an empty highlighted argument (the "just
+#      seed the initial screen" mode) only regenerates without
+#      toggling anything.
 
 on:
   push:
@@ -141,6 +148,19 @@ jobs:
 
       - name: Preset (--preset) test
         run: zsh test/preset-fixtures.sh
+
+  preset-order-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf or tmux install needed — --internal-preset-tab is
+      # handled before the dependency checks, the same reason the
+      # footer-click and preview handlers it's modeled on don't need
+      # them either.
+      - name: Create Preset's Tab-order handler test
+        run: zsh test/preset-order-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

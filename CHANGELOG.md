@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] — 2026-08-27
+
+### Added
+
+- **Create Preset now shows launch order as a number, not just a dot.**
+  Suggested live: "wouldn't it be great if you could set the order
+  during preset creation? so when you press tab, instead of a dot, you
+  see a number which represents the order." Tab marks a tool and shows
+  its position (`1`, `2`, `3`, ...); pressing Tab again on a marked
+  tool unmarks it and renumbers everything after it down. Enter saves
+  the preset in that exact order — previously the order always came
+  from the underlying list's own (alphabetical-ish) sort, regardless of
+  what order you actually pressed Tab in, since fzf's own `--multi`
+  output preserves list order, not selection order. New
+  `--internal-preset-tab` handler backs this: `create_preset()` no
+  longer uses fzf's native `--multi`/`--marker` at all, keeping its own
+  small ordered list on the side instead (one command per line, updated
+  by a `transform` bind on every Tab press, reloading the list with
+  updated number badges baked into the display text).
+
+### Changed
+
+- **Enter with nothing marked now shows an error** ("Mark at least one
+  tool with Tab before saving a preset.") and reopens the same screen,
+  instead of silently saving whatever the cursor happened to be
+  sitting on as a one-tool preset — raised live as not really what
+  presets are for, since you'd just launch that one tool directly.
+
 ## [0.29.1] — 2026-08-27
 
 ### Fixed

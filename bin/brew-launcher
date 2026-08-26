@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.29.1"
+VERSION="0.30.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -243,13 +243,15 @@ Presets:
                                   itself the opt-in.
 
   In the launcher: F4 → Create Preset picks the tools and writes the
-  file for you — no hand-editing required. F9 launches an existing one
-  without leaving the picker; Ctrl-D there deletes the highlighted
-  preset instead, asking first and showing how many commands it holds
-  — the one action here you can't undo. Both F4 and F9 stay visible
-  even if tmux isn't installed — pressing either then explains what to
-  install rather than being hidden outright, so the feature is still
-  discoverable.
+  file for you — no hand-editing required. Tab marks a tool and shows
+  a number badge for the order it'll launch in (top to bottom in the
+  file); Tab again on a marked tool unmarks it and renumbers the rest
+  down. F9 launches an existing one without leaving the picker;
+  Ctrl-D there deletes the highlighted preset instead, asking first
+  and showing how many commands it holds — the one action here you
+  can't undo. Both F4 and F9 stay visible even if tmux isn't
+  installed — pressing either then explains what to install rather
+  than being hidden outright, so the feature is still discoverable.
 
   Mouse mode is on for every preset session (that session only, not
   your tmux config) — click a pane to focus it, drag a border to
@@ -534,10 +536,92 @@ if [[ "$1" == "--internal-preview" ]]; then
     exit 0
 fi
 
+# ------------------------------------------------------------
+# Create Preset's Tab handler (internal use only)
+#
+# Invoked by create_preset()'s fzf as a fresh subprocess every time
+# Tab is pressed, via a transform bind — same mechanism and the same
+# "must feel instant" reason as the click handler above.
+#
+# fzf's own --multi marking has no concept of *order*, only "is this
+# marked" — so instead of --multi, create_preset() keeps its own small
+# ordered list on the side (PRESET_ORDER_STATE_FILE, one command per
+# line, in the order marked) and this toggles it: already in the list
+# → removed (and everything after it renumbers down); not in it yet →
+# appended at the end. $2 is the currently-highlighted command ({1}
+# from create_preset()'s own --delimiter/--nth setup, inherited via the
+# exported PRESET_ORDER_* paths since this runs as a real subprocess,
+# not a function call). An empty $2 means "just regenerate, don't
+# toggle anything" — used once up front to render the initial
+# all-blank list through this same code path rather than duplicating
+# the badge format in two places.
+#
+# Prints a transform result reloading the regenerated list and moving
+# the cursor down a row — fzf's own default toggle+down convenience
+# for --multi doesn't come along for free once Tab is rebound to a
+# custom transform, verified live, so this asks for +down explicitly.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-preset-tab" ]]; then
+
+    preset_tab_highlighted="$2"
+    preset_tab_order=()
+    [[ -s "$PRESET_ORDER_STATE_FILE" ]] && preset_tab_order=("${(@f)$(<"$PRESET_ORDER_STATE_FILE")}")
+
+    if [[ -n "$preset_tab_highlighted" ]]; then
+
+        preset_tab_new_order=()
+        preset_tab_found=false
+
+        for preset_tab_o in "${preset_tab_order[@]}"; do
+            [[ -z "$preset_tab_o" ]] && continue
+            if [[ "$preset_tab_o" == "$preset_tab_highlighted" ]]; then
+                preset_tab_found=true
+                continue
+            fi
+            preset_tab_new_order+=("$preset_tab_o")
+        done
+
+        [[ "$preset_tab_found" == false ]] && preset_tab_new_order+=("$preset_tab_highlighted")
+        preset_tab_order=("${preset_tab_new_order[@]}")
+
+        printf '%s\n' "${preset_tab_order[@]}" > "$PRESET_ORDER_STATE_FILE"
+    fi
+
+    : > "${PRESET_ORDER_LIST_FILE}.new"
+
+    while IFS=$'\t' read -r preset_tab_cmd preset_tab_rest; do
+        [[ -z "$preset_tab_cmd" ]] && continue
+
+        preset_tab_badge="   "
+        preset_tab_idx=0
+        preset_tab_found_idx=0
+
+        for preset_tab_o in "${preset_tab_order[@]}"; do
+            preset_tab_idx=$(( preset_tab_idx + 1 ))
+            if [[ "$preset_tab_o" == "$preset_tab_cmd" ]]; then
+                preset_tab_found_idx=$preset_tab_idx
+                break
+            fi
+        done
+
+        (( preset_tab_found_idx > 0 )) && preset_tab_badge="$(printf '%2d ' "$preset_tab_found_idx")"
+
+        printf '%s\t%s%s\n' "$preset_tab_cmd" "$preset_tab_badge" "$preset_tab_rest" >> "${PRESET_ORDER_LIST_FILE}.new"
+
+    done < "$PRESET_ORDER_BASE_FILE"
+
+    mv "${PRESET_ORDER_LIST_FILE}.new" "$PRESET_ORDER_LIST_FILE"
+
+    [[ -n "$preset_tab_highlighted" ]] && printf 'reload(cat %q)+down' "$PRESET_ORDER_LIST_FILE"
+
+    exit 0
+fi
+
 # Reached only by the launcher itself — the click handler above exits
 # before this line, which matters: if the handler installed this trap
 # too, it would delete the click file it just wrote on its own exit.
-trap 'rm -f "$FOOTER_CLICK_FILE"' EXIT
+trap 'rm -f "$FOOTER_CLICK_FILE" "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"' EXIT
 
 FORCE_REFRESH=false
 LIST_MODE=false
@@ -2407,6 +2491,8 @@ pick_help() {
     rows+=("Open to Categories  Start on the view picker instead of All")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("     Create Preset  Pick tools to save as a new preset")
+        rows+=("                    Tab shows the launch order as a number;")
+        rows+=("                    Tab again unmarks and renumbers the rest")
     else
         rows+=("     Create Preset  needs tmux: brew install tmux")
     fi
@@ -4147,52 +4233,110 @@ create_preset() {
     local fzf_result line
     local preset_name preset_file existing_count overwrite_answer
     local -a existing_presets=()
+    local -a result_lines=()
+    local pick_valid=false
 
-    # 1. Multi-select from the full "All" list, regardless of whatever
+    # 1. Pick tools from the full "All" list, regardless of whatever
     #    view was on screen when this was opened — a preset should be
     #    able to draw from the whole toolset. Hidden entries stay
     #    excluded, same precedent already set for categorizing (a
     #    narrow niche not worth the extra plumbing).
+    #
+    #    Not fzf's own --multi: that has no concept of order, only
+    #    "is this marked", so the number a preset's tools launch in
+    #    would always just be the All list's own (alphabetical-ish)
+    #    order regardless of what order you pressed Tab in. Instead,
+    #    --internal-preset-tab keeps a small ordered list on the side
+    #    every Tab press updates, and shows it back as a number badge
+    #    in place of fzf's native marker — see that handler above for
+    #    the mechanics.
     CURRENT_VIEW="All"
     build_entries
 
-    rm -f "$FOOTER_CLICK_FILE"
+    export PRESET_ORDER_BASE_FILE="$CACHE_DIR/preset-order-base.$$"
+    export PRESET_ORDER_LIST_FILE="$CACHE_DIR/preset-order-list.$$"
+    export PRESET_ORDER_STATE_FILE="$CACHE_DIR/preset-order-state.$$"
 
-    fzf_result="$(
-        printf '%s\n' "${entries[@]}" |
-        fzf \
-            --multi \
-            --height=100% \
-            --no-clear \
-            --layout=reverse \
-            --border=rounded \
-            --border-label="$(screen_border_label 'New preset — select tools')" \
-            --border-label-pos=2 \
-            --prompt=' 󰣇  ' \
-            --pointer='▌' \
-            --marker='●' \
-            --delimiter=$'\t' \
-            --with-nth=2 \
-            --nth=1,2,3,4 \
-            --header='Tab marks a tool. Enter confirms every marked one (or just the one under the cursor, if none are marked).' \
-            --footer='  ↑ ↓  Navigate    Tab  Mark/unmark    Enter  [Confirm]    Esc  [Cancel]' \
-            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
-            --color="$FZF_COLORS"
-    )"
+    mkdir -p "$CACHE_DIR"
+    : > "$PRESET_ORDER_STATE_FILE"
+    printf '%s\n' "${entries[@]}" > "$PRESET_ORDER_BASE_FILE"
 
-    rm -f "$FOOTER_CLICK_FILE"
+    # Seeds the initial (all-unmarked) list through the exact same code
+    # path Tab itself uses to regenerate it, rather than formatting the
+    # blank badge a second time here.
+    "$SCRIPT_PATH" --internal-preset-tab "" >/dev/null
 
-    CURRENT_VIEW="$saved_view"
-    build_entries
+    while [[ "$pick_valid" == false ]]; do
 
-    [[ -z "$fzf_result" ]] && return 1
+        rm -f "$FOOTER_CLICK_FILE"
 
-    for line in "${(@f)fzf_result}"; do
-        [[ -z "$line" ]] && continue
-        selected_commands+=("${line%%$'\t'*}")
+        fzf_result="$(
+            fzf \
+                --height=100% \
+                --no-clear \
+                --layout=reverse \
+                --border=rounded \
+                --border-label="$(screen_border_label 'New preset — select tools')" \
+                --border-label-pos=2 \
+                --prompt=' 󰣇  ' \
+                --pointer='▌' \
+                --delimiter=$'\t' \
+                --with-nth=2 \
+                --nth=1,2,3,4 \
+                --header="Tab marks a tool — the number is the order it'll launch in. Tab again to unmark." \
+                --footer='  ↑ ↓  Navigate    Tab  Mark/unmark    Enter  [Confirm]    Esc  [Cancel]' \
+                --bind "tab:transform:$SCRIPT_PATH --internal-preset-tab {1}" \
+                --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+                --expect=enter,esc \
+                --color="$FZF_COLORS" \
+                < "$PRESET_ORDER_LIST_FILE"
+        )"
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        if [[ -z "$fzf_result" ]]; then
+            rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
+            CURRENT_VIEW="$saved_view"
+            build_entries
+            return 1
+        fi
+
+        result_lines=("${(@f)fzf_result}")
+
+        if [[ "${result_lines[1]}" != "enter" ]]; then
+            rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
+            CURRENT_VIEW="$saved_view"
+            build_entries
+            return 1
+        fi
+
+        selected_commands=()
+        if [[ -s "$PRESET_ORDER_STATE_FILE" ]]; then
+            for line in "${(@f)$(<"$PRESET_ORDER_STATE_FILE")}"; do
+                [[ -z "$line" ]] && continue
+                selected_commands+=("$line")
+            done
+        fi
+
+        # Enter with nothing marked used to fall back to whatever the
+        # cursor happened to be sitting on, silently saving a one-tool
+        # "preset" — reported as confusing, since a preset that's just
+        # one tool isn't really what presets are for (you'd just launch
+        # that tool directly). Now it's an explicit error, and this
+        # loop just reopens the same screen rather than dropping all
+        # the way back out to More.
+        if (( ${#selected_commands[@]} == 0 )); then
+            printf '\n'
+            printf 'Mark at least one tool with Tab before saving a preset.\n'
+            sleep 2
+        else
+            pick_valid=true
+        fi
     done
 
-    (( ${#selected_commands[@]} == 0 )) && return 1
+    rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
+    CURRENT_VIEW="$saved_view"
+    build_entries
 
     # 2. Name it — type a new name, or pick an existing preset to
     #    replace. Same type-or-pick convention toggle_category() above
