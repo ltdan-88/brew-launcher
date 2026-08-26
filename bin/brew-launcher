@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.29.0"
+VERSION="0.29.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -593,6 +593,7 @@ run_preset() {
     local name="$1"
     local preset_file="$PRESETS_DIR/$name"
     local -a preset_commands=()
+    local -a preset_warnings=()
     local preset_line preset_session preset_cmd preset_resolved
     local preset_started=false preset_pane_count
     local preset_hash preset_stored_hash
@@ -682,7 +683,14 @@ run_preset() {
         preset_resolved="$(command -v "$preset_cmd" 2>/dev/null)"
 
         if [[ -z "$preset_resolved" ]]; then
-            printf 'Warning: "%s" not found on PATH, skipping.\n' "$preset_cmd"
+            # Collected rather than printed here — printing immediately
+            # would just get overwritten the instant this function execs
+            # into tmux a few lines down, on a preset with any working
+            # commands left. Reported live as looking exactly like
+            # nothing happened: with only one tool left after a skip,
+            # the single resulting pane is a plain shell prompt with no
+            # visible sign anything launched at all.
+            preset_warnings+=("Warning: \"$preset_cmd\" not found on PATH, skipping.")
             continue
         fi
 
@@ -730,9 +738,29 @@ run_preset() {
     # your tmux, if you use it for other things and have it off there.
     tmux set-option -t "$preset_session" mouse on
 
+    # Same reasoning, same scoping: a preset session is otherwise
+    # visually identical to a plain shell whenever it only ends up with
+    # one pane (a skipped tool, or a one-tool preset), and that's
+    # exactly the scenario reported live as "launched a preset, it just
+    # dropped me back at the shell and did nothing" — it hadn't; there
+    # was just nothing on screen saying otherwise. Forcing the status
+    # bar on guarantees the session name is always visible, regardless
+    # of what your own tmux config does elsewhere.
+    tmux set-option -t "$preset_session" status on
+
     # Stashed so the next run of this same preset can tell whether the
     # command list changed since — see the fingerprint comment above.
     tmux set-environment -t "$preset_session" BL_PRESET_HASH "$preset_hash"
+
+    # Printed and paused on now, rather than at the point each one was
+    # found — see the comment above where these are collected. This is
+    # the last moment before the exec below hands the screen to tmux,
+    # so it's the only point a warning is actually readable.
+    if (( ${#preset_warnings[@]} > 0 )); then
+        printf '\n'
+        printf '%s\n' "${preset_warnings[@]}"
+        sleep 2
+    fi
 
     if [[ -n "$TMUX" ]]; then
         exec tmux switch-client -t "$preset_session"

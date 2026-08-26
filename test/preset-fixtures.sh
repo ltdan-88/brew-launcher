@@ -122,6 +122,14 @@ mouse_option="$(tmux show-options -t "$SESSION" mouse 2>/dev/null)"
 [[ "$mouse_option" == "mouse on" ]] ||
     fail "preset session should have mouse mode on, got: $mouse_option"
 
+# Forced on regardless of the user's own tmux config — otherwise a
+# preset that only ends up with one live pane (like this fixture, one
+# command skipped) is visually identical to a plain shell prompt, with
+# nothing on screen saying a preset launched at all.
+status_option="$(tmux show-options -t "$SESSION" status 2>/dev/null)"
+[[ "$status_option" == "status on" ]] ||
+    fail "preset session should have the status bar forced on, got: $status_option"
+
 # ------------------------------------------------------------
 # 5. Editing the preset file while its session is still running
 #    should rebuild with the new pane count on the next invocation,
@@ -144,4 +152,4 @@ session_count_edited="$(tmux list-sessions 2>/dev/null | grep -c '^blpreset-pres
 
 tmux kill-session -t "$SESSION" 2>/dev/null
 
-printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count, re-invoking reattaches instead of duplicating, mouse mode is on, editing a running preset rebuilds instead of staying stale\n'
+printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale\n'
