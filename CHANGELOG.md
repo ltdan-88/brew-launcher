@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] — 2026-08-26
+
+### Changed
+
+- **F9/Presets and Create Preset now hide themselves if tmux isn't
+  installed**, instead of being offered and then failing partway
+  through — pressing F9 used to open a preset list (or "Create Preset"
+  used to let you build one) that could only ever error the moment you
+  actually tried to use it. Same "don't offer what can only fail"
+  reasoning Create Shortcut already followed on unsupported platforms,
+  now applied here too. The direct F9/⌥P keypress still works as a
+  fallback and explains what's missing, in case muscle memory reaches
+  for it anyway. `--preset` from a terminal is unaffected — typing that
+  flag already implies you know what it needs.
+
 ## [0.20.0] — 2026-08-26
 
 ### Added

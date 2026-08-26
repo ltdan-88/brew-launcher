@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.20.0"
+VERSION="0.21.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -210,7 +210,9 @@ Presets:
 
   In the launcher: F4 → Create Preset picks the tools and writes the
   file for you — no hand-editing required. F9 launches an existing one
-  without leaving the picker.
+  without leaving the picker. Both are hidden from the footer and More
+  menu if tmux isn't installed, since neither could do anything useful
+  without it.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin       Default
@@ -636,6 +638,20 @@ if [[ "$TERMINAL" == "tmux" ]] &&
    ! command -v tmux >/dev/null 2>&1; then
     echo "Error: tmux is required when using BREW_LAUNCHER_TERMINAL=tmux."
     exit 1
+fi
+
+# Computed once so every screen that offers a preset-related action can
+# just check this instead of shelling out to `command -v tmux` again.
+# Presets always need tmux regardless of $TERMINAL, so this is a
+# separate check from the one just above (which only fires for the
+# tmux terminal backend specifically). Same reasoning as Create
+# Shortcut already being hidden on unsupported platforms rather than
+# offered and then failing: an action that can only ever error isn't
+# offered in the first place.
+if command -v tmux >/dev/null 2>&1; then
+    TMUX_AVAILABLE=true
+else
+    TMUX_AVAILABLE=false
 fi
 
 # ------------------------------------------------------------
@@ -1867,7 +1883,9 @@ pick_help() {
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
-    rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
+    if [[ "$TMUX_AVAILABLE" == true ]]; then
+        rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
+    fi
     rows+=("")
     rows+=("Second tier — F4, or press directly at any time")
     rows+=("  F6 / ⌥H   Hide or unhide the selected entry")
@@ -1876,7 +1894,9 @@ pick_help() {
     rows+=("")
     rows+=("F4 only — no direct key")
     rows+=("            Theme  Switch color theme")
-    rows+=("     Create Preset  Pick tools to save as a new preset")
+    if [[ "$TMUX_AVAILABLE" == true ]]; then
+        rows+=("     Create Preset  Pick tools to save as a new preset")
+    fi
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create shortcut  macOS .command or Linux .desktop file")
     fi
@@ -1924,16 +1944,26 @@ pick_more_action() {
     rows+=("f6"$'\t'"$(printf '%-18s%s' "$hide_label" 'F6 / ⌥H')")
     rows+=("f7"$'\t'"$(printf '%-18s%s' 'Favorite' 'F7 / ⌥F')")
     rows+=("f8"$'\t'"$(printf '%-18s%s' 'Categorize' 'F8 / ⌥C')")
-    rows+=("f9"$'\t'"$(printf '%-18s%s' 'Launch Preset' 'F9 / ⌥P')")
+
+    # Both preset actions are hidden without tmux — same "don't offer
+    # what can only fail" reasoning as Create Shortcut below. Creating
+    # a preset without tmux wouldn't itself error, but it would only
+    # ever produce something that errors the moment it's used, so
+    # there's no point offering it either.
+    if [[ "$TMUX_AVAILABLE" == true ]]; then
+        rows+=("f9"$'\t'"$(printf '%-18s%s' 'Launch Preset' 'F9 / ⌥P')")
+    fi
 
     # No F-key of its own — every F1-F9 is already spoken for, and
     # this is settings-adjacent rather than something reached for
     # often enough to need a direct shortcut.
     rows+=("theme"$'\t'"$(printf '%-18s%s' 'Theme' '')")
 
-    # Same reasoning as Theme above — also setup-adjacent rather than
-    # everyday, so it doesn't need a key of its own either.
-    rows+=("create_preset"$'\t'"$(printf '%-18s%s' 'Create Preset' '')")
+    if [[ "$TMUX_AVAILABLE" == true ]]; then
+        # Same reasoning as Theme above — also setup-adjacent rather
+        # than everyday, so it doesn't need a key of its own either.
+        rows+=("create_preset"$'\t'"$(printf '%-18s%s' 'Create Preset' '')")
+    fi
 
     # Shortcuts are macOS/Linux-only; elsewhere the action can only
     # refuse, so it isn't offered rather than being offered and
@@ -3427,7 +3457,13 @@ footer_actions() {
     parts+=("$(footer_key F3 D $with_alt)  [Details]")
     parts+=("$(footer_key F4 M $with_alt)  [More]")
     parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
-    parts+=("$(footer_key F9 P $with_alt)  [Presets]")
+
+    # Hidden entirely without tmux, same as Create Shortcut is hidden
+    # on unsupported platforms — an action that can only ever fail
+    # isn't offered in the first place.
+    if [[ "$TMUX_AVAILABLE" == true ]]; then
+        parts+=("$(footer_key F9 P $with_alt)  [Presets]")
+    fi
 
     local separator="${(l:$gap:: :)}"
     local out="" part
@@ -3707,7 +3743,20 @@ while true; do
 
     if [[ "$action" == "f9" || "$action" == "alt-p" ]]; then
 
-        launch_preset
+        # F9 stays bound (it's still in --expect) even though the
+        # footer/menu already hide it without tmux — this is the
+        # fallback for that direct keypress, so it fails as cleanly as
+        # the footer/menu already imply it would rather than opening
+        # launch_preset()'s own picker only to error once something's
+        # actually selected.
+        if [[ "$TMUX_AVAILABLE" == false ]]; then
+            printf '\n'
+            printf 'Presets need tmux: brew install tmux\n'
+            sleep 2
+        else
+            launch_preset
+        fi
+
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
