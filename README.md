@@ -93,6 +93,13 @@ The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
 teaches you the key and then gets out of the way.
 
+Three rows in More are on/off switches, not one-shot actions — Default
+Categories, Default Hidden, and Open to Categories (see
+[Bundled defaults](#bundled-defaults) below). Those flip with **Space** as
+well as Enter, and reopen the menu right after so you can flip more than one
+without leaving. Everything else in More still exits back to the list once
+it's done, same as always.
+
 ### One place to switch views
 
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
