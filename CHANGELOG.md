@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.2] — 2026-08-26
+
+### Changed
+
+- **The three More-menu switches (Default Categories, Default Hidden,
+  Open to Categories) now flip with Space as well as Enter, and reopen
+  the menu right after** instead of dropping back to the main list —
+  reported live: pressing Enter to toggle a setting felt like "leaving
+  the screen" the way Enter does on every other row, and having to
+  press F4 again to touch a second setting was real friction for
+  something meant to be flipped quickly, possibly more than one at a
+  time. `pick_more_action()` gained `--bind 'space:accept'` (Space now
+  confirms any row, same as Enter — the only real tradeoff being that
+  Space can no longer be typed as a literal search character in this
+  one short menu, which fuzzy-matching makes moot in practice). The F4
+  dispatch itself now loops: a toggle flips in place and calls back
+  into the same menu, anything else still exits normally exactly as
+  before. The three standalone toggle handlers this replaced are gone
+  — reaching them any other way was never possible, so keeping both
+  would've been dead code.
+
 ## [0.25.1] — 2026-08-26
 
 ### Fixed

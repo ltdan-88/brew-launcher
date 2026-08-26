@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.25.1"
+VERSION="0.25.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -273,6 +273,11 @@ Theme:
   (bundled, manual, or both), since an empty category list has nothing
   useful to open to. Esc from that first screen falls back to All,
   same as pressing it from F2 any other time.
+
+  All three of these toggles flip with Space as well as Enter, and
+  reopen the More menu afterward rather than exiting to the main list
+  — useful for touching more than one in the same visit. Every other
+  action in More still exits normally once it's done.
 
 Bundled defaults:
   A curated set of well-known formula -> category mappings, and a
@@ -2312,6 +2317,9 @@ pick_help() {
         rows+=("  Create shortcut  macOS .command or Linux .desktop file")
     fi
     rows+=("")
+    rows+=("The three toggles above flip with Space, not just Enter, and stay")
+    rows+=("on this menu afterward — everything else here exits back to the list.")
+    rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
     rows+=("")
@@ -2427,7 +2435,8 @@ pick_more_action() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --footer='  ↑ ↓  Navigate    Enter  [Choose]    Esc  [Back]' \
+            --footer='  ↑ ↓  Navigate    Enter/Space  [Choose]    Esc  [Back]' \
+            --bind 'space:accept' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -4376,16 +4385,55 @@ while true; do
 
     if [[ "$action" == "f4" || "$action" == "alt-m" ]]; then
 
-        chosen_action="$(pick_more_action "$hide_label")"
+        # Looped rather than a single pick_more_action() call: the
+        # three settings toggles flip in place and reopen More again,
+        # since there's often more than one you want to touch in the
+        # same visit and dropping back to the full list after each one
+        # would mean pressing F4 all over again for the next. Every
+        # other action here is a one-off, so it still breaks out and
+        # falls through to that action's own handler below exactly as
+        # before.
+        while true; do
 
-        if [[ -z "$chosen_action" ]]; then
-            # Cancelled: redraw where we were instead of letting the
-            # cursor snap back to the top of the list.
-            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-            continue
-        fi
+            chosen_action="$(pick_more_action "$hide_label")"
 
-        action="$chosen_action"
+            if [[ -z "$chosen_action" ]]; then
+                # Cancelled: redraw where we were instead of letting the
+                # cursor snap back to the top of the list.
+                restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+                continue 2
+            fi
+
+            case "$chosen_action" in
+                toggle_default_categories)
+                    local new_value='off'
+                    [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && new_value='on'
+                    set_config_value DEFAULT_CATEGORIES "$new_value"
+                    CONFIG_DEFAULT_CATEGORIES="$new_value"
+                    continue
+                    ;;
+                toggle_default_hidden)
+                    local new_value='off'
+                    [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && new_value='on'
+                    set_config_value DEFAULT_HIDDEN "$new_value"
+                    CONFIG_DEFAULT_HIDDEN="$new_value"
+                    continue
+                    ;;
+                toggle_open_to_categories)
+                    # Opt-in (default off), so the flip direction here
+                    # is the reverse of the two toggles above — starts
+                    # by turning on, not off.
+                    local new_value='on'
+                    [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
+                    set_config_value OPEN_TO_CATEGORIES "$new_value"
+                    CONFIG_OPEN_TO_CATEGORIES="$new_value"
+                    continue
+                    ;;
+            esac
+
+            action="$chosen_action"
+            break
+        done
     fi
 
     # --------------------------------------------------------
@@ -4414,46 +4462,6 @@ while true; do
     if [[ "$action" == "create_preset" ]]; then
 
         create_preset
-        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-        continue
-    fi
-
-    # --------------------------------------------------------
-    # Default Categories / Default Hidden — plain on/off switches for
-    # whether the bundled curated data applies to anything the user
-    # hasn't categorized/hidden themselves. Flips in place and returns
-    # straight to More rather than the main list, since that's where it
-    # was pressed from and its own label already shows the new state.
-    # --------------------------------------------------------
-
-    if [[ "$action" == "toggle_default_categories" ]]; then
-
-        local new_value='off'
-        [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && new_value='on'
-        set_config_value DEFAULT_CATEGORIES "$new_value"
-        CONFIG_DEFAULT_CATEGORIES="$new_value"
-        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-        continue
-    fi
-
-    if [[ "$action" == "toggle_default_hidden" ]]; then
-
-        local new_value='off'
-        [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && new_value='on'
-        set_config_value DEFAULT_HIDDEN "$new_value"
-        CONFIG_DEFAULT_HIDDEN="$new_value"
-        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-        continue
-    fi
-
-    # Opt-in (default off), so the flip direction here is the reverse
-    # of the two toggles above — starts by turning on, not off.
-    if [[ "$action" == "toggle_open_to_categories" ]]; then
-
-        local new_value='on'
-        [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
-        set_config_value OPEN_TO_CATEGORIES "$new_value"
-        CONFIG_OPEN_TO_CATEGORIES="$new_value"
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
