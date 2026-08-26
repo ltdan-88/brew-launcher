@@ -318,10 +318,16 @@ brew-launcher --help
 
 ## Configuration
 
-There's nothing you *have to* configure — the in-app keys (Theme, Create
-Preset) write these files for you. They're plain text if you'd rather edit
-them directly, one setting or command per line, `#` comments and blank lines
-ignored:
+Nothing here is required reading — everything in the launcher works with zero
+configuration. Expand this if you want to change the terminal backend, theme,
+bundled-defaults behavior, or preset file format.
+
+<details>
+<summary><strong>Show configuration details</strong></summary>
+
+The in-app keys (Theme, Create Preset) write these files for you. They're
+plain text if you'd rather edit them directly, one setting or command per
+line, `#` comments and blank lines ignored:
 
 ```
 ~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN= — see below
@@ -425,7 +431,15 @@ reattaches to) a tmux session, no ambiguity about whether tmux gets
 bootstrapped. Re-running the same preset while it's still running reattaches
 you to it rather than spawning a duplicate.
 
+</details>
+
 ## How it works
+
+Curious how it stays instant with no daemon and no database? Expand this —
+otherwise, nothing here changes how you use it.
+
+<details>
+<summary><strong>Show the caching internals</strong></summary>
 
 Homebrew is queried once and the result cached, so startup after the first run
 is effectively instant. Whether anything was installed or removed is then only
@@ -457,6 +471,8 @@ double-clickable app:
 4. Save as `Brew Launcher.app`, then add it to the Dock or bind a hotkey
 
 It opens `brew-launcher` in a new Ghostty tab.
+</details>
+
 </details>
 
 ## Troubleshooting
