@@ -91,14 +91,24 @@ rather than everyday.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
-teaches you the key and then gets out of the way.
+teaches you the key and then gets out of the way. Rows are grouped by what
+they need: entry-scoped actions (Hide, Favorite, Categorize) and Launch Preset
+first, then Theme and the three toggles below, then the two "build something
+new" actions, Create Preset and Create shortcut, last.
 
 Three rows in More are on/off switches, not one-shot actions — Default
 Categories, Default Hidden, and Open to Categories (see
 [Bundled defaults](#bundled-defaults) below). Those flip with **Space** as
 well as Enter, and reopen the menu right after so you can flip more than one
-without leaving. Everything else in More still exits back to the list once
-it's done, same as always.
+without leaving. Theme and Create Preset return to More once they're done too;
+only Create shortcut exits back to wherever you opened More from, since it's
+the one action here that's actually finished when it's finished.
+
+**F4** and **F5** also work from inside the view picker (**F2**) itself, not
+just the main list — no row needs to be highlighted for either, so More opens
+there with just the entry-independent actions (no Hide/Favorite/Categorize/
+Create shortcut), and Esc backs out to the view picker, not all the way to
+`All`.
 
 ### One place to switch views
 
@@ -279,8 +289,8 @@ reference below, from inside the launcher.
 | **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
 | **Esc** | Go back one level, or quit | footer |
-| **F4** / **⌥M** | Open the More menu | footer |
-| **F5** / **⌥R** | Refresh the cache without leaving | footer |
+| **F4** / **⌥M** | Open the More menu — also works from the view picker | footer |
+| **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) | footer |
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | More |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | More |
