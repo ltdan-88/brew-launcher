@@ -100,9 +100,12 @@ teaches you the key and then gets out of the way.
 **F2** opens the view picker: `All`, `Favorites`, then your own categories —
 each marked with `·` so they're easy to tell apart from the built-in views —
 followed by `Most Used`, `Recently Added`, and `Hidden` last. Group tools
-however you think about them — Games, Editors, Monitoring. Every view except `All` shows
-how many entries it holds. **Esc** steps back one level at a time (filtered
-view → picker → everything → quit) rather than dumping you out.
+however you think about them — Games, Editors, Monitoring. Every row shows how
+many entries it holds, including `All` — which excludes `Hidden` the same way
+the real view does, so the two counts add up to your real total rather than
+`All` silently meaning something narrower than its name suggests. **Esc**
+steps back one level at a time (filtered view → picker → everything → quit)
+rather than dumping you out.
 
 `Most Used` and `Recently Added` are computed, not something you set up —
 `Most Used` tracks what you actually launch, and `Recently Added` reads the

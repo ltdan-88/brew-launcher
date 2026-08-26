@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.1] — 2026-08-26
+
+### Fixed
+
+- **The view picker's "All" row now shows a count**, reported live as
+  an inconsistency: every other row had a number, "All" didn't. It was
+  left out on the theory that fzf's own inline counter repeats it once
+  you're actually in that view, but from the picker screen itself the
+  missing number read as something broken rather than intentional.
+  Also addresses a related point raised in the same report — "All"
+  isn't literally every installed tool, it excludes `Hidden` the same
+  way the real view does — by making that visible rather than changing
+  the behavior: `All (50)` and `Hidden (63)` now sit on screen
+  together and add up to the real total, instead of `All` silently
+  meaning something narrower than its name implies with no visible
+  cue. Renaming "All" itself was considered and declined — the
+  underlying behavior is correct (it's the whole point of Hide: hidden
+  things actually leave your default view) and the two visible counts
+  now make the relationship clear without touching a name every
+  existing user already knows.
+
 ## [0.25.0] — 2026-08-26
 
 ### Added
