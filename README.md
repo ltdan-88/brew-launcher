@@ -179,6 +179,11 @@ it for you. **F9** lists your presets and launches the one you pick,
 reattaching to it if it's already running rather than opening a second copy.
 File format and the `--preset` CLI flag are in [Configuration](#configuration).
 
+Presets need [tmux](#terminal-backends), and both of these disappear from the
+footer and More menu if it isn't installed — same as Create Shortcut already
+does on platforms where it can't work, rather than being offered and then
+failing.
+
 ### Color themes
 
 <p align="center"><img src="assets/themes.png" alt="The same list rendered in all ten themes side by side, showing each palette's actual colors"></p>
@@ -413,8 +418,11 @@ Automation).
 that from inside an existing tmux session (`$TMUX` set); otherwise it falls
 back to launching in place, same as `current`.
 
-**`--preset`/F9 says tmux is required.** Presets always use tmux regardless of
-`BREW_LAUNCHER_TERMINAL` — install it with `brew install tmux`.
+**I don't see Presets (F9) or Create Preset anywhere.** Both need tmux, so
+they're hidden from the footer and More menu if it isn't installed — install
+it with `brew install tmux` and they'll appear on the next launch.
+`--preset` from a terminal still says so explicitly either way, since typing
+that flag already implies you know what it needs.
 
 **Versions look out of date.** The update check runs on a timer, not every
 launch. `brew-launcher --refresh` forces it.
