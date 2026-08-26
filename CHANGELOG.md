@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.2] — 2026-08-26
+
+### Fixed
+
+- **The view picker's category counts could overcount** — reported
+  live: "the TUI counter to the right of the category names don't
+  always match with the actual number of TUIs located in the
+  category." Root cause was two-fold. A plain `grep -c` on a real
+  category file counted blank/comment lines and entries that no
+  longer exist or are hidden, and the bundled-category tally never
+  checked hidden status at all — several bundled-hidden commands
+  (`age-inspect`, `calcurse-caldav`/`-upgrade`/`-vdir`) share a
+  formula with a bundled category (Security, Productivity), so those
+  categories always overcounted by construction, on top of anything a
+  user had separately hidden by hand. Extracted into a dedicated
+  `compute_category_counts()` that mirrors exactly what the filtered
+  view itself displays (known-installed, not hidden, real file parsed
+  with the same blank/comment skipping `load_category_members()`
+  already used) — verified against real data: Security's bundled
+  tally dropped from a wrong 3 to a correct 1 once `age-inspect` and
+  `age-plugin-batchpass` were excluded.
+
 ## [0.24.1] — 2026-08-26
 
 ### Fixed
