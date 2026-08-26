@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.25.2"
+VERSION="0.26.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -333,8 +333,8 @@ Views:
   its own F7 toggle). Deleting asks first and shows how many entries
   the category holds — it's the one action here you can't undo.
 
-  Esc goes up one level at a time: a filtered view -> the view picker
-  -> All -> quit.
+  Esc goes up one level at a time: the details pane (if open) -> a
+  filtered view -> the view picker -> All -> quit.
 
 Categories:
   F7/⌥F toggles Favorites for the selected entry, instantly. F8/⌥C is
@@ -407,23 +407,18 @@ if [[ "$1" == "--internal-footer-click" ]]; then
     case "$FZF_CLICK_FOOTER_WORD" in
         '[Hide]'|Hide|'[Unhide]'|Unhide|F6/⌥H|F6| \
         '[Views]'|Views|F2/⌥V|F2| \
+        '[Details]'|Details|F3/⌥D|F3| \
         '[Presets]'|Presets|F9/⌥P|F9| \
         '[Refresh]'|Refresh|F5/⌥R|F5| \
         '[Favorite]'|Favorite|F7/⌥F|F7| \
         '[Categorize]'|Categorize|F8/⌥C|F8| \
         '[More]'|More|F4/⌥M|F4| \
         '[Choose]'|Choose| \
-        '[Quit]'|Quit|Enter|'[Launch]'|Launch| \
+        '[Quit]'|Quit|'[Close]'|Close|Enter|'[Launch]'|Launch| \
         '[View]'|View|'[Delete]'|Delete)
             mkdir -p "$CACHE_DIR"
             printf '%s\n%s\n' "$FZF_CLICK_FOOTER_WORD" "$FZF_CLICK_FOOTER_LINE" > "$FOOTER_CLICK_FILE"
             printf 'accept'
-            ;;
-        # Returns an fzf action rather than accept/abort: the
-        # transform binding interprets whatever we print, so the
-        # preview can be toggled in place without exiting fzf.
-        '[Details]'|Details|F3/⌥D|F3)
-            printf 'toggle-preview'
             ;;
         '[Back]'|Back|'[Cancel]'|Cancel)
             printf 'abort'
@@ -2079,6 +2074,15 @@ typeset -a CATEGORY_NAMES
 # around that; holding the name makes those unnecessary.
 CURRENT_VIEW="All"
 
+# Whether the F3 details pane is currently open. Used to be fzf's own
+# native toggle-preview bind, invisible to this script entirely — but
+# that meant Esc could never know the pane was open, so it always fell
+# straight through to Quit/Views instead of just closing the pane
+# first. Routed through the normal dispatch-and-redraw loop instead,
+# same as every other toggle (F6/F7/F8) already works, so Esc can
+# check this before deciding what "back" means.
+DETAILS_VISIBLE=false
+
 typeset -A category_members
 
 load_category_names() {
@@ -2185,6 +2189,17 @@ load_category_members() {
     done
 }
 
+# Shared border-label shape for every screen that isn't the main list —
+# same " Homebrew CLI vX · <label> " format the main list already uses
+# for a filtered view, just without the disk-usage figures (those only
+# fit comfortably on the one screen that has the room and reason to
+# carry them). Consistency matters more now that Open to Categories can
+# make View the very first thing a launch shows — every screen should
+# still read as brew-launcher, not just the main list.
+screen_border_label() {
+    printf ' 󰣇  Homebrew CLI v%s · %s ' "$VERSION" "$1"
+}
+
 # Confirm before deleting a category. Returns 0 to proceed.
 #
 # Deleting is the one irreversible action in the launcher — F2, F6 and
@@ -2216,7 +2231,7 @@ confirm_delete_category() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=" Delete category " \
+            --border-label="$(screen_border_label 'Delete category')" \
             --border-label-pos=2 \
             --prompt='  ' \
             --pointer='▌' \
@@ -2322,6 +2337,7 @@ pick_help() {
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
+    rows+=("  Esc                     Closes it first — back/quit on the next press")
     rows+=("")
     rows+=("Mouse")
     rows+=("  Click a row to select, double-click to launch")
@@ -2340,7 +2356,7 @@ pick_help() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' Help ' \
+            --border-label="$(screen_border_label 'Help')" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -2429,7 +2445,7 @@ pick_more_action() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' More ' \
+            --border-label="$(screen_border_label 'More')" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -2484,7 +2500,7 @@ pick_theme() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' Theme ' \
+            --border-label="$(screen_border_label 'Theme')" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -2638,7 +2654,7 @@ pick_view() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' View ' \
+            --border-label="$(screen_border_label 'View')" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -3649,7 +3665,7 @@ confirm_relaunch() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' Apply change ' \
+            --border-label="$(screen_border_label 'Apply change')" \
             --border-label-pos=2 \
             --prompt='  ' \
             --pointer='▌' \
@@ -3789,7 +3805,7 @@ toggle_category() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' Categorize ' \
+            --border-label="$(screen_border_label 'Categorize')" \
             --border-label-pos=2 \
             --prompt=' New or existing: ' \
             --footer='  ↑ ↓  Navigate    Type  New name or pick one    Enter  [Categorize]    Esc  [Cancel]' \
@@ -3905,7 +3921,7 @@ create_preset() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' New preset — select tools ' \
+            --border-label="$(screen_border_label 'New preset — select tools')" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -3953,7 +3969,7 @@ create_preset() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' New preset — name it ' \
+            --border-label="$(screen_border_label 'New preset — name it')" \
             --border-label-pos=2 \
             --prompt=' New or existing: ' \
             --footer="  ↑ ↓  Navigate    Type  New name or pick to replace    Enter  [Save ${#selected_commands[@]}]    Esc  [Cancel]" \
@@ -3992,7 +4008,7 @@ create_preset() {
                 --no-clear \
                 --layout=reverse \
                 --border=rounded \
-                --border-label=' Preset already exists ' \
+                --border-label="$(screen_border_label 'Preset already exists')" \
                 --border-label-pos=2 \
                 --prompt='  ' \
                 --pointer='▌' \
@@ -4052,7 +4068,7 @@ launch_preset() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label=' Launch Preset ' \
+            --border-label="$(screen_border_label 'Launch Preset')" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -4207,14 +4223,19 @@ run_fzf() {
         --color="$FZF_COLORS"
 
         # Field 3 is the formula name, which is what the preview files
-        # are keyed by. Hidden by default: the list already needs ~143
-        # columns for its own footer, so the pane only costs width once
-        # you actually ask for it. F8 and a footer click both toggle it
-        # entirely inside fzf, so the main loop never sees them.
+        # are keyed by. Hidden unless DETAILS_VISIBLE says otherwise —
+        # the list already needs ~143 columns for its own footer, so
+        # the pane only costs width once you actually ask for it.
+        #
+        # F3/⌥D used to be a native fzf toggle-preview bind, invisible
+        # to this script entirely — fast, but it meant Esc could never
+        # tell the pane was open, so it always fell straight through to
+        # Quit/Views instead of closing the pane first. Now routed
+        # through the normal dispatch loop like every other toggle (see
+        # DETAILS_VISIBLE), which costs a redraw but lets Esc check
+        # state before deciding what "back" means.
         --preview "${(q)SCRIPT_PATH} --internal-preview {1} {3}"
-        --preview-window='down,35%,border-top,hidden,wrap'
-        --bind='f3:toggle-preview'
-        --bind='alt-d:toggle-preview'
+        --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')"
         --bind='shift-up:preview-up'
         --bind='shift-down:preview-down'
     )
@@ -4288,6 +4309,12 @@ while true; do
         esc_hint="Views"
     fi
 
+    # Takes priority over the view-based hint above — whichever "back"
+    # step Esc would otherwise take, closing an open details pane
+    # happens first, same as the Hidden-view check below takes
+    # priority over the plain hide/unhide label.
+    [[ "$DETAILS_VISIBLE" == true ]] && esc_hint="Close"
+
     # In the Hidden view every row is by definition hidden, so F2 can
     # only mean "unhide" — say so rather than making the user infer it.
     [[ "$CURRENT_VIEW" == "Hidden" ]] && hide_label="Unhide"
@@ -4297,7 +4324,7 @@ while true; do
         run_fzf \
             "$border_label" \
             "$(build_footer "$esc_hint")" \
-            'enter,f1,f2,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-p,alt-r,alt-f,alt-c,alt-m,alt-?,esc' \
+            'enter,f1,f2,f3,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-p,alt-r,alt-f,alt-c,alt-d,alt-m,alt-?,esc' \
             "$restore_position"
     )"
 
@@ -4337,18 +4364,19 @@ while true; do
         rm -f "$FOOTER_CLICK_FILE"
 
         # "[Views]" appears twice — as the Esc hint on line 1 while
-        # filtered, and as F3's own label on line 2. No need to tell
-        # them apart: Esc-while-filtered and F3 run the same two lines
-        # (pick_view; build_entries), so both map to "f3".
+        # filtered, and as F2's own footer label on line 2. No need to
+        # tell them apart: Esc-while-filtered and F2 run the same two
+        # lines (pick_view; build_entries), so both map to "f2".
         case "$clicked_word" in
             '[Hide]'|Hide|'[Unhide]'|Unhide|F6/⌥H|F6) action="f6" ;;
             '[Views]'|Views|F2/⌥V|F2) action="f2" ;;
+            '[Details]'|Details|F3/⌥D|F3) action="f3" ;;
             '[Presets]'|Presets|F9/⌥P|F9) action="f9" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) action="f5" ;;
             '[Favorite]'|Favorite|F7/⌥F|F7) action="f7" ;;
             '[Categorize]'|Categorize|F8/⌥C|F8) action="f8" ;;
             '[More]'|More|F4/⌥M|F4) action="f4" ;;
-            '[Quit]'|Quit) action="esc" ;;
+            '[Quit]'|Quit|'[Close]'|Close) action="esc" ;;
             Enter|'[Launch]'|Launch) action="enter" ;;
         esac
     fi
@@ -4503,6 +4531,19 @@ while true; do
     fi
 
     # --------------------------------------------------------
+    # F3 / ⌥D — toggle the details pane. See DETAILS_VISIBLE's own
+    # comment for why this goes through the normal dispatch-and-redraw
+    # loop instead of fzf's own native toggle-preview bind.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "f3" || "$action" == "alt-d" ]]; then
+
+        [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
+    fi
+
+    # --------------------------------------------------------
     # F5 / ⌥R — rebuild the cache without leaving the launcher.
     # Doesn't need a selected entry.
     # --------------------------------------------------------
@@ -4536,15 +4577,23 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # Esc: back out of a category filter first, only quit once
-    # already on "All" — same one-step-at-a-time idea as F3's
-    # hidden-entries screen already using Esc to go back. "Back"
-    # while filtered reopens the category picker (same as F5) rather
-    # than jumping straight to "All", so you can switch to a
+    # Esc: one step back at a time. A view filter (same idea as F2's
+    # picker itself) and the details pane are two independent things
+    # Esc can undo, so whichever is currently "open" closes first —
+    # closing the pane takes priority over stepping back a view, and
+    # only quits once there's truly nothing left to back out of.
+    # "Back" while filtered reopens the category picker (same as F5)
+    # rather than jumping straight to "All", so you can switch to a
     # different category without detouring through the full list.
     # --------------------------------------------------------
 
     if [[ "$action" == "esc" ]]; then
+
+        if [[ "$DETAILS_VISIBLE" == true ]]; then
+            DETAILS_VISIBLE=false
+            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+            continue
+        fi
 
         if [[ "$CURRENT_VIEW" != "All" ]]; then
             pick_view

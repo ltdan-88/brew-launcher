@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] — 2026-08-26
+
+### Changed
+
+- **Every screen now shows the "Homebrew CLI vX" border label**, not
+  just the main list. Reported live: View, More, Theme, Categorize,
+  Launch Preset, and the rest all showed a bare label like `View` or
+  `More` with no version/branding — inconsistent, and more noticeable
+  now that Open to Categories can make View the very first screen a
+  launch shows. New shared `screen_border_label()` helper (same
+  " Homebrew CLI vX · <label> " shape the main list already uses for a
+  filtered view, just without the main list's disk-usage figures) now
+  backs all 11 secondary fzf screens.
+- **Esc now closes the details pane (F3) before doing anything else**,
+  reported live: pressing Esc while it was open used to fall straight
+  through to Quit or Views, since F3 was a native fzf toggle-preview
+  bind entirely invisible to this script — Esc had no way to know the
+  pane was even open. F3/⌥D moved off that native bind and onto the
+  same dispatch-and-redraw path every other toggle (F6/F7/F8) already
+  uses, tracked by a new DETAILS_VISIBLE flag. Esc checks it first: if
+  the pane is open, closes it and stays put; only steps back a view or
+  quits once it's already closed. The footer says `[Close]` instead of
+  `[Quit]`/`[Views]` while the pane is open, so the change in what Esc
+  does is never a surprise. Also fixes a footer-click bug this same
+  work surfaced: clicking `[Details]` still called the old native
+  toggle directly, bypassing the new flag entirely — moved onto the
+  same click → record → redraw path every other footer button uses.
+
 ## [0.25.2] — 2026-08-26
 
 ### Changed

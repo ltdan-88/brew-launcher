@@ -111,8 +111,8 @@ however you think about them — Games, Editors, Monitoring. Every row shows how
 many entries it holds, including `All` — which excludes `Hidden` the same way
 the real view does, so the two counts add up to your real total rather than
 `All` silently meaning something narrower than its name suggests. **Esc**
-steps back one level at a time (filtered view → picker → everything → quit)
-rather than dumping you out.
+steps back one level at a time (details pane → filtered view → picker →
+everything → quit) rather than dumping you out.
 
 `Most Used` and `Recently Added` are computed, not something you set up —
 `Most Used` tracks what you actually launch, and `Recently Added` reads the
@@ -189,7 +189,9 @@ defaults](#bundled-defaults) place it somewhere, that shows too, marked
 `(default)` so it's never confused with a category you actually chose.
 
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
-stays closed until you ask for it.
+stays closed until you ask for it. While it's open, **Esc** closes it first —
+the footer says `[Close]` instead of the usual `[Quit]`/`[Views]` so it's
+never a surprise — and only takes you further back on the next press.
 
 ### Launch without leaving the launcher
 
