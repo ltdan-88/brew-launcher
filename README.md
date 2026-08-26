@@ -131,6 +131,22 @@ not.
 special screen: it's just another view in the picker, so **Enter** still launches
 and **F6** unhides. Same key, opposite direction, exactly like Favorites.
 
+### Already organized on day one
+
+A curated set of well-known formulae ships pre-categorized, and a short,
+hand-reviewed list of commands that are genuinely just a multi-command
+formula's minor helper scripts — not a second tool worth its own row — ships
+pre-hidden. Both apply the moment the cache first builds, so a fresh install
+already looks organized instead of handing you 40 unsorted rows to sort out
+yourself. A bundled category shows up in **F2** right alongside your own,
+even before you've filed anything into it by hand.
+
+Your own **F6** or **F8** on any entry always overrides the bundled default
+for that entry, no exceptions. Turn either mechanism off entirely from
+**F4 → More → Default Categories** / **Default Hidden** — see
+[Bundled defaults](#bundled-defaults) for exactly what's included and how an
+override sticks.
+
 ### The full details, without leaving
 
 <p align="center"><img src="assets/details.gif" alt="Toggling the details pane with F3; it follows the cursor down the list"></p>
@@ -421,7 +437,10 @@ check runs on its own separate schedule so it can't go stale for days.
 
 Discovery walks each formula's `opt/<name>/bin`, keeps executables that are
 actually reachable on your `PATH`, and drops obvious helper binaries. Only
-formulae you installed on purpose are listed.
+formulae you installed on purpose are listed. The same pass stamps each entry
+with its bundled category and hidden status — see [Bundled
+defaults](#bundled-defaults) — so nothing extra runs later just to apply
+them.
 
 One zsh file plus a small Python helper for parsing Homebrew's JSON — no
 Node, no Rust, no daemon, no SQLite.
@@ -465,6 +484,13 @@ needs.
 
 **Versions look out of date.** The update check runs on a timer, not every
 launch. `brew-launcher --refresh` forces it.
+
+**Something's categorized or hidden and I never did that.** That's the
+[bundled defaults](#bundled-defaults) — a curated set of category/hidden-
+command defaults ships with the launcher and applies to anything you haven't
+touched yourself. Press **F8** to file it somewhere else (or **F6** to
+unhide it) and your choice sticks from then on, or turn the whole mechanism
+off from **F4 → More → Default Categories** / **Default Hidden**.
 
 ## Contributing
 
