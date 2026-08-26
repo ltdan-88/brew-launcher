@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.1] — 2026-08-27
+
+### Fixed
+
+- **Launching a preset could look exactly like it did nothing.**
+  Reported live: "when I launch a preset, it exits the launcher and
+  returns to the shell without doing anything" — a right-click
+  revealed it was actually tmux's own context menu, meaning the preset
+  had launched correctly all along. Root cause: a preset session that
+  ends up with only one live pane (a one-tool preset, or one tool
+  skipped because it wasn't found on PATH) is visually identical to a
+  plain shell prompt, and there was nothing forcing tmux's status bar
+  — the one thing that would actually say "you're in `blpreset-<name>`
+  now" — to be visible, so it silently inherited whatever the user's
+  own tmux config did with it. `run_preset()` now forces the status
+  bar on for every preset session, same session-scoped approach
+  already used for mouse mode.
+- **"Not found on PATH" warnings were unreadable** — printed, then
+  immediately overwritten the instant the function exec'd into tmux a
+  few lines later. Now collected and printed together with a 2-second
+  pause right before that exec, the last point they're actually able
+  to stay on screen.
+
 ## [0.29.0] — 2026-08-26
 
 ### Added

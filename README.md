@@ -464,6 +464,13 @@ reattaches you to it rather than spawning a duplicate; editing the preset
 first (fewer or more commands) rebuilds the session fresh instead, so the
 pane count always matches what the file says now.
 
+The status bar is also forced on for every preset session, regardless of
+what your own tmux config does elsewhere — a preset that ends up with just
+one pane (a one-tool preset, or one tool skipped because it wasn't found)
+would otherwise look exactly like a plain shell prompt, with nothing on
+screen to say a preset launched at all. The status bar always names the
+session (`blpreset-<name>`), so that's never ambiguous.
+
 Mouse mode is turned on for every preset session (scoped to that session
 only — it won't change mouse behavior anywhere else you use tmux), so you
 can click a pane to focus it or drag a border to resize it. Two built-in
