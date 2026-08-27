@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.37.0"
+VERSION="0.37.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -368,7 +368,7 @@ Keyboard shortcuts:
   theme, the three toggles under "Bundled defaults" below, Create
   Preset, Create a macOS or Linux shortcut. None of these need a
   highlighted entry, so they're also offered when Actions is opened
-  from the view picker (Hide/Favorite/Categorize/Create shortcut are
+  from the view picker (Hide/Favorite/Categorize/Create Shortcut are
   not, since those act on a specific entry — and the view picker has
   no single row to name anyway). Esc from any of them returns to the
   Actions menu, not out to the main list.
@@ -2733,12 +2733,12 @@ pick_help() {
         rows+=("     Create Preset  needs tmux: brew install tmux")
     fi
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("  Create shortcut  macOS .command or Linux .desktop file")
+        rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
     fi
     rows+=("")
     rows+=("The three toggles above flip with Space, not just Enter, and stay")
     rows+=("on this menu afterward. Theme and Create Preset return to this")
-    rows+=("menu too once done — only Create shortcut exits back to the list.")
+    rows+=("menu too once done — only Create Shortcut exits back to the list.")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -2778,7 +2778,7 @@ pick_help() {
 pick_more_action() {
 
     local hide_label="$1"
-    # Entry-scoped rows (Hide/Favorite/Categorize/Create shortcut all
+    # Entry-scoped rows (Hide/Favorite/Categorize/Create Shortcut all
     # act on whatever row was highlighted) only make sense when there
     # is a highlighted row to act on — false when Actions is reached
     # from a screen with no entry of its own, like the view picker.
@@ -2824,7 +2824,7 @@ pick_more_action() {
 
     # Grouped with Theme rather than off on their own — all four are
     # "adjust something, then get back to what you were doing" in the
-    # same way, unlike Create Preset/Create shortcut below, which each
+    # same way, unlike Create Preset/Create Shortcut below, which each
     # build a brand new thing from scratch. Global overrides for the
     # bundled curated defaults (categories and pre-hidden commands).
     # Off means "don't apply the bundled data to anything I haven't
@@ -2852,7 +2852,7 @@ pick_more_action() {
 
     # Same reasoning as Theme above — also setup-adjacent rather than
     # everyday, so it doesn't need a key of its own either. Grouped
-    # with Create shortcut below rather than up near Theme: both build
+    # with Create Shortcut below rather than up near Theme: both build
     # something new from scratch (a preset, a shortcut file) instead
     # of adjusting a setting, and Launch Preset doesn't need a
     # highlighted row so it's offered here regardless of has_entry.
@@ -2865,7 +2865,7 @@ pick_more_action() {
     # Categorize above.
     if [[ "$has_entry" == true ]] &&
        [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create shortcut' '')")
+        rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
     fi
 
     [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
@@ -2910,7 +2910,7 @@ pick_more_action() {
 # Returns 1 if Esc was pressed with nothing left to do — the caller
 # just redraws whatever it was already showing. Returns 2 only when
 # has_entry is true and one of the entry-scoped rows (Hide/Favorite/
-# Categorize/Create shortcut) was picked; MORE_MENU_FALLTHROUGH_ACTION
+# Categorize/Create Shortcut) was picked; MORE_MENU_FALLTHROUGH_ACTION
 # holds which one, since only the caller has the entry context (the
 # selected command/formula) needed to actually run it. With
 # has_entry=false those rows are never offered in the first place, so
@@ -5217,7 +5217,7 @@ while true; do
     # the toggle-and-reopen loop for the settings rows — see its own
     # comment. It only ever returns here for two reasons: Esc with
     # nothing left to do (return 1), or one of the entry-scoped rows
-    # (Hide/Favorite/Categorize/Create shortcut) that needs this
+    # (Hide/Favorite/Categorize/Create Shortcut) that needs this
     # screen's own $command/$formula to run (return 2) — so those four
     # still fall through to their normal handler below exactly as
     # before, and this block still has to sit above them.
@@ -5373,7 +5373,7 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # Create shortcut — reached only through Actions now, not a direct
+    # Create Shortcut — reached only through Actions now, not a direct
     # key. Made once per tool and rarely touched again, so it moved
     # off F9 in favor of Launch Preset; see pick_more_action().
     # --------------------------------------------------------

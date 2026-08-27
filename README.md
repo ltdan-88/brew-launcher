@@ -97,20 +97,20 @@ makes it easier to discover than an F-number in a crowded footer, and means it
 teaches you the key and then gets out of the way. Rows are grouped by what
 they need: entry-scoped actions (Hide, Favorite, Categorize) and Launch Preset
 first, then Theme and the three toggles below, then the two "build something
-new" actions, Create Preset and Create shortcut, last.
+new" actions, Create Preset and Create Shortcut, last.
 
 Three rows in Actions are on/off switches, not one-shot actions — Default
 Categories, Default Hidden, and Open to Categories (see
 [Bundled defaults](#bundled-defaults) below). Those flip with **Space** as
 well as Enter, and reopen the menu right after so you can flip more than one
 without leaving. Theme and Create Preset return to Actions once they're done
-too; only Create shortcut exits back to wherever you opened Actions from,
+too; only Create Shortcut exits back to wherever you opened Actions from,
 since it's the one action here that's actually finished when it's finished.
 
 **F4** and **F5** also work from inside the view picker (**F2**) itself, not
 just the main list — no row needs to be highlighted for either, so Actions
 opens there with just the entry-independent actions (no Hide/Favorite/
-Categorize/Create shortcut) and its border label just says "Actions," with
+Categorize/Create Shortcut) and its border label just says "Actions," with
 no row to name. Esc backs out to the view picker, not all the way to `All`.
 
 ### One place to switch views
@@ -276,7 +276,7 @@ once at startup. Env var and config-file syntax are in
 
 ### Desktop shortcuts
 
-**F4 → Actions → Create shortcut** makes a tool show up outside the launcher too.
+**F4 → Actions → Create Shortcut** makes a tool show up outside the launcher too.
 
 On macOS it writes a `.command` file to `/Applications/TUIs/` — double-click
 it, drag it to the Dock, or bind it to a hotkey in System Settings. Give it a
