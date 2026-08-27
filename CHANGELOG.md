@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] — 2026-08-27
+
+### Changed
+
+- **The More menu is now the Actions menu**, and its border label names
+  the row it's about to act on (e.g. "Actions on fastfetch") instead
+  of a generic label. Raised live: someone used to a GUI right-click
+  menu wouldn't necessarily know that pressing F4 acts on whatever's
+  currently highlighted — "More" doesn't say that, the way a context
+  menu opening already anchored to what you clicked would. Opened from
+  the view picker (no single row to name) it still just says
+  "Actions". Purely a rename/labeling change — every key, action, and
+  behavior underneath is identical.
+
+### Fixed
+
+- **The footer's own width budget was quietly wrong** — off by 2
+  characters, undercounting how much room fzf's border and padding
+  actually take up. Harmless before now because the old "[More]" label
+  happened to leave just enough slack to hide it; renaming it to the
+  3-characters-wider "[Actions]" removed that slack and exposed it —
+  the footer's F-key row could get truncated (missing the tail of
+  "[Presets]") on a terminal that should have had room to spare.
+  Measured the real overhead live by rendering the same footer text at
+  a range of terminal widths rather than guessing, and corrected the
+  budget to match — fixed for any future footer text change, not just
+  this one.
+
 ## [0.30.2] — 2026-08-27
 
 ### Fixed

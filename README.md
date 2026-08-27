@@ -80,14 +80,17 @@ filtered views to leave room for the view's own name.
 
 ### Two tiers of keys
 
-<p align="center"><img src="assets/more.gif" alt="Opening the More menu with F4 and favoriting an entry from it"></p>
+<p align="center"><img src="assets/more.gif" alt="Opening the Actions menu with F4 and favoriting an entry from it"></p>
 
 The footer shows what browsing needs — **Views**, **Details**, **Refresh** —
 plus **Presets**, since running one is worth a key of its own. Organizing —
 hide, favorite, categorize — and setup — theme, create a preset, create a
-shortcut — live behind **F4 / ⌥M**. Hide, Favorite and Categorize still have
-a direct key too; the setup actions are More-only, since they're one-time
-rather than everyday.
+shortcut — live behind **F4 / ⌥M**, labeled **Actions** rather than something
+vaguer, since it's a right-click-menu equivalent: whatever's highlighted when
+you press it is what it acts on, and its own border label says so by name
+(`Actions on fastfetch`), not just the generic word. Hide, Favorite and
+Categorize still have a direct key too; the setup actions are Actions-only,
+since they're one-time rather than everyday.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
@@ -96,19 +99,19 @@ they need: entry-scoped actions (Hide, Favorite, Categorize) and Launch Preset
 first, then Theme and the three toggles below, then the two "build something
 new" actions, Create Preset and Create shortcut, last.
 
-Three rows in More are on/off switches, not one-shot actions — Default
+Three rows in Actions are on/off switches, not one-shot actions — Default
 Categories, Default Hidden, and Open to Categories (see
 [Bundled defaults](#bundled-defaults) below). Those flip with **Space** as
 well as Enter, and reopen the menu right after so you can flip more than one
-without leaving. Theme and Create Preset return to More once they're done too;
-only Create shortcut exits back to wherever you opened More from, since it's
-the one action here that's actually finished when it's finished.
+without leaving. Theme and Create Preset return to Actions once they're done
+too; only Create shortcut exits back to wherever you opened Actions from,
+since it's the one action here that's actually finished when it's finished.
 
 **F4** and **F5** also work from inside the view picker (**F2**) itself, not
-just the main list — no row needs to be highlighted for either, so More opens
-there with just the entry-independent actions (no Hide/Favorite/Categorize/
-Create shortcut), and Esc backs out to the view picker, not all the way to
-`All`.
+just the main list — no row needs to be highlighted for either, so Actions
+opens there with just the entry-independent actions (no Hide/Favorite/
+Categorize/Create shortcut) and its border label just says "Actions," with
+no row to name. Esc backs out to the view picker, not all the way to `All`.
 
 ### One place to switch views
 
@@ -135,7 +138,7 @@ shows how many entries the category holds — every other action here is a toggl
 you can undo with the same key, so this is the one worth pausing on. `All`,
 `Hidden`, `Favorites`, `Most Used` and `Recently Added` can't be deleted.
 
-Once your categories are actually populated, **F4 → More → Open to Categories**
+Once your categories are actually populated, **F4 → Actions → Open to Categories**
 opens straight into this picker on every launch instead of `All` — a long flat
 list stops being the first thing you see. Esc from it still falls back to
 `All`, exactly like pressing Esc from F2 any other time.
@@ -168,7 +171,7 @@ even before you've filed anything into it by hand.
 
 Your own **F6** or **F8** on any entry always overrides the bundled default
 for that entry, no exceptions. Turn either mechanism off entirely from
-**F4 → More → Default Categories** / **Default Hidden** — see
+**F4 → Actions → Default Categories** / **Default Hidden** — see
 [Bundled defaults](#bundled-defaults) for exactly what's included and how an
 override sticks.
 
@@ -236,7 +239,7 @@ many commands it holds before anything's removed. File format and the
 `--preset` CLI flag are in [Configuration](#configuration).
 
 Presets need [tmux](#terminal-backends). Both stay visible in the footer and
-More menu either way — the More menu's hint reads "needs tmux" in place of the
+Actions menu either way — the Actions menu's hint reads "needs tmux" in place of the
 usual keybind when it's missing, and pressing either explains the exact
 install command rather than silently failing.
 
@@ -263,7 +266,7 @@ once at startup. Env var and config-file syntax are in
 
 ### Desktop shortcuts
 
-**F4 → More → Create shortcut** makes a tool show up outside the launcher too.
+**F4 → Actions → Create shortcut** makes a tool show up outside the launcher too.
 
 On macOS it writes a `.command` file to `/Applications/TUIs/` — double-click
 it, drag it to the Dock, or bind it to a hotkey in System Settings. Give it a
@@ -296,18 +299,18 @@ reference below, from inside the launcher.
 | **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
 | **Esc** | Go back one level, or quit | footer |
-| **F4** / **⌥M** | Open the More menu — also works from the view picker | footer |
+| **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) | footer |
-| **F6** / **⌥H** | Hide — or unhide, in the Hidden view | More |
-| **F7** / **⌥F** | Toggle Favorites for selected entry | More |
-| **F8** / **⌥C** | Categorize selected entry (adds or removes) | More |
+| **F6** / **⌥H** | Hide — or unhide, in the Hidden view | Actions |
+| **F7** / **⌥F** | Toggle Favorites for selected entry | Actions |
+| **F8** / **⌥C** | Categorize selected entry (adds or removes) | Actions |
 | **F1** | Open this reference in the launcher | — |
-| — | Switch color theme | More only |
-| — | Create a new preset | More only |
-| — | Toggle Default Categories / Default Hidden | More only |
-| — | Toggle Open to Categories | More only |
-| — | Create a desktop shortcut (macOS or Linux) | More only |
+| — | Switch color theme | Actions only |
+| — | Create a new preset | Actions only |
+| — | Toggle Default Categories / Default Hidden | Actions only |
+| — | Toggle Open to Categories | Actions only |
+| — | Create a desktop shortcut (macOS or Linux) | Actions only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
 **⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails. They exist because
@@ -332,7 +335,7 @@ are things you do in bursts, and they were costing footer slots you'd
 otherwise look at on every single launch. **F9** followed the same logic in
 reverse: unlike making a shortcut (once per tool, rarely repeated), running a
 preset is something you'd reach for over and over, so it earned a footer key
-of its own rather than staying More-only.
+of its own rather than staying Actions-only.
 
 The menu lists each action's key beside it, so it teaches its own shortcuts
 and works itself out of a job.
@@ -427,8 +430,8 @@ instead). Both apply automatically, on every cache rebuild, to anything you
 haven't already touched yourself — a fresh install already looks organized
 without any setup.
 
-Two switches control it: `More → Default Categories` and
-`More → Default Hidden` (`DEFAULT_CATEGORIES` / `DEFAULT_HIDDEN` in
+Two switches control it: `Actions → Default Categories` and
+`Actions → Default Hidden` (`DEFAULT_CATEGORIES` / `DEFAULT_HIDDEN` in
 `config`, each `on`/`off`, default `on`). Your own F6 (hide) or F8
 (categorize) choice on any individual entry always overrides the bundled
 data for that entry, no matter what these two settings say — they're only
@@ -560,7 +563,7 @@ launch. `brew-launcher --refresh` forces it.
 command defaults ships with the launcher and applies to anything you haven't
 touched yourself. Press **F8** to file it somewhere else (or **F6** to
 unhide it) and your choice sticks from then on, or turn the whole mechanism
-off from **F4 → More → Default Categories** / **Default Hidden**.
+off from **F4 → Actions → Default Categories** / **Default Hidden**.
 
 ## Contributing
 
