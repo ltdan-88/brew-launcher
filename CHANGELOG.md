@@ -5,6 +5,41 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.2] — 2026-08-27
+
+### Fixed
+
+- **A preset bigger than ~4 tools could silently drop the rest** on a
+  plain terminal. Root cause, found live by deliberately testing
+  presets from 1 to 200 commands: tmux's default `split-window` just
+  keeps halving whichever pane it's handed rather than filling the
+  window grid-aware, so an 80x24 terminal ran out of room after only 4
+  panes — the 5th onward failed with "no space for a new pane," and
+  `run_preset()` never checked that call's exit status, so those tools
+  vanished with no warning at all. Now retiles into a grid after every
+  single pane, not just once at the end, which comfortably handles
+  well over 100 panes on a plain terminal before hitting a true floor
+  — and when it does hit one, a single summary warning ("no room for N
+  tools...") reports it instead of failing silently.
+- **A tool that crashed mid-TUI could leave its pane looking frozen or
+  blank.** Found live while investigating: a curses-style tool that
+  enters alternate-screen mode and then dies without restoring it (a
+  common failure mode for an unhandled crash, not a bug in the tool
+  necessarily) left tmux's own `#{alternate_on}` stuck at 1 even
+  though a perfectly ordinary shell was running underneath — the
+  visual result can be a pane that looks unresponsive until something
+  else forces a redraw. Every "run the command, then fall through to a
+  fresh shell" launch path (presets, the current-terminal and tmux
+  backends, Ghostty, and both macOS/Linux shortcut file generators) now
+  exits alternate-screen mode and shows the cursor again right before
+  that fresh shell starts — a no-op if the tool already cleaned up
+  after itself, a real fix if it didn't.
+- **The More menu and Theme picker didn't mention you can type to
+  search them**, despite both being fully searchable and both holding
+  10 rows — every other list-like screen in the app already says
+  "Type Search" in its footer. Added to both, matching the existing
+  convention.
+
 ## [0.30.1] — 2026-08-27
 
 ### Fixed
