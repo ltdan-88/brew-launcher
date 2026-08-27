@@ -89,4 +89,26 @@ open_menu_block="$(sed -n '/^open_more_menu() {/,/^}/p' "$LAUNCHER")"
 [[ "$open_menu_block" == *'DETAILS_VISIBLE=false'* && "$open_menu_block" == *'DETAILS_VISIBLE=true'* ]] ||
     fail "open_more_menu's toggle_details case should actually flip DETAILS_VISIBLE"
 
+# One flag everywhere, not a separate one per screen — raised live:
+# "when it is on, it should always be on, on every screen where a
+# details pane is available." First shipped as two flags
+# (DETAILS_VISIBLE for the main list, PICKER_DETAILS_VISIBLE for F2/
+# F9), deliberately, so this checks the old name isn't used as an
+# actual variable anymore, not just that the new behavior happens to
+# work. The name still appears once, deliberately, in a comment
+# explaining that history — checking for '$PICKER_DETAILS_VISIBLE' or
+# 'PICKER_DETAILS_VISIBLE=' specifically (real usage) rather than a
+# blanket zero-occurrences check avoids that comment being a false
+# positive.
+[[ "$(grep -cE '\$PICKER_DETAILS_VISIBLE|PICKER_DETAILS_VISIBLE=' "$LAUNCHER")" == "0" ]] ||
+    fail "PICKER_DETAILS_VISIBLE should no longer be used as a variable — F2/F9 should share DETAILS_VISIBLE with the main list"
+
+# pick_view_block was already extracted above for the F9-wiring check.
+[[ "$pick_view_block" == *'DETAILS_VISIBLE'* ]] ||
+    fail "pick_view (F2) should reference DETAILS_VISIBLE for its own F3 preview"
+
+launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
+[[ "$launch_preset_block" == *'DETAILS_VISIBLE'* ]] ||
+    fail "launch_preset (F9) should reference DETAILS_VISIBLE for its own F3 preview"
+
 printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, and Actions offers a Details toggle mirroring F3\n'

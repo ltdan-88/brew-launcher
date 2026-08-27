@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.1] — 2026-08-27
+
+### Fixed
+
+- **F3's category preview (0.41.0) now excludes hidden entries, same
+  as the category's own count.** "Category counter and actual number
+  of tools don't match." Confirmed live: a category with two hidden
+  members showed "3" as its count but 5 tools in the preview — both
+  numbers were individually correct by their own rules, but visibly
+  disagreed with each other. The preview's hidden-status check is
+  inlined (IGNORE_FILE, plus bundled-hidden via CACHE_FILE field 11
+  unless SHOWN_FILE overrides it) rather than calling
+  `load_hidden_commands()`, which isn't defined yet this early —
+  same reasoning already documented for not calling it, just now
+  actually replicating its combining rule instead of skipping it.
+- **The F3/Details toggle is one shared state again, not two.**
+  "When it is on, it should always be on, on every screen where a
+  details pane is available." Shipped in 0.41.0 as two separate flags
+  (`DETAILS_VISIBLE` for the main list, `PICKER_DETAILS_VISIBLE` for
+  F2/F9) specifically so turning one on wouldn't silently turn the
+  other on too — raised live as the opposite of what was wanted.
+  `PICKER_DETAILS_VISIBLE` is gone; F2 and F9 now toggle and read the
+  same `DETAILS_VISIBLE` the main list and Actions → Details already
+  do, verified live across all three screens in one session.
+
 ## [0.42.0] — 2026-08-27
 
 ### Added
