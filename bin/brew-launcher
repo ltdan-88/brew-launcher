@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.38.0"
+VERSION="0.39.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -192,6 +192,15 @@ PREVIEW_DIR="$CACHE_DIR/previews"
 # it in. Passed to the Python cache writer so both sides agree on it.
 PREVIEW_CATEGORY_MARKER="@@CATEGORIES@@"
 
+# Same reasoning as PREVIEW_CATEGORY_MARKER above, for "which presets
+# is this command part of" — raised live: "would it make sense to tell
+# what presets are currently assigned to a TUI in F3 details pane?"
+# Preset membership is per-command too (a preset file lists commands,
+# same as a category file), so it's filled in at render time from
+# PRESETS_DIR the same way category membership is filled in from
+# CATEGORIES_DIR, not baked into the per-formula cache at build time.
+PREVIEW_PRESET_MARKER="@@PRESETS@@"
+
 # How long to trust the cache without re-asking Homebrew whether
 # anything was installed or removed. That check costs ~0.54s of a
 # ~0.55s launch, so skipping it is effectively the entire startup time.
@@ -260,14 +269,16 @@ Presets:
   file for you — no hand-editing required. Tab marks a tool and shows
   a number badge for the order it'll launch in (top to bottom in the
   file); Tab again on a marked tool unmarks it and renumbers the rest
-  down. F9 launches an existing one without leaving the picker;
-  Ctrl-R there renames the highlighted preset (just a file rename,
-  same name your presets directory already uses); Ctrl-D deletes it
-  instead, asking first and showing how many commands it holds — the
-  one action here you can't undo. Both F4 and F9 stay visible even if
-  tmux isn't installed — pressing either then explains what to
-  install rather than being hidden outright, so the feature is still
-  discoverable.
+  down. F9 launches an existing one without leaving the picker; F3
+  there previews what's actually in the highlighted preset — every
+  command, with its description, in launch order rather than
+  alphabetical. Ctrl-R renames the highlighted preset (just a file
+  rename, same name your presets directory already uses); Ctrl-D
+  deletes it instead, asking first and showing how many commands it
+  holds — the one action here you can't undo. Both F4 and F9 stay
+  visible even if tmux isn't installed — pressing either then explains
+  what to install rather than being hidden outright, so the feature is
+  still discoverable.
 
   Mouse mode is on for every preset session (that session only, not
   your tmux config) — click a pane to focus it, drag a border to
@@ -353,7 +364,8 @@ Keyboard shortcuts:
   F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
             Recently Added, Hidden)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
-            categories, dependencies, caveats). Shift-Up/Down scrolls it.
+            categories, presets it's part of, dependencies, caveats).
+            Shift-Up/Down scrolls it.
   F4 / ⌥M   Open the Actions menu — the actions below. Named for what
             it does to the highlighted row, like a right-click menu
             would — its border label names that row too (e.g.
@@ -388,8 +400,13 @@ Keyboard shortcuts:
 Views:
   F2/⌥V switches what you're looking at: All, Favorites, your
   categories, then the computed views and Hidden last. "Hidden" is an
-  ordinary view — Enter still launches there, and F6 unhides. Ctrl-R
-  in the picker renames the highlighted category (just a file rename —
+  ordinary view — Enter still launches there, and F6 unhides. F3 in
+  the picker previews what's actually in the highlighted category —
+  every command it holds, with its description — same built-in views
+  (All, Hidden, Most Used, Recently Added) say there's nothing stored
+  to preview, and a bundled-only category with no real file yet says
+  so instead of showing nothing. Ctrl-R in the picker renames the
+  highlighted category (just a file rename —
   a category's name is its filename in
   ~/.config/brew-launcher/categories, nothing else to update); a
   category that only exists via the bundled defaults, with no real
@@ -590,6 +607,23 @@ if [[ "$1" == "--internal-preview" ]]; then
         [[ "$preview_default_category" == "-" ]] && preview_default_category=""
     fi
 
+    # Same idea and same grep -lxF trick as the category lookup above,
+    # against PRESETS_DIR instead of CATEGORIES_DIR — a preset file is
+    # just a plain list of command names too. Raised live: "would it
+    # make sense to tell what presets are currently assigned to a TUI
+    # in F3 details pane?"
+    preview_presets=()
+    preview_preset_files=("$PRESETS_DIR"/*(N))
+
+    if (( ${#preview_preset_files} )) && [[ -n "$preview_command" ]]; then
+        preview_preset_matches="$(grep -lxF -- "$preview_command" "${preview_preset_files[@]}" 2>/dev/null)"
+
+        if [[ -n "$preview_preset_matches" ]]; then
+            preview_presets=("${(@f)preview_preset_matches}")
+            preview_presets=("${preview_presets[@]:t}")
+        fi
+    fi
+
     while IFS= read -r preview_line; do
         if [[ "$preview_line" == "$PREVIEW_CATEGORY_MARKER" ]]; then
             if (( ${#preview_categories} )); then
@@ -597,10 +631,125 @@ if [[ "$1" == "--internal-preview" ]]; then
             elif [[ -n "$preview_default_category" ]]; then
                 printf '  %-18s%s (default)\n' 'Categories' "$preview_default_category"
             fi
+        elif [[ "$preview_line" == "$PREVIEW_PRESET_MARKER" ]]; then
+            (( ${#preview_presets} )) &&
+                printf '  %-18s%s\n' 'Presets' "${(j:, :)preview_presets}"
         else
             print -r -- "$preview_line"
         fi
     done < "$preview_file"
+
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# F3 details preview for the view picker (F2): what's actually inside
+# the highlighted category, at a glance.
+#
+# Raised live: "would F2 and F9 benefit from an F3 details pane, where
+# you could see at a glance what TUIs are within the categories or
+# presets?" Scoped to real category files only — a bundled-only
+# category (see load_bundled_categories) has no single file to read,
+# and reconstructing its membership here would mean duplicating
+# load_category_members()'s bundled-merge logic against a
+# default_category_commands table this early code path doesn't
+# populate, for a case Ctrl-R already draws the same line around
+# (rename also refuses a bundled-only category until F8 makes it
+# real). Says so instead of silently showing nothing.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-preview-category" ]]; then
+
+    preview_view_name="$2"
+
+    if [[ "$preview_view_name" == "All" || "$preview_view_name" == "Hidden" \
+          || "$preview_view_name" == "Most Used" || "$preview_view_name" == "Recently Added" ]]; then
+        print -r -- "  Not a stored category — nothing to preview."
+        exit 0
+    fi
+
+    preview_category_file="$CATEGORIES_DIR/$preview_view_name"
+
+    if [[ ! -f "$preview_category_file" ]]; then
+        print -r -- "  Bundled default category, not one of yours yet."
+        print -r -- "  Categorize one entry into it with F8 to see it here."
+        exit 0
+    fi
+
+    preview_category_commands=()
+
+    while IFS= read -r preview_member; do
+        preview_member="${preview_member#"${preview_member%%[![:space:]]*}"}"
+        preview_member="${preview_member%"${preview_member##*[![:space:]]}"}"
+        [[ -z "$preview_member" ]] && continue
+        [[ "$preview_member" == \#* ]] && continue
+        preview_category_commands+=("$preview_member")
+    done < "$preview_category_file"
+
+    if (( ${#preview_category_commands[@]} == 0 )); then
+        print -r -- "  Empty."
+        exit 0
+    fi
+
+    # Alphabetical, unlike the preset preview below — a category has no
+    # inherent order of its own the way a preset's launch order does.
+    preview_category_commands=("${(@o)preview_category_commands}")
+
+    for preview_member in "${preview_category_commands[@]}"; do
+        preview_member_desc="$(awk -F'\t' -v cmd="$preview_member" '$1 == cmd { print $2; exit }' "$CACHE_FILE" 2>/dev/null)"
+        if [[ -n "$preview_member_desc" ]]; then
+            printf '  %-20s%s\n' "$preview_member" "$preview_member_desc"
+        else
+            printf '  %s\n' "$preview_member"
+        fi
+    done
+
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# F3 details preview for the preset picker (F9): what's actually in
+# the highlighted preset, at a glance. Same motivation as the category
+# preview above; a preset is always a real file (no bundled-only case
+# to worry about), so this is the simpler of the two.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-preview-preset" ]]; then
+
+    preview_preset_name="$2"
+    preview_preset_file="$PRESETS_DIR/$preview_preset_name"
+
+    if [[ ! -f "$preview_preset_file" ]]; then
+        print -r -- "  Preset not found."
+        exit 0
+    fi
+
+    preview_preset_commands=()
+
+    while IFS= read -r preview_member; do
+        preview_member="${preview_member#"${preview_member%%[![:space:]]*}"}"
+        preview_member="${preview_member%"${preview_member##*[![:space:]]}"}"
+        [[ -z "$preview_member" ]] && continue
+        [[ "$preview_member" == \#* ]] && continue
+        preview_preset_commands+=("$preview_member")
+    done < "$preview_preset_file"
+
+    if (( ${#preview_preset_commands[@]} == 0 )); then
+        print -r -- "  Empty."
+        exit 0
+    fi
+
+    # File order, not alphabetical — this is also the launch order
+    # (top to bottom, left to right in the tmux layout), which is
+    # worth showing as-is rather than obscuring it by sorting.
+    for preview_member in "${preview_preset_commands[@]}"; do
+        preview_member_desc="$(awk -F'\t' -v cmd="$preview_member" '$1 == cmd { print $2; exit }' "$CACHE_FILE" 2>/dev/null)"
+        if [[ -n "$preview_member_desc" ]]; then
+            printf '  %-20s%s\n' "$preview_member" "$preview_member_desc"
+        else
+            printf '  %s\n' "$preview_member"
+        fi
+    done
 
     exit 0
 fi
@@ -1595,7 +1744,8 @@ rebuild_cache() {
         "$brew_prefix" \
         "$tmp_entries" \
         "$PREVIEW_DIR" \
-        "$PREVIEW_CATEGORY_MARKER" <<'PY'
+        "$PREVIEW_CATEGORY_MARKER" \
+        "$PREVIEW_PRESET_MARKER" <<'PY'
 
 import datetime
 import json
@@ -1610,6 +1760,7 @@ brew_prefix = sys.argv[4]
 output_file = sys.argv[5]
 preview_dir = sys.argv[6]
 category_marker = sys.argv[7]
+preset_marker = sys.argv[8]
 
 # ------------------------------------------------------------
 # Bundled curated data — see "Bundled defaults" in the README.
@@ -2161,6 +2312,7 @@ for formula in formulae:
     # the rest of the metadata, so it stays visible without scrolling
     # when a formula has long dependency or caveat sections.
     lines.append(category_marker)
+    lines.append(preset_marker)
 
     deps = formula.get("dependencies") or []
     if deps:
@@ -2512,6 +2664,15 @@ CURRENT_VIEW="All"
 # check this before deciding what "back" means.
 DETAILS_VISIBLE=false
 
+# Same idea as DETAILS_VISIBLE above, but for the F2/F9 pickers' own
+# F3 preview (what's inside the highlighted category/preset) — kept
+# separate rather than sharing DETAILS_VISIBLE itself, so turning one
+# on doesn't also silently turn the main list's own details pane on
+# the next time you're back there, or vice versa. Shared between F2
+# and F9 themselves, since both are "peek at what's inside" screens of
+# the same kind.
+PICKER_DETAILS_VISIBLE=false
+
 typeset -A category_members
 
 load_category_names() {
@@ -2618,6 +2779,21 @@ load_category_members() {
     done
 }
 
+# " *" once a newer brew-launcher itself is available, "" otherwise.
+# Raised live: "would it make sense to put an asterisk behind the
+# brew-launcher version... whenever a newer version is available?"
+# Reuses the exact outdated-formulae snapshot every other "*" marker in
+# this app already reads from (see load_outdated_formulas above) —
+# brew-launcher is just another installed formula to that mechanism,
+# so this rides the same refresh timer/F5-refresh cadence rather than
+# running a separate check of its own, with the same freshness caveat
+# already documented in Troubleshooting for every other outdated
+# marker: it reflects whatever Homebrew last knew locally, not a live
+# check on every launch.
+launcher_update_marker() {
+    [[ -n "${outdated_formulas[brew-launcher]-}" ]] && printf '*'
+}
+
 # Shared border-label shape for every screen that isn't the main list —
 # same " Homebrew CLI vX · <label> " format the main list already uses
 # for a filtered view, just without the disk-usage figures (those only
@@ -2626,7 +2802,7 @@ load_category_members() {
 # make View the very first thing a launch shows — every screen should
 # still read as brew-launcher, not just the main list.
 screen_border_label() {
-    printf ' 󰣇  Homebrew CLI v%s · %s ' "$VERSION" "$1"
+    printf ' 󰣇  Homebrew CLI v%s%s · %s ' "$VERSION" "$(launcher_update_marker)" "$1"
 }
 
 # Confirm before deleting a category. Returns 0 to proceed.
@@ -2799,10 +2975,15 @@ pick_help() {
     rows+=("Markers — shown next to an entry, not things you press")
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
     rows+=("")
+    rows+=("The same * appears after brew-launcher's own version in the border")
+    rows+=("above once a newer brew-launcher itself is available to install —")
+    rows+=("same outdated-formula check, brew-launcher is just another one to it")
+    rows+=("")
     rows+=("First tier — always on screen")
     rows+=("  F2 / ⌥V   Switch view (All, Favorites, categories, Most Used,")
-    rows+=("            Recently Added, Hidden) — Ctrl-R there renames the")
-    rows+=("            highlighted category, Ctrl-D deletes it")
+    rows+=("            Recently Added, Hidden) — F3 there previews what's in")
+    rows+=("            the highlighted category, Ctrl-R renames it, Ctrl-D")
+    rows+=("            deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
@@ -2810,8 +2991,8 @@ pick_help() {
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
         rows+=("            otherwise reattaches if it's already running")
-        rows+=("            Ctrl-R there renames the highlighted preset,")
-        rows+=("            Ctrl-D deletes it")
+        rows+=("            F3 there previews what's in the highlighted preset,")
+        rows+=("            Ctrl-R renames it, Ctrl-D deletes it")
     else
         rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
     fi
@@ -3287,8 +3468,10 @@ pick_view() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F4  [Actions]    F5  [Refresh]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
-            --expect=enter,ctrl-d,ctrl-r,f4,f5 \
+            --preview "${(q)SCRIPT_PATH} --internal-preview-category {1}" \
+            --preview-window="down,35%,border-top,wrap$([[ "$PICKER_DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F3  [Details]    F4  [Actions]    F5  [Refresh]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --expect=enter,ctrl-d,ctrl-r,f3,f4,f5 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -3312,6 +3495,7 @@ pick_view() {
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[Rename]'|Rename) pick_action="ctrl-r" ;;
+            '[Details]'|Details) pick_action="f3" ;;
             '[View]'|View) pick_action="enter" ;;
             '[Actions]'|Actions|F4/⌥M|F4) pick_action="f4" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) pick_action="f5" ;;
@@ -3334,6 +3518,17 @@ pick_view() {
 
     if [[ "$pick_action" == "f5" ]]; then
         refresh_cache_and_state
+        pick_view
+        return $?
+    fi
+
+    # F3 — toggle the "what's inside this category" preview. Same
+    # dispatch-and-redraw shape as F4/F5 above rather than fzf's own
+    # native toggle-preview bind, for the same reason DETAILS_VISIBLE
+    # uses one on the main list: so Esc could eventually learn to close
+    # this first too, the way it already does there.
+    if [[ "$pick_action" == "f3" ]]; then
+        [[ "$PICKER_DETAILS_VISIBLE" == true ]] && PICKER_DETAILS_VISIBLE=false || PICKER_DETAILS_VISIBLE=true
         pick_view
         return $?
     fi
@@ -5124,8 +5319,10 @@ launch_preset() {
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
-            --footer='  ↑ ↓  Navigate    Enter  [Launch]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Cancel]' \
-            --expect=enter,ctrl-d,ctrl-r \
+            --preview "${(q)SCRIPT_PATH} --internal-preview-preset {1}" \
+            --preview-window="down,35%,border-top,wrap$([[ "$PICKER_DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
+            --footer='  ↑ ↓  Navigate    Enter  [Launch]    F3  [Details]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Cancel]' \
+            --expect=enter,ctrl-d,ctrl-r,f3 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -5151,11 +5348,18 @@ launch_preset() {
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[Rename]'|Rename) pick_action="ctrl-r" ;;
+            '[Details]'|Details) pick_action="f3" ;;
             '[Launch]'|Launch) pick_action="enter" ;;
         esac
     fi
 
     [[ -z "$preset_name" ]] && return 1
+
+    if [[ "$pick_action" == "f3" ]]; then
+        [[ "$PICKER_DETAILS_VISIBLE" == true ]] && PICKER_DETAILS_VISIBLE=false || PICKER_DETAILS_VISIBLE=true
+        launch_preset
+        return $?
+    fi
 
     if [[ "$pick_action" == "ctrl-r" ]]; then
 
@@ -5426,9 +5630,9 @@ while true; do
     # Disk usage only appears on "All" — a filtered view's border
     # already carries the view name, and both together risks crowding
     # or truncating a border label on a narrower terminal.
-    border_label=" 󰣇  Homebrew CLI v$VERSION "
+    border_label=" 󰣇  Homebrew CLI v$VERSION$(launcher_update_marker) "
     if [[ -n "$HOMEBREW_USAGE" && -n "$FREE_SPACE" ]]; then
-        border_label=" 󰣇  Homebrew CLI v$VERSION · ${HOMEBREW_USAGE} brew · ${FREE_SPACE} free "
+        border_label=" 󰣇  Homebrew CLI v$VERSION$(launcher_update_marker) · ${HOMEBREW_USAGE} brew · ${FREE_SPACE} free "
     fi
     esc_hint="Quit"
     hide_label="Hide"

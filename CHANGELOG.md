@@ -5,6 +5,39 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.39.0] — 2026-08-27
+
+### Added
+
+Three ideas raised live in the same message.
+
+- **A `*` after brew-launcher's own version, once a newer one is
+  installable.** "Would it make sense to put an asterisk behind the
+  brew-launcher version on the UI frame, whenever a newer version is
+  available?" Reuses the exact outdated-formula snapshot that already
+  powers the `*` marker on every other row — brew-launcher is just
+  another installed formula to that mechanism, so `launcher_update_marker()`
+  is a one-line hash lookup, shown on every screen's border via
+  `screen_border_label()`. Same freshness caveat as every other `*`
+  already has: reflects whatever Homebrew last knew locally, not a
+  live check on every launch.
+- **F3 details for the F2 (categories) and F9 (presets) pickers.**
+  "Would F2 and F9 benefit from an F3 details pane, where you could
+  see at a glance what TUIs are within the categories or presets?"
+  Reuses the exact same preview mechanism the main list's own details
+  pane already uses, pointed at a category or preset file's contents
+  instead of `brew info` — every command it holds, with its
+  description; categories sorted alphabetically, presets kept in
+  launch order. A built-in view (All, Hidden, Most Used, Recently
+  Added) or a bundled-only category with no real file yet explains
+  why there's nothing to preview instead of showing a blank pane.
+- **Which presets a command belongs to, in its own F3 details pane.**
+  "Would it make sense to tell what presets are currently assigned to
+  a TUI in F3 details pane?" The reverse lookup of the point above — a
+  `Presets` line next to the existing `Categories` one, filled in at
+  render time from `PRESETS_DIR` the same way `Categories` is filled
+  in from `CATEGORIES_DIR`. Omitted when the command isn't in any.
+
 ## [0.38.0] — 2026-08-27
 
 ### Added

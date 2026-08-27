@@ -78,6 +78,12 @@ The top border also shows how much disk space Homebrew's own installs are
 using and how much is still free on the volume — visible on `All`, hidden on
 filtered views to leave room for the view's own name.
 
+The same `*` marker appears after brew-launcher's own version number in that
+border, on every screen, once a newer brew-launcher itself is installable —
+`v0.38.0*`. It's the exact same outdated-formula check that powers the marker
+above; brew-launcher is just another installed formula to it. Run
+`brew upgrade brew-launcher` and it's gone on the next launch.
+
 ### Two tiers of keys
 
 <p align="center"><img src="assets/more.gif" alt="Opening the Actions menu with F4 and favoriting an entry from it"></p>
@@ -132,6 +138,12 @@ everything → quit) rather than dumping you out.
 install date Homebrew already records for every formula. Both cap themselves
 to the 15 most relevant tools, so they stay a short, useful list instead of
 turning into "everything, just re-sorted."
+
+**F3** previews what's actually inside the highlighted category — every
+command it holds, with its description, at a glance rather than opening it
+to find out. A category that only exists via the
+[bundled defaults](#bundled-defaults), with no real file of its own yet,
+explains that instead of showing nothing.
 
 **Ctrl-R** in that picker renames the highlighted category — type a new name
 over the prefilled current one and press Enter. A category's name is just its
@@ -209,6 +221,11 @@ moment you press **F7** or **F8**. If nothing's filed by hand but the [bundled
 defaults](#bundled-defaults) place it somewhere, that shows too, marked
 `(default)` so it's never confused with a category you actually chose.
 
+Same idea for presets: if the highlighted command is part of one or more, a
+`Presets` line names them — the reverse of [F3 in the F9
+picker](#launch-several-tools-together), which shows a preset's commands
+rather than a command's presets. Omitted when it isn't in any.
+
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
 stays closed until you ask for it. While it's open, **Esc** closes it first —
 the footer says `[Close]` instead of the usual `[Quit]`/`[Views]` so it's
@@ -250,8 +267,11 @@ order they're listed in. Enter with nothing marked shows an error rather
 than quietly saving a one-tool "preset." **F9** lists your presets and
 launches the one you pick — in its own window when there's somewhere to put
 one, otherwise reattaching to it if it's already running rather than opening
-a second copy (see [Configuration](#configuration) for exactly which). **Ctrl-R**
-on a highlighted preset renames it — same "type a new name over the prefilled
+a second copy (see [Configuration](#configuration) for exactly which). **F3**
+previews what's in the highlighted preset — every command, with its
+description, in the order it launches in (not alphabetical — this is the same
+order Tab built when you created it). **Ctrl-R** on a highlighted preset
+renames it — same "type a new name over the prefilled
 current one" as renaming a category, since a preset is exactly the same shape:
 a name that's just its filename under `~/.config/brew-launcher/presets`. If a
 session for that preset is already running, it keeps working under the old
@@ -344,11 +364,13 @@ reference below, from inside the launcher.
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) | footer |
+| **F3** | Preview what's in the highlighted preset — in the F9 picker | picker |
 | **Ctrl-R** | Rename the highlighted preset — in the F9 picker | picker |
 | **Ctrl-D** | Delete the highlighted preset — in the F9 picker | picker |
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | Actions |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | Actions |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | Actions |
+| **F3** | Preview what's in the highlighted category — in the F2 picker | picker |
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
 | **F1** | Open this reference in the launcher | — |

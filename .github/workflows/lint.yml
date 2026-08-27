@@ -75,6 +75,18 @@ name: CI
 #       leaking in alongside them, and a clean failure with no partial
 #       archive left behind when brew isn't on PATH. Skips if brew
 #       itself isn't available.
+#
+#   12. version-marker-fixtures — launcher_update_marker()/
+#       screen_border_label(): sourced and called directly against a
+#       hand-populated outdated_formulas, no fzf/brew/tmux needed.
+#
+#   13. picker-details-fixtures — the F3 preview subcommands behind F2
+#       and F9's own details pane (--internal-preview-category,
+#       --internal-preview-preset): plain CLI subcommands with no
+#       fzf/interactivity of their own, driven directly against a
+#       fixture cache/categories/presets dir. F2/F9's own wiring (the
+#       f3 key pointed at the right subcommand) is a source-text
+#       assertion, same reasoning as rename-fixtures.sh.
 
 on:
   push:
@@ -246,6 +258,30 @@ jobs:
       # limited to source-text assertions.
       - name: Backup test
         run: zsh test/backup-fixtures.sh
+
+  version-marker-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — launcher_update_marker() and
+      # screen_border_label() are sourced and called directly against
+      # a hand-populated outdated_formulas.
+      - name: Version-marker test
+        run: zsh test/version-marker-fixtures.sh
+
+  picker-details-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — the F3 preview subcommands are
+      # plain CLI, driven directly against a fixture cache/categories/
+      # presets dir.
+      - name: F2/F9 details-pane test
+        run: zsh test/picker-details-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
