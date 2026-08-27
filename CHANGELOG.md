@@ -5,6 +5,43 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.38.0] — 2026-08-27
+
+### Added
+
+- **Rename categories and presets from the UI.** Raised live: "I would
+  like to be able to rename categories and presets from the UI." Both
+  are just a named file (`~/.config/brew-launcher/categories/<name>`,
+  `~/.config/brew-launcher/presets/<name>`), so renaming either is
+  **Ctrl-R** in its picker (F2 for categories, F9 for presets) — type
+  a new name over the prefilled current one, same fzf `--print-query`
+  idiom `toggle_category()` already uses to accept a typed name — then
+  a plain `mv`. Guards against the same things creating one already
+  refuses (a name with "/" or a leading ".", one of the built-in view
+  names) plus a new one renaming needs but creating never did:
+  colliding with a name that already exists. A category that only
+  exists via the [bundled defaults](#bundled-defaults), with no real
+  file yet, needs one entry categorized into it with F8 first — there
+  isn't a clean equivalent to deleting one of those (which just
+  excludes every command it contributes) for renaming one. Renaming a
+  preset with a session already running under its old name doesn't
+  reach into that session — it keeps working under the old name until
+  it ends.
+- **Backup.** Raised in the same message: "would a feature like brew
+  bundle make sense... a backup of your brew apps, categories, and
+  presets, for when you want to freshly install a computer?" **F4 →
+  Actions → Backup** writes `~/brew-launcher-backup.tar.gz` (always
+  that path, overwritten every run) containing a Brewfile from `brew
+  bundle dump` — every installed formula, cask and tap, including the
+  tap this launcher itself comes from — plus a full copy of
+  `~/.config/brew-launcher`, since `brew bundle` has no idea this
+  launcher exists and can't capture categories, presets, hidden
+  entries, favorites, or theme on its own. Restoring is left as a
+  documented two-step manual process rather than a launcher action of
+  its own — restoring only ever happens once per fresh machine, and
+  it's inherently higher-stakes (it can overwrite current config) than
+  creating a backup ever is.
+
 ## [0.37.1] — 2026-08-27
 
 ### Fixed

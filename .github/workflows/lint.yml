@@ -57,6 +57,24 @@ name: CI
 #      stand-in launcher; launch_in_tmux()/launch_in_ghostty() are
 #      covered as source-text assertions since they need a real tmux
 #      session / Ghostty.app to run end to end.
+#
+#   10. rename-fixtures — rename_category()/rename_preset() (F2/F9,
+#       Ctrl-R): source-text assertions for the reserved-name/invalid-
+#       name/collision guards and the actual mv, same reasoning as
+#       category-fixtures.sh already documents for toggle_category() —
+#       the text entry itself calls fzf, so driving it headlessly needs
+#       either a real TTY or a drive-by refactor of working code purely
+#       to make it testable, not attempted here. The full interactive
+#       flow was verified live in a real tmux pane instead.
+#
+#   11. backup-fixtures — create_backup() (Actions → Backup): no fzf
+#       involved at all, so this one is sourced and actually run
+#       against a fixture $CONFIG_DIR, then the resulting archive is
+#       inspected for real — a Brewfile and the fixture category/
+#       preset/config files, none of brew-launcher's own staging logs
+#       leaking in alongside them, and a clean failure with no partial
+#       archive left behind when brew isn't on PATH. Skips if brew
+#       itself isn't available.
 
 on:
   push:
@@ -202,6 +220,32 @@ jobs:
       # they need a real tmux session / Ghostty.app to run end to end.
       - name: Relaunch-after-quit test
         run: zsh test/relaunch-fixtures.sh
+
+  rename-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — source-text assertions only,
+      # same reasoning category-fixtures.sh already documents for
+      # toggle_category(): the actual text entry calls fzf, so it
+      # isn't driven headlessly here, per the project's "no drive-by
+      # refactors" stance.
+      - name: Rename category/preset test
+        run: zsh test/rename-fixtures.sh
+
+  backup-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # create_backup() is sourced and actually run against a fixture
+      # $CONFIG_DIR — no fzf involved, so unlike rename this one isn't
+      # limited to source-text assertions.
+      - name: Backup test
+        run: zsh test/backup-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

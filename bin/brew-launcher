@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.37.1"
+VERSION="0.38.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -85,6 +85,12 @@ IGNORE_FILE="$CONFIG_DIR/ignore"
 # themselves — those already have their own real, unambiguous file.
 SHOWN_FILE="$CONFIG_DIR/shown"
 CATEGORY_EXCLUDE_FILE="$CONFIG_DIR/category-exclude"
+
+# Fixed path, overwritten on every Backup — see create_backup() below.
+# Deliberately not timestamped: a backup you point a synced folder
+# (iCloud Drive, Dropbox) at once and forget about, not one that needs
+# manual cleanup of older copies over time.
+BACKUP_FILE="$HOME/brew-launcher-backup.tar.gz"
 
 # Persisted defaults for things an env var can already override for one
 # run — BREW_LAUNCHER_TERMINAL and BREW_LAUNCHER_THEME still win if
@@ -255,11 +261,13 @@ Presets:
   a number badge for the order it'll launch in (top to bottom in the
   file); Tab again on a marked tool unmarks it and renumbers the rest
   down. F9 launches an existing one without leaving the picker;
-  Ctrl-D there deletes the highlighted preset instead, asking first
-  and showing how many commands it holds — the one action here you
-  can't undo. Both F4 and F9 stay visible even if tmux isn't
-  installed — pressing either then explains what to install rather
-  than being hidden outright, so the feature is still discoverable.
+  Ctrl-R there renames the highlighted preset (just a file rename,
+  same name your presets directory already uses); Ctrl-D deletes it
+  instead, asking first and showing how many commands it holds — the
+  one action here you can't undo. Both F4 and F9 stay visible even if
+  tmux isn't installed — pressing either then explains what to
+  install rather than being hidden outright, so the feature is still
+  discoverable.
 
   Mouse mode is on for every preset session (that session only, not
   your tmux config) — click a pane to focus it, drag a border to
@@ -352,8 +360,8 @@ Keyboard shortcuts:
             "Actions on fastfetch"), so it's never ambiguous which
             entry it's about to act on.
   F5 / ⌥R   Refresh the cache without leaving the launcher
-  F9 / ⌥P   Launch a preset — see Presets below. Ctrl-D in that
-            picker deletes the highlighted preset instead.
+  F9 / ⌥P   Launch a preset — see Presets below. Ctrl-R in that
+            picker renames the highlighted preset, Ctrl-D deletes it.
 
   F4 and F5 also work from inside the view picker (F2) itself, not
   just the main list — no entry needs to be highlighted for either.
@@ -366,8 +374,8 @@ Keyboard shortcuts:
 
   In the Actions menu only — Launch Preset (same as F9), switch color
   theme, the three toggles under "Bundled defaults" below, Create
-  Preset, Create a macOS or Linux shortcut. None of these need a
-  highlighted entry, so they're also offered when Actions is opened
+  Preset, Create a macOS or Linux shortcut, Backup. None of these need
+  a highlighted entry, so they're also offered when Actions is opened
   from the view picker (Hide/Favorite/Categorize/Create Shortcut are
   not, since those act on a specific entry — and the view picker has
   no single row to name anyway). Esc from any of them returns to the
@@ -380,11 +388,16 @@ Keyboard shortcuts:
 Views:
   F2/⌥V switches what you're looking at: All, Favorites, your
   categories, then the computed views and Hidden last. "Hidden" is an
-  ordinary view — Enter still launches there, and F6 unhides. Ctrl-D
-  in the picker deletes the highlighted
-  category (All, Hidden and Favorites can't be deleted; Favorites has
-  its own F7 toggle). Deleting asks first and shows how many entries
-  the category holds — it's the one action here you can't undo.
+  ordinary view — Enter still launches there, and F6 unhides. Ctrl-R
+  in the picker renames the highlighted category (just a file rename —
+  a category's name is its filename in
+  ~/.config/brew-launcher/categories, nothing else to update); a
+  category that only exists via the bundled defaults, with no real
+  file of its own yet, needs one F8 first. Ctrl-D deletes the
+  highlighted category outright (All, Hidden and
+  Favorites can neither be renamed nor deleted; Favorites has its own
+  F7 toggle). Deleting asks first and shows how many entries the
+  category holds — it's the one action here you can't undo.
 
   Esc goes up one level at a time: the details pane (if open) -> a
   filtered view -> the view picker -> All -> quit.
@@ -418,6 +431,23 @@ Mouse:
   next to them does (e.g. clicking [Hide] is the same as pressing
   F2). Plain, unbracketed footer text — like the "+"/"*" legend or
   "Navigate" — isn't clickable; it's there to explain, not to act on.
+
+Backup:
+  Actions → Backup writes one file, ~/brew-launcher-backup.tar.gz
+  (always that path, overwritten on every run — point a synced folder
+  at it once and forget about it), containing:
+
+    - A Brewfile from 'brew bundle dump': every installed formula,
+      cask and tap, including the tap this launcher itself came from.
+    - brew-launcher-config/: a copy of ~/.config/brew-launcher —
+      categories, presets, hidden entries, favorites, theme, terminal
+      backend. Everything above doesn't know this launcher exists;
+      this is the other half.
+
+  Restoring on a fresh machine is two manual steps, not a launcher
+  action of its own: untar the archive, run
+  'brew bundle install --file=Brewfile', then copy
+  brew-launcher-config back to ~/.config/brew-launcher.
 
 Behavior:
   • Applications are discovered automatically from Homebrew.
@@ -2648,6 +2678,75 @@ confirm_delete_category() {
     [[ "$answer" == Delete* ]]
 }
 
+# Rename a category: type a new name, prefilled with the current one
+# via fzf's own --print-query — the same "type a name" idiom
+# toggle_category() already uses to accept a brand new category name,
+# reused here instead of inventing a second text-entry mechanism. A
+# category IS its filename (see CATEGORIES_DIR throughout this file),
+# so renaming one is nothing more than moving that file; nothing else
+# to update anywhere. Prints the new name on success for the caller to
+# react to (e.g. updating CURRENT_VIEW), nothing on cancel/failure.
+rename_category() {
+
+    local old_name="$1"
+    local new_name
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    new_name="$(
+        printf '%s\n' "$old_name" |
+        fzf \
+            --print-query \
+            --query="$old_name" \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Rename category')" \
+            --border-label-pos=2 \
+            --prompt=' New name: ' \
+            --footer='  Type  New name    Enter  [Rename]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --pointer='▌' \
+            --color="$FZF_COLORS" |
+        tail -n1
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$new_name" || "$new_name" == "$old_name" ]] && return 1
+
+    # Same filename-safety rule toggle_category() already applies when
+    # creating a category by typing a brand new name.
+    if [[ "$new_name" == */* || "$new_name" == .* ]]; then
+        printf '\n'
+        printf 'Invalid category name: %s\n' "$new_name"
+        printf 'Names cannot contain "/" or start with ".".\n'
+        sleep 2
+        return 1
+    fi
+
+    if [[ "$new_name" == "All" || "$new_name" == "Hidden" || "$new_name" == "Favorites" \
+          || "$new_name" == "Most Used" || "$new_name" == "Recently Added" ]]; then
+        printf '\n'
+        printf '"%s" is a built-in view name.\n' "$new_name"
+        printf 'Pick a different name.\n'
+        sleep 2
+        return 1
+    fi
+
+    if [[ -e "$CATEGORIES_DIR/$new_name" ]]; then
+        printf '\n'
+        printf 'A category named "%s" already exists.\n' "$new_name"
+        printf 'Delete or rename that one first if you meant to merge them.\n'
+        sleep 2
+        return 1
+    fi
+
+    mv "$CATEGORIES_DIR/$old_name" "$CATEGORIES_DIR/$new_name"
+    printf '%s' "$new_name"
+}
+
 # The single "what am I looking at?" hub: All, Hidden, and every
 # category, fuzzy-searchable.
 #
@@ -2702,7 +2801,8 @@ pick_help() {
     rows+=("")
     rows+=("First tier — always on screen")
     rows+=("  F2 / ⌥V   Switch view (All, Favorites, categories, Most Used,")
-    rows+=("            Recently Added, Hidden)")
+    rows+=("            Recently Added, Hidden) — Ctrl-R there renames the")
+    rows+=("            highlighted category, Ctrl-D deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
@@ -2710,7 +2810,8 @@ pick_help() {
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
         rows+=("            otherwise reattaches if it's already running")
-        rows+=("            Ctrl-D there deletes the highlighted preset instead")
+        rows+=("            Ctrl-R there renames the highlighted preset,")
+        rows+=("            Ctrl-D deletes it")
     else
         rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
     fi
@@ -2735,10 +2836,13 @@ pick_help() {
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
     fi
+    rows+=("            Backup  Brewfile + categories/presets/theme in one")
+    rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
     rows+=("")
     rows+=("The three toggles above flip with Space, not just Enter, and stay")
-    rows+=("on this menu afterward. Theme and Create Preset return to this")
-    rows+=("menu too once done — only Create Shortcut exits back to the list.")
+    rows+=("on this menu afterward. Theme, Create Preset and Backup return to")
+    rows+=("this menu too once done — only Create Shortcut exits back to the")
+    rows+=("list.")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -2868,6 +2972,13 @@ pick_more_action() {
         rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
     fi
 
+    # Last, not grouped with anything above — this isn't "adjust a
+    # setting" (Theme/the three toggles) or "build one new thing"
+    # (Create Preset/Create Shortcut), it's "export everything," which
+    # reads more like a closing action than a peer of either group.
+    # Not gated on has_entry: nothing about it concerns one row.
+    rows+=("backup"$'\t'"$(printf '%-20s%s' 'Backup' '')")
+
     [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
 
     rm -f "$FOOTER_CLICK_FILE"
@@ -2966,6 +3077,10 @@ open_more_menu() {
                 ;;
             f9)
                 launch_preset
+                continue
+                ;;
+            backup)
+                create_backup
                 continue
                 ;;
         esac
@@ -3172,8 +3287,8 @@ pick_view() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F4  [Actions]    F5  [Refresh]    Ctrl-D  [Delete]    Esc  [Back]' \
-            --expect=enter,ctrl-d,f4,f5 \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F4  [Actions]    F5  [Refresh]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --expect=enter,ctrl-d,ctrl-r,f4,f5 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -3196,6 +3311,7 @@ pick_view() {
 
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
+            '[Rename]'|Rename) pick_action="ctrl-r" ;;
             '[View]'|View) pick_action="enter" ;;
             '[Actions]'|Actions|F4/⌥M|F4) pick_action="f4" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) pick_action="f5" ;;
@@ -3223,6 +3339,41 @@ pick_view() {
     fi
 
     [[ -z "$picked" ]] && return 1
+
+    if [[ "$pick_action" == "ctrl-r" ]]; then
+
+        # Same not-a-real-category guard as Ctrl-D above, minus the
+        # bundled-only case: deleting a bundled category converts
+        # cleanly to "exclude everything in it," but renaming one has
+        # no equally clean equivalent (there'd need to be a brand new
+        # real file taking over a global default's members) — simpler
+        # and more honest to ask for one F8 first, which already turns
+        # a bundled category into a real file the normal way.
+        if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" \
+              || "$picked" == "Most Used" || "$picked" == "Recently Added" ]]; then
+            printf '\n'
+            printf '"%s" can'"'"'t be renamed.\n' "$picked"
+            sleep 1
+
+        elif [[ ! -f "$CATEGORIES_DIR/$picked" ]]; then
+            printf '\n'
+            printf '"%s" is a bundled default category, not one of yours yet.\n' "$picked"
+            printf 'Categorize one entry into it with F8 first, then it can be renamed.\n'
+            sleep 2
+
+        else
+            local renamed_category
+            if renamed_category="$(rename_category "$picked")" && [[ -n "$renamed_category" ]]; then
+                refresh_category_state
+                [[ "$CURRENT_VIEW" == "$picked" ]] && CURRENT_VIEW="$renamed_category"
+            fi
+        fi
+
+        # Same reasoning as Ctrl-D below: stay in the picker rather
+        # than dropping back to "All".
+        pick_view
+        return $?
+    fi
 
     if [[ "$pick_action" == "ctrl-d" ]]; then
 
@@ -3944,6 +4095,95 @@ end run
 APPLESCRIPT
 
     return $?
+}
+
+# ------------------------------------------------------------
+# Backup — one archive with everything needed to rebuild this exact
+# setup on a fresh machine.
+#
+# Raised live: "would a feature like brew bundle make sense... a
+# backup of your brew apps, categories, and presets?" `brew bundle
+# dump` already covers "what's installed" (formulae, casks, taps —
+# including the tap this launcher itself came from, so a restore pulls
+# it back in too); it has no idea this launcher exists, so it can't
+# capture categories, presets, hidden entries, favorites, or theme.
+# Those all live under one place, $CONFIG_DIR, entirely as plain files
+# (see CATEGORIES_DIR/PRESETS_DIR/SHOWN_FILE/CATEGORY_EXCLUDE_FILE/
+# CONFIG_FILE above) — so backing up "everything this launcher
+# remembers" is just copying that whole directory wholesale, no need
+# to enumerate its contents by hand or keep this in sync as more state
+# files get added later. $CACHE_DIR is deliberately left out: it's
+# derived, rebuilt automatically, and would only bloat the archive.
+#
+# Restore is left as a manual two-step rather than a launcher action
+# of its own (raised live too, deliberately out of scope for now):
+# untar this file, then `brew bundle install --file=Brewfile` plus
+# copying brew-launcher-config back to $CONFIG_DIR. Restoring only
+# ever happens once per fresh machine, so it doesn't need to be one
+# keypress, and it's inherently higher-stakes (it can overwrite
+# current config) than creating a backup ever is.
+# ------------------------------------------------------------
+
+create_backup() {
+
+    if ! command -v brew >/dev/null 2>&1; then
+        printf '\n'
+        printf 'Homebrew not found — nothing to back up.\n'
+        sleep 2
+        return 1
+    fi
+
+    local staging
+    staging="$(mktemp -d)" || return 1
+
+    # Everything that actually goes in the archive lives under its own
+    # payload/ subdirectory, one level below $staging itself — so the
+    # tar step below (which archives that subdirectory's contents, not
+    # $staging's) never picks up the two log files sitting alongside
+    # it, only what's meant to be backed up.
+    local payload="$staging/payload"
+    mkdir -p "$payload"
+
+    printf '\n'
+    printf 'Backing up...\n'
+
+    if ! brew bundle dump --file="$payload/Brewfile" --force \
+         >"$staging/bundle-output.txt" 2>&1; then
+        printf '\n'
+        printf 'brew bundle dump failed:\n'
+        cat "$staging/bundle-output.txt" 2>/dev/null
+        rm -rf "$staging"
+        sleep 2
+        return 1
+    fi
+
+    [[ -d "$CONFIG_DIR" ]] && cp -R "$CONFIG_DIR" "$payload/brew-launcher-config"
+
+    if ! tar -czf "$BACKUP_FILE" -C "$payload" . 2>"$staging/tar-error.txt"; then
+        printf '\n'
+        printf 'Could not write backup archive:\n'
+        cat "$staging/tar-error.txt" 2>/dev/null
+        rm -rf "$staging"
+        sleep 2
+        return 1
+    fi
+
+    rm -rf "$staging"
+
+    local backup_size
+    backup_size="$(du -h "$BACKUP_FILE" 2>/dev/null | awk '{print $1}')"
+
+    printf '\n'
+    printf 'Backup saved: %s (%s)\n' "$BACKUP_FILE" "${backup_size:-?}"
+    printf 'Contains a Brewfile (formulae, casks, taps) and\n'
+    printf 'brew-launcher'\''s own config (categories, presets, hidden\n'
+    printf 'entries, theme).\n'
+    printf '\n'
+    printf 'To restore on a fresh machine: untar it, run\n'
+    printf '  brew bundle install --file=Brewfile\n'
+    printf 'then copy brew-launcher-config back to\n'
+    printf '  %s\n' "$CONFIG_DIR"
+    sleep 2
 }
 
 # ------------------------------------------------------------
@@ -4788,6 +5028,59 @@ confirm_delete_preset() {
     [[ "$answer" == Delete* ]]
 }
 
+# Rename a preset — same idiom as rename_category() above, since a
+# preset is exactly the same shape (a name that IS a filename, nothing
+# else to update). See that function for why --print-query is used as
+# the text-entry mechanism instead of something new.
+rename_preset() {
+
+    local old_name="$1"
+    local new_name
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    new_name="$(
+        printf '%s\n' "$old_name" |
+        fzf \
+            --print-query \
+            --query="$old_name" \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Rename preset')" \
+            --border-label-pos=2 \
+            --prompt=' New name: ' \
+            --footer='  Type  New name    Enter  [Rename]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --pointer='▌' \
+            --color="$FZF_COLORS" |
+        tail -n1
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$new_name" || "$new_name" == "$old_name" ]] && return 1
+
+    if [[ "$new_name" == */* || "$new_name" == .* ]]; then
+        printf '\n'
+        printf 'Invalid preset name: %s\n' "$new_name"
+        printf 'Names cannot contain "/" or start with ".".\n'
+        sleep 2
+        return 1
+    fi
+
+    if [[ -e "$PRESETS_DIR/$new_name" ]]; then
+        printf '\n'
+        printf 'A preset named "%s" already exists.\n' "$new_name"
+        sleep 2
+        return 1
+    fi
+
+    mv "$PRESETS_DIR/$old_name" "$PRESETS_DIR/$new_name"
+    printf '%s' "$new_name"
+}
+
 # ------------------------------------------------------------
 # Pick a preset and launch it — the in-app entry point to run_preset(),
 # reached via F9. --preset <name> is the other way in, for when you
@@ -4831,8 +5124,8 @@ launch_preset() {
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
-            --footer='  ↑ ↓  Navigate    Enter  [Launch]    Ctrl-D  [Delete]    Esc  [Cancel]' \
-            --expect=enter,ctrl-d \
+            --footer='  ↑ ↓  Navigate    Enter  [Launch]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Cancel]' \
+            --expect=enter,ctrl-d,ctrl-r \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -4857,11 +5150,37 @@ launch_preset() {
 
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
+            '[Rename]'|Rename) pick_action="ctrl-r" ;;
             '[Launch]'|Launch) pick_action="enter" ;;
         esac
     fi
 
     [[ -z "$preset_name" ]] && return 1
+
+    if [[ "$pick_action" == "ctrl-r" ]]; then
+
+        local renamed_preset had_running_session=false
+
+        # A running session for this preset is named after the OLD
+        # name (blpreset-<name>, see run_preset()) — renaming the file
+        # doesn't reach into a live session to match, so it's worth
+        # saying so rather than leaving that to be found out later.
+        # The old session just keeps working under its old name until
+        # it ends; the next launch of the new name starts fresh, same
+        # as editing a running preset's command list already does.
+        tmux has-session -t "blpreset-$preset_name" 2>/dev/null && had_running_session=true
+
+        if renamed_preset="$(rename_preset "$preset_name")" && [[ -n "$renamed_preset" ]]; then
+            printf '\n'
+            printf 'Preset "%s" renamed to "%s".\n' "$preset_name" "$renamed_preset"
+            [[ "$had_running_session" == true ]] &&
+                printf 'Its running session keeps working under the old name until it ends.\n'
+            sleep 1
+        fi
+
+        launch_preset
+        return $?
+    fi
 
     if [[ "$pick_action" == "ctrl-d" ]]; then
 
