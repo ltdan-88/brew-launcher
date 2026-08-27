@@ -42,6 +42,13 @@ name: CI
 #      leaving a gap, and an empty highlighted argument (the "just
 #      seed the initial screen" mode) only regenerates without
 #      toggling anything.
+#
+#   8. terminal-auto-fixtures — resolve_auto_terminal(), sourced and
+#      called directly: over SSH already inside tmux resolves to tmux,
+#      over SSH otherwise (via any of the three SSH env vars) resolves
+#      to current, and locally resolves to ghostty or current
+#      depending on whether Ghostty.app is actually present on the
+#      runner. No fzf, brew, or tmux needed.
 
 on:
   push:
@@ -161,6 +168,18 @@ jobs:
       # them either.
       - name: Create Preset's Tab-order handler test
         run: zsh test/preset-order-fixtures.sh
+
+  terminal-auto-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — resolve_auto_terminal() is
+      # sourced and called directly against real env vars, same
+      # technique category-fixtures.sh already uses.
+      - name: Auto terminal-backend detection test
+        run: zsh test/terminal-auto-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

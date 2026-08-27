@@ -389,7 +389,9 @@ wins over what `config` says, for that one run. Categories match on
 ### Terminal backends
 
 By default the best available option is chosen: Ghostty on macOS if installed,
-otherwise the current terminal. Override with `BREW_LAUNCHER_TERMINAL`:
+otherwise the current terminal — **unless you're connected over SSH**, where
+there's no display to open a Ghostty window in even if it's installed on the
+machine. Override with `BREW_LAUNCHER_TERMINAL`:
 
 ```bash
 export BREW_LAUNCHER_TERMINAL=auto      # default
@@ -402,6 +404,14 @@ export BREW_LAUNCHER_TERMINAL=tmux      # new tmux window
 Use it while you're already inside one and it opens tools in a new window
 alongside the launcher; run it outside tmux and it just falls back to
 `current`, same as if you hadn't set it.
+
+`auto` itself is SSH-aware, so this is usually nothing you need to set by
+hand: connected over SSH (detected via the standard `SSH_TTY`/
+`SSH_CONNECTION`/`SSH_CLIENT` env vars) and already inside a tmux session, it
+picks `tmux`; over SSH without one, `current`. Reported live: launching a
+single tool over SSH used to still reach for Ghostty and just hang, since
+`auto` had no way to tell "a Mac with Ghostty installed" from "a Mac with
+Ghostty installed that I can't currently see."
 
 ### Theme
 
