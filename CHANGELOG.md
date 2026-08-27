@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.2] — 2026-08-27
+
+### Fixed
+
+- **Esc no longer undoes a Details choice made via Actions.** "I found
+  a conflict between the Esc behavior closing the details pane and
+  the details toggle... I think the toggle should override this
+  behavior." Turning Details on from F4 → Actions was meant as a
+  standing "always on" choice (0.41.0), but the main list's own
+  Esc-closes-the-pane-first behavior (0.31.0) couldn't tell that
+  apart from a pane opened with a quick F3 press — so the very next
+  Esc silently undid the choice. New `DETAILS_PINNED` flag tracks
+  which of the two just turned the pane on: Actions → Details sets it
+  to match the new state (a standing choice), all three F3 handlers
+  (main list, F2, F9) always clear it (a peek). Esc's auto-close, and
+  the `[Close]` footer hint that promises it, now only fire when
+  `DETAILS_PINNED` is false — a pinned pane skips straight to
+  whatever Esc would otherwise do. Verified live in both directions:
+  pinned via Actions, one Esc left it alone and the next quit outright
+  (nothing else to back out of); opened with F3 directly, one Esc
+  still closed it exactly as before.
+
 ## [0.42.1] — 2026-08-27
 
 ### Fixed

@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.42.1"
+VERSION="0.42.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -2868,6 +2868,20 @@ DETAILS_VISIBLE=false
 # screen where a details pane is available." One flag, one on/off
 # state, everywhere F3 (or Actions -> Details) can toggle it.
 
+# Raised live once both fixes above landed: turning Details on via
+# Actions is meant as a standing preference ("always on"), but the
+# main list's own Esc-closes-the-pane-first behavior (see the "Whether
+# the F3 details pane" comment above) would immediately undo it on the
+# very next Esc, indistinguishable from a pane opened with a quick F3
+# press. Tracks *how* the pane was last turned on: F3 always sets this
+# false (a peek — Esc closing it first is exactly the point), Actions
+# -> Details sets it to match DETAILS_VISIBLE (a standing choice — Esc
+# should skip straight past it to whatever the next back-step is,
+# same as if the pane weren't there). Answers the user's own "I think
+# the toggle should override this" instinct: yes, and this is the flag
+# that lets Esc tell the two cases apart without guessing.
+DETAILS_PINNED=false
+
 typeset -A category_members
 
 load_category_names() {
@@ -3494,6 +3508,12 @@ open_more_menu() {
                 # the data in it, so the main loop's own next fzf
                 # redraw already picks it up.
                 [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+
+                # DETAILS_PINNED tracks *this* path specifically — see
+                # its own comment for why. Set to match the new state:
+                # true (a standing "always on" choice) if Details just
+                # turned on this way, false if it just turned off.
+                DETAILS_PINNED="$DETAILS_VISIBLE"
                 continue
                 ;;
             theme)
@@ -3796,6 +3816,9 @@ pick_view() {
     # this first too, the way it already does there.
     if [[ "$pick_action" == "f3" ]]; then
         [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+        # F3 is always a peek, never a standing choice — see
+        # DETAILS_PINNED's own comment.
+        DETAILS_PINNED=false
         pick_view
         return $?
     fi
@@ -5643,6 +5666,9 @@ launch_preset() {
 
     if [[ "$pick_action" == "f3" ]]; then
         [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+        # F3 is always a peek, never a standing choice — see
+        # DETAILS_PINNED's own comment.
+        DETAILS_PINNED=false
         launch_preset
         return $?
     fi
@@ -5942,8 +5968,11 @@ while true; do
     # Takes priority over the view-based hint above — whichever "back"
     # step Esc would otherwise take, closing an open details pane
     # happens first, same as the Hidden-view check below takes
-    # priority over the plain hide/unhide label.
-    [[ "$DETAILS_VISIBLE" == true ]] && esc_hint="Close"
+    # priority over the plain hide/unhide label. Not when the pane is
+    # pinned on via Actions, though (see DETAILS_PINNED) — Esc skips
+    # it entirely then, so the footer shouldn't promise a "[Close]"
+    # that particular Esc press won't actually do.
+    [[ "$DETAILS_VISIBLE" == true && "$DETAILS_PINNED" == false ]] && esc_hint="Close"
 
     # In the Hidden view every row is by definition hidden, so F2 can
     # only mean "unhide" — say so rather than making the user infer it.
@@ -6102,6 +6131,9 @@ while true; do
     if [[ "$action" == "f3" || "$action" == "alt-d" ]]; then
 
         [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+        # F3 is always a peek, never a standing choice — see
+        # DETAILS_PINNED's own comment.
+        DETAILS_PINNED=false
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
@@ -6126,11 +6158,21 @@ while true; do
     # "Back" while filtered reopens the category picker (same as F5)
     # rather than jumping straight to "All", so you can switch to a
     # different category without detouring through the full list.
+    #
+    # Skipped entirely when DETAILS_PINNED is true — raised live: "I
+    # found a conflict between the Esc behavior closing the details
+    # pane and the details toggle... I think the toggle should
+    # override this behavior." Turning Details on via Actions is a
+    # standing "always on" choice; Esc immediately undoing it on the
+    # very next press would make that choice pointless. A pane opened
+    # with a quick F3 press is the opposite — Esc closing it first is
+    # exactly what it's for — and DETAILS_PINNED is what tells the two
+    # apart (see its own comment).
     # --------------------------------------------------------
 
     if [[ "$action" == "esc" ]]; then
 
-        if [[ "$DETAILS_VISIBLE" == true ]]; then
+        if [[ "$DETAILS_VISIBLE" == true && "$DETAILS_PINNED" == false ]]; then
             DETAILS_VISIBLE=false
             restore_position="$(find_entry_position "${selection%%$'\t'*}")"
             continue

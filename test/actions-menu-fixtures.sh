@@ -111,4 +111,36 @@ launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$launch_preset_block" == *'DETAILS_VISIBLE'* ]] ||
     fail "launch_preset (F9) should reference DETAILS_VISIBLE for its own F3 preview"
 
-printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, and Actions offers a Details toggle mirroring F3\n'
+# ------------------------------------------------------------
+# 4. DETAILS_PINNED: Esc closing the details pane and the Details
+#    toggle used to conflict — raised live: "I think the toggle
+#    should override this behavior." Turning Details on via Actions
+#    is meant to stick; F3 opening it is meant to be an Esc-closable
+#    peek. DETAILS_PINNED is what tells the two apart, so this checks
+#    each of the four places that touch it does its part: Actions'
+#    toggle_details sets it to match the new state, all three F3
+#    handlers (main list, F2, F9) always clear it, and the main list's
+#    own Esc auto-close only fires when it's clear.
+# ------------------------------------------------------------
+
+[[ "$open_menu_block" == *'DETAILS_PINNED="$DETAILS_VISIBLE"'* ]] ||
+    fail "open_more_menu's toggle_details case should set DETAILS_PINNED to match the new DETAILS_VISIBLE state"
+
+[[ "$pick_view_block" == *'DETAILS_PINNED=false'* ]] ||
+    fail "pick_view's (F2) F3 handler should clear DETAILS_PINNED — F3 is always a peek"
+
+[[ "$launch_preset_block" == *'DETAILS_PINNED=false'* ]] ||
+    fail "launch_preset's (F9) F3 handler should clear DETAILS_PINNED — F3 is always a peek"
+
+main_loop_f3_line="$(grep -n 'DETAILS_VISIBLE=false || DETAILS_VISIBLE=true' "$LAUNCHER" | tail -1 | cut -d: -f1)"
+[[ -n "$main_loop_f3_line" ]] ||
+    fail "could not find the main list's own F3 toggle line to check nearby"
+main_loop_f3_context="$(sed -n "${main_loop_f3_line},$((main_loop_f3_line + 3))p" "$LAUNCHER")"
+[[ "$main_loop_f3_context" == *'DETAILS_PINNED=false'* ]] ||
+    fail "the main list's own F3 handler should clear DETAILS_PINNED — F3 is always a peek, got: $main_loop_f3_context"
+
+esc_block="$(grep -A3 'action" == "esc" \]\]; then' "$LAUNCHER" | head -4)"
+[[ "$esc_block" == *'DETAILS_PINNED'* ]] ||
+    fail "the main list's Esc handler should check DETAILS_PINNED before auto-closing the details pane, got: $esc_block"
+
+printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Actions offers a Details toggle mirroring F3, and DETAILS_PINNED keeps Esc from undoing a Details choice made via Actions\n'
