@@ -232,11 +232,13 @@ tmux layout), Tab again on a marked tool unmarks it and renumbers the rest
 down, and **Enter** saves them in that exact order — not the alphabetical
 order they're listed in. Enter with nothing marked shows an error rather
 than quietly saving a one-tool "preset." **F9** lists your presets and
-launches the one you pick, reattaching to it if it's already running rather
-than opening a second copy. **Ctrl-D** on a highlighted preset deletes it
-instead — same confirm-first prompt as deleting a category, showing how
-many commands it holds before anything's removed. File format and the
-`--preset` CLI flag are in [Configuration](#configuration).
+launches the one you pick — in its own window when there's somewhere to put
+one, otherwise reattaching to it if it's already running rather than opening
+a second copy (see [Configuration](#configuration) for exactly which). **Ctrl-D**
+on a highlighted preset deletes it instead — same confirm-first prompt as
+deleting a category, showing how many commands it holds before anything's
+removed. File format and the `--preset` CLI flag are also in
+[Configuration](#configuration).
 
 Presets need [tmux](#terminal-backends). Both stay visible in the footer and
 Actions menu either way — the Actions menu's hint reads "needs tmux" in place of the
@@ -487,6 +489,30 @@ tmux keys are usually more useful than resizing by hand, mouse or otherwise:
 everyone else), and **prefix + Ctrl-arrow** nudges a border a cell at a
 time if you do want to reshape it. Default prefix is Ctrl-b unless your
 tmux config remaps it.
+
+**How a preset actually shows up on screen depends on how you're connected**
+— a multi-pane preset earns its own window rather than swallowing whatever's
+already open, whenever there's somewhere to put one:
+
+- **Local Mac with Ghostty** — opens a brand new Ghostty **window** (never a
+  tab, unlike single-tool launches — a preset holding several TUIs deserves
+  more than a corner of whatever's already there). The launcher you ran it
+  from keeps running exactly as it was; nothing about it is touched.
+- **Over SSH (or no Ghostty), already inside a tmux session** — your client
+  switches to the preset's session instead. Recoverable: **prefix + s**
+  switches back to whatever session you were in before, unharmed.
+- **Over SSH (or no Ghostty), not inside tmux** — takes over the current
+  window, same as every version before this one — there's no GUI to open a
+  window in and no existing tmux session to switch within, so taking over
+  the only screen there is the only way to show a multi-pane preset at all.
+  Says so before doing it. Run brew-launcher itself inside a tmux session
+  (`tmux` then `brew-launcher`) to get the recoverable behavior above
+  instead — this is exactly the setup [BREW_LAUNCHER_TERMINAL=tmux](#terminal-backends)
+  is for.
+
+Detecting "connected over SSH" uses the standard `SSH_TTY` / `SSH_CONNECTION`
+/ `SSH_CLIENT` environment variables — the same signal most SSH-aware tools
+check.
 
 </details>
 

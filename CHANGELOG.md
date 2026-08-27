@@ -5,6 +5,35 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] — 2026-08-27
+
+### Added
+
+- **Launching a preset opens its own window instead of always closing
+  the one you launched it from.** Raised live: "when you launch a
+  preset it makes more sense to open a separate window instead of a
+  new tab, since it will contain multiple TUIs at once" — and a
+  follow-up question confirmed the picker really was being replaced
+  outright (`exec` never returns), not just backgrounded. New
+  `preset_show_session()` picks one of three outcomes:
+  - **Local Mac with Ghostty** — opens a genuinely separate Ghostty
+    **window** (never a tab) attached to the session. The picker isn't
+    touched at all.
+  - **Over SSH (or no Ghostty), already inside a tmux session** —
+    switches the client to the preset's session instead of the old
+    unconditional takeover. Recoverable with prefix+s.
+  - **Over SSH (or no Ghostty), not inside tmux** — same takeover as
+    before (no GUI and no existing session to switch within leaves no
+    other option), but now says so first instead of silently doing it.
+  SSH is detected via the standard `SSH_TTY`/`SSH_CONNECTION`/
+  `SSH_CLIENT` trio. The Ghostty path checks its own success rather
+  than assuming it — confirmed live that it can genuinely fail
+  ("Can't get focused terminal..."), in which case it falls through to
+  the tmux paths above instead of silently claiming to have worked.
+  `--preset <name>` from a terminal now explicitly exits either way,
+  since a successful new-window launch no longer means "never
+  returns" the way an exec always did.
+
 ## [0.31.0] — 2026-08-27
 
 ### Changed

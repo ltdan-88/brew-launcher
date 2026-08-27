@@ -215,4 +215,33 @@ alternate_on="$(tmux display-message -p -t "$BADTUI_SESSION" '#{alternate_on}' 2
 
 tmux kill-session -t "$BADTUI_SESSION" 2>/dev/null
 
-printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there\n'
+# ------------------------------------------------------------
+# 8. preset_show_session()'s three-way branch: SSH-simulated (the
+#    standard SSH_TTY/SSH_CONNECTION/SSH_CLIENT env-var trio) skips
+#    the local-GUI-window path entirely regardless of what's actually
+#    installed on this machine, same as a real SSH session would.
+#    Doesn't attempt the switch-client/attach-session step itself for
+#    the same reason noted at the top of this file — no real attached
+#    client to hand off to — but the *choice* of which one it takes,
+#    and the warning printed before the unrecoverable one, are both
+#    fully verifiable without one.
+# ------------------------------------------------------------
+
+NOTMUX_SESSION="blpreset-preset-fixtures-notmux"
+tmux kill-session -t "$NOTMUX_SESSION" 2>/dev/null
+
+cat > "$PRESETS_DIR/preset-fixtures-notmux" <<'EOF'
+cat
+EOF
+
+# Not inside tmux: should warn before taking over, then attempt
+# attach-session (fails here for the environment reason above, not a
+# bug in the choice itself).
+notmux_output="$(SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-notmux </dev/null 2>&1)"
+
+[[ "$notmux_output" == *"Not running inside tmux"* ]] ||
+    fail "launching a preset outside tmux should warn before taking over the window, got: $notmux_output"
+
+tmux kill-session -t "$NOTMUX_SESSION" 2>/dev/null
+
+printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there, launching a preset outside tmux warns before taking over the window\n'
