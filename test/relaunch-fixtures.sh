@@ -72,6 +72,111 @@ source <(sed -n '/^launch_in_current_terminal() {/,/^}/p' "$LAUNCHER")
     fail "marker file had unexpected content: $(<"$MARKER_FILE")"
 
 # ------------------------------------------------------------
+# 1b. The "press any key" pause: raised live — a one-shot CLI
+#     (fastfetch, eza, jq, ...) prints and exits in under a second, and
+#     without a pause the relaunch above landed so fast the picker's
+#     full-screen UI painted over that output before there was any
+#     real chance to read it. Looked exactly like the command had
+#     silently failed, when it had actually run fine.
+#
+# Two things to prove: the pause is genuinely there waiting on a
+# keypress (checked live below via a real pty — the run above with no
+# tty doesn't exercise this, since `read` returns immediately on EOF
+# rather than blocking, which is also exactly why the run above never
+# hangs in CI), and it doesn't turn a headless run (no tty at all,
+# same as CI or --preset) into a hang.
+# ------------------------------------------------------------
+
+MARKER_FILE_2="$TEST_HOME/marker2"
+cat > "$FAKE_LAUNCHER" <<EOF
+#!/bin/zsh
+printf 'RELAUNCHED\n' > "$MARKER_FILE_2"
+EOF
+
+pause_timed_out_flag="$TEST_HOME/pause-timed-out"
+rm -f "$pause_timed_out_flag" "$MARKER_FILE_2"
+
+(
+    FOOTER_CLICK_FILE="$TEST_HOME/footer-click-2"
+    SCRIPT_PATH="$FAKE_LAUNCHER"
+    launch_in_current_terminal /usr/bin/true
+) </dev/null >/dev/null 2>&1 &
+headless_pid=$!
+
+(
+    sleep 5
+    if kill -0 "$headless_pid" 2>/dev/null; then
+        touch "$pause_timed_out_flag"
+        kill -9 "$headless_pid" 2>/dev/null
+    fi
+) &
+watcher_pid=$!
+
+wait "$headless_pid" 2>/dev/null
+kill "$watcher_pid" 2>/dev/null
+wait "$watcher_pid" 2>/dev/null
+
+[[ -f "$pause_timed_out_flag" ]] &&
+    fail "launch_in_current_terminal's press-any-key pause should return immediately on EOF (no tty), not hang"
+
+[[ -f "$MARKER_FILE_2" ]] ||
+    fail "launch_in_current_terminal should still relaunch after the pause once \`read\` hits EOF"
+
+# Now with a real pty, the pause should actually hold until a key
+# arrives, rather than falling straight through. A plain subshell (as
+# used above) has no controlling tty at all, so it never really
+# exercises the wait, only the EOF fallback.
+#
+# tmux provides that real pty rather than a raw python pty.fork(),
+# which was tried first here and gave a false failure: `read -k`
+# never returned even after `send`-ing a keystroke, echoed by the
+# kernel's own line discipline but seemingly never delivered to zsh.
+# Re-run as plain `tmux send-keys` against a real tmux pane instead
+# (below) and it worked first try — so that was a gap in what a raw
+# pty.fork() emulates, the same class of gap already on record in this
+# project for fzf hanging on cursor-position queries against one, not
+# a bug in `read -k` itself. tmux is what real usage actually goes
+# through for this launch path anyway, so it's the more honest test.
+if command -v tmux >/dev/null 2>&1; then
+    MARKER_FILE_3="$TEST_HOME/marker3"
+    cat > "$FAKE_LAUNCHER" <<EOF
+#!/bin/zsh
+printf 'RELAUNCHED\n' > "$MARKER_FILE_3"
+EOF
+    rm -f "$MARKER_FILE_3"
+
+    TMUX_SCRIPT="$TEST_HOME/tmux-script.zsh"
+    cat > "$TMUX_SCRIPT" <<EOF
+FOOTER_CLICK_FILE="$TEST_HOME/footer-click-3"
+SCRIPT_PATH="$FAKE_LAUNCHER"
+source <(sed -n '/^launch_in_current_terminal() {/,/^}/p' "$LAUNCHER")
+launch_in_current_terminal /usr/bin/true
+EOF
+
+    TMUX_SESSION="brew-launcher-relaunch-test-$$"
+    tmux kill-session -t "$TMUX_SESSION" 2>/dev/null
+
+    tmux new-session -d -s "$TMUX_SESSION" -x 80 -y 24 "zsh '$TMUX_SCRIPT'"
+    sleep 1.5
+
+    still_waiting=true
+    [[ -f "$MARKER_FILE_3" ]] && still_waiting=false
+
+    tmux send-keys -t "$TMUX_SESSION" x
+    sleep 1.5
+
+    tmux kill-session -t "$TMUX_SESSION" 2>/dev/null
+
+    [[ "$still_waiting" == true ]] ||
+        fail "launch_in_current_terminal should still be waiting on the press-any-key pause 1.5s in (before a key arrives)"
+
+    [[ -f "$MARKER_FILE_3" ]] ||
+        fail "launch_in_current_terminal should relaunch once a key arrives at the pause, but the fake launcher never ran"
+else
+    printf 'SKIP: tmux not found, skipping the real-pty press-any-key check\n' >&2
+fi
+
+# ------------------------------------------------------------
 # 2. launch_in_tmux() and launch_in_ghostty(): can't run these end to
 #    end without a real tmux session / Ghostty.app, so this asserts
 #    directly on the source text instead — both should still exec into
@@ -84,11 +189,15 @@ tmux_line="$(sed -n '/^launch_in_tmux() {/,/^}/p' "$LAUNCHER")"
     fail "launch_in_tmux should exec into \"\$2\" (SCRIPT_PATH) after the tool exits"
 [[ "$tmux_line" == *'${(q)SCRIPT_PATH}'* ]] ||
     fail "launch_in_tmux should pass SCRIPT_PATH as the second quoted argument"
+[[ "$tmux_line" == *'read -k 1 -s'* ]] ||
+    fail "launch_in_tmux should pause on a keypress before the relaunch, same as launch_in_current_terminal"
 
 ghostty_block="$(sed -n '/^launch_in_ghostty() {/,/^}/p' "$LAUNCHER")"
 [[ "$ghostty_block" == *'exec \"$2\"'* ]] ||
     fail "launch_in_ghostty should exec into \"\$2\" (launcherPath) after the tool exits"
 [[ "$ghostty_block" == *'quoted form of launcherPath'* ]] ||
     fail "launch_in_ghostty should pass SCRIPT_PATH through as launcherPath"
+[[ "$ghostty_block" == *'read -k 1 -s'* ]] ||
+    fail "launch_in_ghostty should pause on a keypress before the relaunch, same as launch_in_current_terminal"
 
-printf 'PASS: quitting a launched tool relaunches the launcher instead of dropping to a plain shell, in all three launch paths\n'
+printf 'PASS: quitting a launched tool relaunches the launcher (after a press-any-key pause) instead of dropping to a plain shell, in all three launch paths\n'

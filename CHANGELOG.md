@@ -5,6 +5,35 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] — 2026-08-27
+
+### Fixed
+
+- **A one-shot CLI's output (`fastfetch`, `eza`, `jq`, ...) was getting
+  wiped before it could be read.** Reported live: "it launches
+  fastfetch, but quickly returns to the launcher" — the previous
+  "relaunch the picker after a tool exits" fix (0.34.0) fired
+  immediately once the command finished, so the picker's full-screen
+  UI painted straight over the output. It looked exactly like the
+  command had silently failed when it had actually run fine; a
+  long-running TUI (`htop`, `newsboat`) wasn't affected the same way
+  since you'd already seen everything before choosing to quit it.
+  Fixed by pausing with **"Press any key to return to
+  brew-launcher..."** right before the relaunch, in all three launch
+  paths (current terminal, tmux, Ghostty) — a no-op with no real
+  terminal attached (`read` returns immediately on EOF, so tests and
+  `--preset` still fail fast rather than hang), and a real wait
+  otherwise.
+- `test/relaunch-fixtures.sh` now verifies the pause genuinely blocks
+  using a real tmux pane rather than a raw Python `pty.fork()`, which
+  gave a false failure here — `read -k` never returned even after a
+  simulated keystroke, echoed by the pty's own line discipline but
+  seemingly never delivered to zsh. Plain `tmux send-keys` against a
+  real pane worked on the first try, so that's a gap in what a bare
+  `pty.fork()` emulates (the same class of gap already on record in
+  this project for fzf hanging on cursor-position queries against
+  one), not a bug in `read -k` itself.
+
 ## [0.35.0] — 2026-08-27
 
 ### Changed
