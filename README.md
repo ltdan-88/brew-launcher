@@ -510,18 +510,25 @@ already open, whenever there's somewhere to put one:
 - **Local Mac with Ghostty** — opens a brand new Ghostty **window** (never a
   tab, unlike single-tool launches — a preset holding several TUIs deserves
   more than a corner of whatever's already there). The launcher you ran it
-  from keeps running exactly as it was; nothing about it is touched.
+  from keeps running exactly as it was; nothing about it is touched. Closing
+  or detaching from that window later relaunches the launcher right there.
 - **Over SSH (or no Ghostty), already inside a tmux session** — your client
-  switches to the preset's session instead. Recoverable: **prefix + s**
-  switches back to whatever session you were in before, unharmed.
+  switches to the preset's session instead. Detaching (**prefix + d**) later,
+  or the preset session ending, relaunches the launcher in the window you
+  switched from — it's not still sitting there in the background the way an
+  earlier version of this doc claimed; testing with a real attached client
+  found that pane actually closes the moment the switch completes, since
+  nothing was left running in it. Relaunching in its place is what makes
+  this recoverable in practice, not the pane surviving on its own.
 - **Over SSH (or no Ghostty), not inside tmux** — takes over the current
-  window, same as every version before this one — there's no GUI to open a
-  window in and no existing tmux session to switch within, so taking over
-  the only screen there is the only way to show a multi-pane preset at all.
-  Says so before doing it. Run brew-launcher itself inside a tmux session
-  (`tmux` then `brew-launcher`) to get the recoverable behavior above
-  instead — this is exactly the setup [BREW_LAUNCHER_TERMINAL=tmux](#terminal-backends)
-  is for.
+  window — there's no GUI to open a window in and no existing tmux session
+  to switch within, so taking over the only screen there is is the only way
+  to show a multi-pane preset at all. Says so before doing it. Detaching or
+  the preset ending relaunches the launcher right there too, same as the
+  other two cases. Run brew-launcher itself inside a tmux session (`tmux`
+  then `brew-launcher`) to get the switch-instead-of-takeover behavior above
+  — this is exactly the setup
+  [BREW_LAUNCHER_TERMINAL=tmux](#terminal-backends) is for.
 
 Detecting "connected over SSH" uses the standard `SSH_TTY` / `SSH_CONNECTION`
 / `SSH_CLIENT` environment variables — the same signal most SSH-aware tools

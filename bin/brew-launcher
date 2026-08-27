@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.34.0"
+VERSION="0.35.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -270,17 +270,21 @@ Presets:
   How a preset actually shows up on screen depends on how you're
   connected — a multi-pane preset earns its own window rather than
   swallowing whatever's already open, whenever there's somewhere to
-  put one:
+  put one. Either way, quitting/detaching brings the launcher back
+  rather than leaving a dead pane or a bare shell behind:
     - Local Mac with Ghostty: opens a brand new Ghostty window (not a
       tab) attached to the session. The launcher you ran it from
-      keeps running untouched.
+      keeps running untouched; closing that window later relaunches
+      the launcher right there.
     - Over SSH (or no Ghostty), already inside a tmux session: your
-      client switches to the preset's session. Recoverable — prefix+s
-      switches back to whatever you were doing.
+      client switches to the preset's session. Detaching (prefix+d)
+      later, or the preset ending, relaunches the launcher in the
+      window you switched from.
     - Over SSH (or no Ghostty), not inside tmux: takes over the
-      current window, same as before — there's no other screen to put
-      it in. Says so first. Run brew-launcher itself inside a tmux
-      session to get the recoverable behavior above instead.
+      current window — there's no other screen to put it in. Says so
+      first. Detaching or the preset ending relaunches the launcher
+      right there too. Run brew-launcher itself inside a tmux session
+      to get the switch-instead-of-takeover behavior above.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin       Default
@@ -710,27 +714,56 @@ is_ssh_session() {
 # and avoidable whenever a real GUI is actually available to open a
 # genuinely separate window in instead.
 #
-# Three outcomes, tried in order:
+# Three outcomes, tried in order — every one of them, once the tmux
+# side of things ends (you detach, or the preset session itself is
+# killed), falls through to relaunching the launcher rather than
+# leaving a dead pane or a bare shell behind. Reported live, right
+# after the launch-a-tool version of this same fix shipped: "would it
+# make sense to return to the launcher as well, when you have multiple
+# tmux panes open and you hit Ctrl+B d?"
+#
+# Verified live with a real attached client that this genuinely
+# mattered for (2) below, not just a nice-to-have: switch-client's own
+# process exits the instant it's done its job (near-instantly,
+# regardless of success), and a pane whose foreground process exits is
+# closed by tmux *by default* — so the picker's original pane, and if
+# it was the only one, its whole session, was actually being destroyed
+# the moment switch-client succeeded. An earlier version of this
+# comment claimed that session survived in the background, switchable
+# back to with prefix+s — that was wrong, caught only by testing with
+# a real attached client rather than trusting the reasoning.
+#
+# The relaunch is chained with && below, not ;, on purpose — caught by
+# the test suite hanging, not reasoning: with no real terminal to
+# attach to (exactly what --preset looks like in a test/CI run, or any
+# non-interactive invocation), attach-session/switch-client fails
+# immediately, and a bare `;` would still run the relaunch straight
+# into a brand new fzf session with that same broken stdin, hanging
+# instead of failing fast the way the surrounding code (and its own
+# tests) already expect. && only relaunches after a *successful*
+# attach that later ended cleanly — a real failure still fails
+# straight through, same as before this whole feature existed.
 #
 #   1. A local Mac with Ghostty, not over SSH — opens a brand new
 #      Ghostty WINDOW (never a tab, unlike single-tool launches: a
 #      multi-pane preset earns its own window, not a corner of
 #      whatever's already open) attached to the session, and returns
 #      normally. Nothing here touches the calling process, so the
-#      picker keeps running exactly as it was.
+#      picker keeps running exactly as it was — detaching later just
+#      relaunches the picker in that same window.
 #
 #   2. Already inside tmux (true over SSH too, once brew-launcher
 #      itself is run inside a tmux session — see the README) —
-#      switch-client. This does exec and never returns, but it's
-#      recoverable: the picker's own session is still alive, just not
-#      what this client is currently looking at (prefix+s switches
-#      back to it).
+#      switch-client, then relaunch the picker in this same pane once
+#      it returns. Detaching later (or the preset ending) switches you
+#      back to this window, which is by then already sitting there
+#      with a fresh picker ready — the relaunch happens in the
+#      background the moment you switch away, not when you come back.
 #
-#   3. Neither — exec attach-session, same as (2) but this time
-#      genuinely not recoverable: with no GUI to open a window in and
-#      no existing tmux session to switch within, taking over the only
-#      screen there is is the only way to show a multi-pane preset at
-#      all. Says so first, so it's never a silent surprise.
+#   3. Neither — same idea via attach-session instead of switch-client,
+#      since there's no separate session to switch within. Detaching
+#      relaunches the picker right here, in the same window, rather
+#      than genuinely taking it over as it used to.
 # ------------------------------------------------------------
 
 preset_show_session() {
@@ -751,14 +784,15 @@ preset_show_session() {
         # returning as if it had worked — a swallowed failure here
         # would look exactly like the original "nothing happened" bug
         # this whole thing exists to fix.
-        if osascript - "$session" <<'APPLESCRIPT' >/dev/null 2>&1
+        if osascript - "$session" "$SCRIPT_PATH" <<'APPLESCRIPT' >/dev/null 2>&1
 on run argv
     set sessionName to item 1 of argv
+    set launcherPath to item 2 of argv
     tell application "Ghostty"
         activate
         set newWindow to new window
         set newTerminal to focused terminal of newWindow
-        input text ("exec tmux attach-session -t " & quoted form of sessionName) to newTerminal
+        input text ("exec zsh -c 'tmux attach-session -t \"$1\" && exec \"$2\"' -- " & quoted form of sessionName & " " & quoted form of launcherPath) to newTerminal
         send key "enter" to newTerminal
     end tell
 end run
@@ -773,15 +807,16 @@ APPLESCRIPT
     fi
 
     if [[ -n "$TMUX" ]]; then
-        exec tmux switch-client -t "$session"
+        exec zsh -c 'tmux switch-client -t "$1" && exec "$2"' -- "$session" "$SCRIPT_PATH"
     fi
 
     printf '\n'
-    printf 'Not running inside tmux — this preset will take over this window.\n'
-    printf 'Run brew-launcher itself inside a tmux session to keep this recoverable next time.\n'
+    printf 'Not running inside tmux — this preset will take over this window\n'
+    printf 'until you detach (prefix+d) or the preset ends, then the launcher\n'
+    printf 'comes back here on its own.\n'
     sleep 2
 
-    exec tmux attach-session -t "$session"
+    exec zsh -c 'tmux attach-session -t "$1" && exec "$2"' -- "$session" "$SCRIPT_PATH"
 }
 
 # ------------------------------------------------------------

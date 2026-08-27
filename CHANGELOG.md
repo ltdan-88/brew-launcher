@@ -5,6 +5,48 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.35.0] — 2026-08-27
+
+### Changed
+
+- **Detaching from a preset (or the preset ending) now brings the
+  launcher back**, extending the previous "relaunch after quitting a
+  tool" fix to presets: "would it make sense to return to the launcher
+  as well, when you have multiple tmux panes open and you hit Ctrl+B
+  d?" All three of `preset_show_session()`'s outcomes now relaunch the
+  launcher once the tmux side of things ends, instead of leaving a
+  dead pane or a bare shell behind.
+
+### Fixed
+
+- **A real bug this surfaced**: testing with a genuinely attached tmux
+  client (not just a headless one) found that the "switch-client"
+  path's claim of being recoverable — "the picker's own session is
+  still alive, prefix+s switches back to it" — was wrong.
+  switch-client's own process exits the instant it's done its job, and
+  a pane whose foreground process exits is closed by tmux *by
+  default*, so the picker's original pane (and, being the only one,
+  its whole session) was actually being destroyed the moment
+  switch-client succeeded. Relaunching the launcher in that same pane
+  once switch-client returns fixes this properly — verified live with
+  a real attached client that the session now survives and has a
+  fresh, ready picker waiting once you switch back to it.
+- **A second bug found while fixing the first**: chaining the relaunch
+  with a bare `;` meant a *failed* attach-session/switch-client (no
+  real terminal available — exactly what `--preset` looks like in a
+  test or any non-interactive invocation) still ran straight into a
+  brand new fzf session against that same broken stdin, hanging
+  instead of failing fast. Changed to `&&`, so the relaunch only fires
+  after a genuinely successful attach that later ended cleanly; a real
+  failure still fails straight through, same as before this whole
+  feature existed. `test/preset-fixtures.sh`'s SSH-simulated case now
+  runs under an explicit timeout to guard against this exact hang
+  coming back — an earlier version of that same test check reported
+  PASS even with the bug deliberately reintroduced, because it
+  inspected the hung process's children *after* killing its parent,
+  by which point they'd already been reparented and were no longer
+  visible to that check.
+
 ## [0.34.0] — 2026-08-27
 
 ### Changed
