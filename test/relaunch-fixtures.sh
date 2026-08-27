@@ -51,6 +51,16 @@ chmod +x "$FAKE_LAUNCHER"
 source <(sed -n '/^launch_in_current_terminal() {/,/^}/p' "$LAUNCHER")
 
 (
+    # The real script always exports this near the top, before any
+    # function can run — sourcing just the one function skips that, so
+    # it needs setting here too (a harmless nonexistent path is fine,
+    # the function only ever `rm -f`s it). Caught live: this passed
+    # locally only because an earlier real run in this same shell had
+    # left FOOTER_CLICK_FILE set in the environment already — CI, with
+    # a clean one, failed on `set -u` the moment the sourced function
+    # referenced it, before ever reaching the exec chain this test is
+    # actually about.
+    FOOTER_CLICK_FILE="$TEST_HOME/footer-click"
     SCRIPT_PATH="$FAKE_LAUNCHER"
     launch_in_current_terminal /usr/bin/true
 ) >/dev/null 2>&1
