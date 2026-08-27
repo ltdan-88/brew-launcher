@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.30.1"
+VERSION="0.30.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -679,7 +679,7 @@ run_preset() {
     local -a preset_commands=()
     local -a preset_warnings=()
     local preset_line preset_session preset_cmd preset_resolved
-    local preset_started=false preset_pane_count
+    local preset_started=false preset_running_count preset_no_room_count=0
     local preset_hash preset_stored_hash
 
     if ! command -v tmux >/dev/null 2>&1; then
@@ -780,40 +780,74 @@ run_preset() {
 
         # Same one-shot-CLI fix as the interactive launch paths: run
         # the command, then fall through to a fresh interactive shell
-        # in the pane, rather than exec-ing straight into it.
+        # in the pane, rather than exec-ing straight into it. The
+        # printf in between exits alternate-screen mode and shows the
+        # cursor — a no-op if the tool already cleaned up, a real fix
+        # if it crashed or got killed mid-TUI and left the pane stuck
+        # thinking it's still in alternate-screen mode (confirmed live
+        # via tmux's own #{alternate_on}) — see launch_in_current_terminal
+        # for the same fix and fuller explanation.
         if [[ "$preset_started" == false ]]; then
             tmux new-session -d -s "$preset_session" -n "$name" \
-                "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)preset_resolved}"
+                "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec zsh' -- ${(q)preset_resolved}"
             preset_started=true
         else
-            tmux split-window -t "$preset_session" \
-                "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)preset_resolved}"
+            if ! tmux split-window -t "$preset_session" \
+                "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec zsh' -- ${(q)preset_resolved}" 2>/dev/null; then
+
+                # Real, reproducible failure mode found live: tmux's
+                # default split just keeps halving whichever pane it's
+                # given, not filling the window grid-aware, so a plain
+                # 80x24 terminal ran out of room after only 4 panes —
+                # the 5th and 6th split silently failed ("no space for
+                # a new pane") and those tools were dropped with no
+                # sign anything had gone wrong. Retiling after every
+                # split below prevents this in all but genuinely
+                # oversized presets; this still catches the true floor
+                # (a terminal too small, or a preset with dozens of
+                # tools, easy to end up with now that Create Preset can
+                # mark that many in one go) and reports it instead of
+                # failing silently. Counted rather than one warning
+                # line per tool — hitting this at all usually means
+                # hitting it many times in a row, and a wall of
+                # identical lines is its own readability problem.
+                preset_no_room_count=$(( preset_no_room_count + 1 ))
+                continue
+            fi
+        fi
+
+        # Reflow into a grid after every pane, not just once at the end
+        # — keeps each split working with the most space tmux can give
+        # it, which is what actually avoids the failure above rather
+        # than just detecting it after the fact. tiled from 3 panes up;
+        # exactly 2 gets even-horizontal instead, since tiled picks a
+        # grid based on the terminal's character-cell shape rather than
+        # its pixel aspect ratio — cells are taller than they are wide,
+        # so tiled stacks a pair top/bottom even on a wide monitor
+        # (confirmed directly: two 200-column panes at 200x24 and
+        # 200x25, one above the other) — even-horizontal's side-by-side
+        # split is the better default at exactly 2.
+        preset_running_count="$(tmux list-panes -t "$preset_session" 2>/dev/null | wc -l)"
+
+        if (( preset_running_count == 2 )); then
+            tmux select-layout -t "$preset_session" even-horizontal 2>/dev/null
+        elif (( preset_running_count > 2 )); then
+            tmux select-layout -t "$preset_session" tiled 2>/dev/null
         fi
 
     done
+
+    if (( preset_no_room_count == 1 )); then
+        preset_warnings+=("Warning: no room for 1 tool — terminal too small for this many panes, skipping it.")
+    elif (( preset_no_room_count > 1 )); then
+        preset_warnings+=("Warning: no room for $preset_no_room_count tools — terminal too small for this many panes, skipping them.")
+    fi
 
     if [[ "$preset_started" == false ]]; then
         printf '\n'
         printf 'Error: none of the commands in preset "%s" were found on PATH.\n' "$name"
         sleep 2
         return 1
-    fi
-
-    # tmux's own "tiled" algorithm picks a grid based on the terminal's
-    # character-cell shape, not its pixel aspect ratio — cells are
-    # taller than they are wide, so for exactly 2 panes it stacks them
-    # top/bottom rather than side by side, even on a wide monitor
-    # (confirmed directly: tiled put two 200-column panes at 200x24
-    # and 200x25, one above the other). even-horizontal gives the
-    # side-by-side split that's actually the better default at 2 —
-    # tiled's grid behavior is the right call again from 3 panes up,
-    # where a single row or column stops making sense.
-    preset_pane_count="$(tmux list-panes -t "$preset_session" 2>/dev/null | wc -l)"
-
-    if (( preset_pane_count == 2 )); then
-        tmux select-layout -t "$preset_session" even-horizontal
-    else
-        tmux select-layout -t "$preset_session" tiled
     fi
 
     # Session-scoped, not global (-g) — this turns mouse support on for
@@ -2640,7 +2674,7 @@ pick_more_action() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --footer='  ↑ ↓  Navigate    Enter/Space  [Choose]    Esc  [Back]' \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter/Space  [Choose]    Esc  [Back]' \
             --bind 'space:accept' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
@@ -2774,7 +2808,7 @@ pick_theme() {
             --delimiter=$'\t' \
             --with-nth=2 \
             --header="Current: $THEME_NAME"$'\n'"Takes effect after a relaunch, not live." \
-            --footer='  ↑ ↓  Navigate    Enter  [Choose]    Esc  [Cancel]' \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [Choose]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -3542,7 +3576,16 @@ launch_in_current_terminal() {
     # command path is passed as "$1" to the inner `zsh -c` rather than
     # interpolated into its script text, so a path containing spaces
     # or shell metacharacters is still passed through as one argument.
-    exec zsh -c '"$1"; exec zsh' -- "$command_path"
+    #
+    # The printf between the command and the fresh shell exits
+    # alternate-screen mode and shows the cursor again — no-ops if the
+    # command already cleaned up after itself, but a real fix for one
+    # that crashed or got killed mid-TUI without doing so. Confirmed
+    # live: a TUI that enters the alternate screen and then dies
+    # leaves tmux's own #{alternate_on} stuck at 1 even though a
+    # perfectly ordinary shell is now running underneath — the terminal
+    # can look frozen or blank until something else forces a redraw.
+    exec zsh -c '"$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; exec zsh' -- "$command_path"
 }
 
 # ------------------------------------------------------------
@@ -3576,7 +3619,9 @@ launch_in_tmux() {
     # with zsh's own (q) flag — the same tool already used to build
     # the details pane's --preview command — rather than interpolated
     # raw, so a path containing spaces still arrives as one argument.
-    tmux new-window "exec zsh -c '\"\$1\"; exec zsh' -- ${(q)command_path}"
+    # The printf between the two exits alternate-screen mode and shows
+    # the cursor — see launch_in_current_terminal for why.
+    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec zsh' -- ${(q)command_path}"
 }
 
 # ------------------------------------------------------------
@@ -3613,8 +3658,17 @@ on run argv
         -- the same tab, rather than exec-ing straight into it. A
         -- one-shot CLI (eza, jq, bat, ...) prints and exits in under
         -- a second; exec-ing into it left the tab with no process to
-        -- show for it, so it looked broken.
-        input text ("exec zsh -c '\"$1\"; exec zsh' -- " & quoted form of commandPath) to newTerminal
+        -- show for it, so it looked broken. The printf before that
+        -- fresh shell exits alternate-screen mode and shows the
+        -- cursor again — see launch_in_current_terminal for why.
+        --
+        -- \\033, not \033: AppleScript has no numeric escape of its
+        -- own (confirmed live — \033 alone is a genuine syntax error
+        -- here, "Expected quote but found unknown token"), so this
+        -- needs its own literal-backslash escape first to produce the
+        -- four real characters \, 0, 3, 3 that the shell on the other
+        -- end is the one actually interpreting as an escape code.
+        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; exec zsh' -- " & quoted form of commandPath) to newTerminal
 
         send key "enter" to newTerminal
 
@@ -3695,10 +3749,12 @@ create_macos_shortcut() {
     # (0.8.0): run the command, then fall through to a fresh
     # interactive shell, rather than exec-ing straight into it. A
     # one-shot CLI shortcut would otherwise print its output and close
-    # the Terminal.app window before you could read it.
+    # the Terminal.app window before you could read it. The printf
+    # before that fresh shell exits alternate-screen mode and shows
+    # the cursor again — see launch_in_current_terminal for why.
     if ! cat > "$shortcut_path" <<EOF
 #!/bin/zsh
-exec zsh -c '"\$1"; exec zsh' -- "$command_path"
+exec zsh -c '"\$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; exec zsh' -- "$command_path"
 EOF
     then
         printf '\n'
@@ -3790,9 +3846,11 @@ create_linux_shortcut() {
     # interactive shell in the same terminal window, rather than
     # exec-ing straight into it — otherwise a one-shot CLI prints its
     # output and the window closes before there's anything to read.
+    # The printf before that fresh shell exits alternate-screen mode
+    # and shows the cursor again — see launch_in_current_terminal.
     if ! cat > "$script_path" <<EOF
 #!/usr/bin/env zsh
-exec zsh -c '"\$1"; exec zsh' -- "$command_path"
+exec zsh -c '"\$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; exec zsh' -- "$command_path"
 EOF
     then
         printf '\n'

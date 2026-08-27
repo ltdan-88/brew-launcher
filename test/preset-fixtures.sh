@@ -152,4 +152,67 @@ session_count_edited="$(tmux list-sessions 2>/dev/null | grep -c '^blpreset-pres
 
 tmux kill-session -t "$SESSION" 2>/dev/null
 
-printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale\n'
+# ------------------------------------------------------------
+# 6. A preset bigger than tmux's default split behavior can handle
+#    without help. Found live: on a plain 80x24 terminal, splitting
+#    kept halving whichever pane it was given rather than filling the
+#    window grid-aware, so only 4 of 6 (and later, only 4 of 12) panes
+#    ever got created — split-window failed silently on the rest ("no
+#    space for a new pane"), with nothing telling the user tools had
+#    been dropped. run_preset() now retiles into a grid after every
+#    split, not just once at the end, so the window is always as full
+#    as it can be before the next one is attempted. 12 comfortably
+#    exceeds the old ~4-pane ceiling this bug had on a plain 80x24
+#    session — this is the regression check for that ceiling coming
+#    back, not a claim about a maximum panes count.
+# ------------------------------------------------------------
+
+BIG_SESSION="blpreset-preset-fixtures-big"
+tmux kill-session -t "$BIG_SESSION" 2>/dev/null
+
+for _ in $(seq 1 12); do printf 'cat\n'; done > "$PRESETS_DIR/preset-fixtures-big"
+
+"$LAUNCHER" --preset preset-fixtures-big </dev/null >/dev/null 2>&1
+
+big_pane_count="$(tmux list-panes -t "$BIG_SESSION" 2>/dev/null | wc -l | tr -d ' ')"
+[[ "$big_pane_count" == "12" ]] ||
+    fail "a 12-command preset should get 12 panes on a plain terminal, got: $big_pane_count"
+
+tmux kill-session -t "$BIG_SESSION" 2>/dev/null
+
+# ------------------------------------------------------------
+# 7. A tool that enters alternate-screen mode and then dies without
+#    restoring it (a real, common failure mode for a curses-based tool
+#    that crashes instead of exiting cleanly) shouldn't leave the pane
+#    stuck thinking it's still in alternate-screen mode once the
+#    fallback shell takes over — found live via tmux's own
+#    #{alternate_on}, confirmed still 1 even though a perfectly
+#    ordinary, responsive shell was running underneath.
+# ------------------------------------------------------------
+
+BADTUI_SESSION="blpreset-preset-fixtures-badtui"
+tmux kill-session -t "$BADTUI_SESSION" 2>/dev/null
+
+BADTUI_BIN="$TEST_HOME/bin"
+mkdir -p "$BADTUI_BIN"
+cat > "$BADTUI_BIN/badtui" <<'EOF'
+#!/bin/sh
+printf '\033[?1049h\033[?25l\033[2J'
+printf 'this is the "crashed" alternate screen'
+exit 1
+EOF
+chmod +x "$BADTUI_BIN/badtui"
+
+cat > "$PRESETS_DIR/preset-fixtures-badtui" <<'EOF'
+badtui
+EOF
+
+PATH="$BADTUI_BIN:$PATH" "$LAUNCHER" --preset preset-fixtures-badtui </dev/null >/dev/null 2>&1
+
+alternate_on="$(tmux display-message -p -t "$BADTUI_SESSION" '#{alternate_on}' 2>/dev/null)"
+[[ "$alternate_on" == "0" ]] ||
+    fail "pane should have exited alternate-screen mode after the tool died without doing so, got alternate_on=$alternate_on"
+
+tmux kill-session -t "$BADTUI_SESSION" 2>/dev/null
+
+printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there\n'
