@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.30.2"
+VERSION="0.31.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -275,10 +275,10 @@ Theme:
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
   var above always wins over it for that one run. The same file also
   holds DEFAULT_CATEGORIES and DEFAULT_HIDDEN (each on|off, default
-  on), toggled from More → Default Categories / Default Hidden — see
-  "Bundled defaults" below.
+  on), toggled from Actions → Default Categories / Default Hidden —
+  see "Bundled defaults" below.
 
-  OPEN_TO_CATEGORIES=on (default off, toggled from More → Open to
+  OPEN_TO_CATEGORIES=on (default off, toggled from Actions → Open to
   Categories) opens straight to the view picker on launch instead of
   All — worth turning on once your categories are actually populated
   (bundled, manual, or both), since an empty category list has nothing
@@ -286,9 +286,9 @@ Theme:
   same as pressing it from F2 any other time.
 
   All three of these toggles flip with Space as well as Enter, and
-  reopen the More menu afterward rather than exiting to the main list
-  — useful for touching more than one in the same visit. Every other
-  action in More still exits normally once it's done.
+  reopen the Actions menu afterward rather than exiting to the main
+  list — useful for touching more than one in the same visit. Every
+  other action in Actions still exits normally once it's done.
 
 Bundled defaults:
   A curated set of well-known formula -> category mappings, and a
@@ -319,7 +319,11 @@ Keyboard shortcuts:
             Recently Added, Hidden)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
             categories, dependencies, caveats). Shift-Up/Down scrolls it.
-  F4 / ⌥M   Open the More menu — the actions below
+  F4 / ⌥M   Open the Actions menu — the actions below. Named for what
+            it does to the highlighted row, like a right-click menu
+            would — its border label names that row too (e.g.
+            "Actions on fastfetch"), so it's never ambiguous which
+            entry it's about to act on.
   F5 / ⌥R   Refresh the cache without leaving the launcher
   F9 / ⌥P   Launch a preset — see Presets below. Ctrl-D in that
             picker deletes the highlighted preset instead.
@@ -327,19 +331,20 @@ Keyboard shortcuts:
   F4 and F5 also work from inside the view picker (F2) itself, not
   just the main list — no entry needs to be highlighted for either.
 
-  In the More menu, and always available directly:
+  In the Actions menu, and always available directly:
   F6 / ⌥H   Hide or unhide selected entry
   F7 / ⌥F   Toggle Favorites for selected entry
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
 
-  In the More menu only — Launch Preset (same as F9), switch color
+  In the Actions menu only — Launch Preset (same as F9), switch color
   theme, the three toggles under "Bundled defaults" below, Create
   Preset, Create a macOS or Linux shortcut. None of these need a
-  highlighted entry, so they're also offered when More is opened from
-  the view picker (Hide/Favorite/Categorize/Create shortcut are not,
-  since those act on a specific entry). Esc from any of them returns
-  to the More menu, not out to the main list.
+  highlighted entry, so they're also offered when Actions is opened
+  from the view picker (Hide/Favorite/Categorize/Create shortcut are
+  not, since those act on a specific entry — and the view picker has
+  no single row to name anyway). Esc from any of them returns to the
+  Actions menu, not out to the main list.
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -433,7 +438,7 @@ if [[ "$1" == "--internal-footer-click" ]]; then
         '[Refresh]'|Refresh|F5/⌥R|F5| \
         '[Favorite]'|Favorite|F7/⌥F|F7| \
         '[Categorize]'|Categorize|F8/⌥C|F8| \
-        '[More]'|More|F4/⌥M|F4| \
+        '[Actions]'|Actions|F4/⌥M|F4| \
         '[Choose]'|Choose| \
         '[Quit]'|Quit|'[Close]'|Close|Enter|'[Launch]'|Launch| \
         '[View]'|View|'[Delete]'|Delete)
@@ -2466,7 +2471,7 @@ confirm_delete_category() {
 # "Esc goes up one level" model: Games -> [Esc] -> picker -> [Esc] ->
 # All -> [Esc] -> quit.
 # ------------------------------------------------------------
-# The [More] menu — second-tier actions.
+# The [Actions] menu — second-tier actions.
 #
 # The split is by what you're doing, not by how often: browsing
 # (find something, look at it, run it) stays on the main footer,
@@ -2485,7 +2490,7 @@ confirm_delete_category() {
 # F1 — the help screen.
 #
 # F1 = help is close to universal, so it's the one key in this
-# launcher deliberately left off both the footer and the More menu's
+# launcher deliberately left off both the footer and the Actions menu's
 # main listing: teaching it would spend space on something most
 # people already know to try. It's still reachable — the same fzf
 # list idiom as every other screen here, purely informational, so
@@ -2503,7 +2508,7 @@ pick_help() {
     rows+=("  F2 / ⌥V   Switch view (All, Favorites, categories, Most Used,")
     rows+=("            Recently Added, Hidden)")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
-    rows+=("  F4 / ⌥M   Open the More menu — the second tier below")
+    rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
     rows+=("            Both also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
@@ -2578,13 +2583,20 @@ pick_more_action() {
     local hide_label="$1"
     # Entry-scoped rows (Hide/Favorite/Categorize/Create shortcut all
     # act on whatever row was highlighted) only make sense when there
-    # is a highlighted row to act on — false when More is reached from
-    # a screen with no entry of its own, like the view picker. Defaults
-    # true so every existing call site (all from the main list) is
-    # unaffected without having to pass it explicitly.
+    # is a highlighted row to act on — false when Actions is reached
+    # from a screen with no entry of its own, like the view picker.
+    # Defaults true so every existing call site (all from the main
+    # list) is unaffected without having to pass it explicitly.
     local has_entry="${2:-true}"
+    # Named in the border label below when present — reported live as
+    # a real point of confusion for anyone used to a GUI right-click
+    # menu: "Actions" alone doesn't say *which* row it's about to act
+    # on, unlike a context menu that opens already anchored to
+    # whatever you clicked. Empty when has_entry is false (nothing to
+    # name), or for a caller that hasn't been updated to pass it.
+    local entry_name="${3:-}"
     local -a rows=()
-    local result chosen clicked_word
+    local result chosen clicked_word more_label='Actions'
 
     if [[ "$has_entry" == true ]]; then
         rows+=("f6"$'\t'"$(printf '%-20s%s' "$hide_label" 'F6 / ⌥H')")
@@ -2659,6 +2671,8 @@ pick_more_action() {
         rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create shortcut' '')")
     fi
 
+    [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
+
     rm -f "$FOOTER_CLICK_FILE"
 
     result="$(
@@ -2668,7 +2682,7 @@ pick_more_action() {
             --no-clear \
             --layout=reverse \
             --border=rounded \
-            --border-label="$(screen_border_label 'More')" \
+            --border-label="$(screen_border_label "$more_label")" \
             --border-label-pos=2 \
             --prompt=' 󰣇  ' \
             --pointer='▌' \
@@ -2688,10 +2702,10 @@ pick_more_action() {
 }
 
 # ------------------------------------------------------------
-# Runs the More menu to completion — loops on pick_more_action() so
+# Runs the Actions menu to completion — loops on pick_more_action() so
 # the three settings toggles (and now Theme/Create Preset/Launch
 # Preset, none of which need a highlighted row either) flip or run in
-# place and reopen More right after, rather than dropping back to
+# place and reopen Actions right after, rather than dropping back to
 # whatever screen called this. Reused from both the main list (with an
 # entry) and the view picker (without one), so this behavior can't
 # drift apart between the two.
@@ -2711,12 +2725,12 @@ MORE_MENU_FALLTHROUGH_ACTION=""
 
 open_more_menu() {
 
-    local hide_label="$1" has_entry="$2"
+    local hide_label="$1" has_entry="$2" entry_name="$3"
     local chosen_action new_value
 
     while true; do
 
-        chosen_action="$(pick_more_action "$hide_label" "$has_entry")"
+        chosen_action="$(pick_more_action "$hide_label" "$has_entry" "$entry_name")"
 
         [[ -z "$chosen_action" ]] && return 1
 
@@ -2766,7 +2780,7 @@ open_more_menu() {
 }
 
 # ------------------------------------------------------------
-# The Theme screen, reached from the More menu.
+# The Theme screen, reached from the Actions menu.
 #
 # Doesn't need a selected entry (nothing here is about any one row),
 # so its main-loop dispatch sits with F1/Help rather than falling
@@ -2961,7 +2975,7 @@ pick_view() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F4  [More]    F5  [Refresh]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F4  [Actions]    F5  [Refresh]    Ctrl-D  [Delete]    Esc  [Back]' \
             --expect=enter,ctrl-d,f4,f5 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
@@ -2986,19 +3000,19 @@ pick_view() {
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[View]'|View) pick_action="enter" ;;
-            '[More]'|More|F4/⌥M|F4) pick_action="f4" ;;
+            '[Actions]'|Actions|F4/⌥M|F4) pick_action="f4" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) pick_action="f5" ;;
         esac
     fi
 
-    # Neither needs a picked row — More and Refresh both work the same
-    # regardless of which view is highlighted when you press them, so
-    # this checks before the "nothing picked" guard below (which would
-    # otherwise treat highlighting nothing yet as a reason to bail).
-    # Redraws by calling back into this same function, exactly like
-    # the Ctrl-D delete flow below already does — the view picker really
-    # is the hub it's described as elsewhere, so More and Refresh need
-    # to work here the same as they do on the main list.
+    # Neither needs a picked row — Actions and Refresh both work the
+    # same regardless of which view is highlighted when you press them,
+    # so this checks before the "nothing picked" guard below (which
+    # would otherwise treat highlighting nothing yet as a reason to
+    # bail). Redraws by calling back into this same function, exactly
+    # like the Ctrl-D delete flow below already does — the view picker
+    # really is the hub it's described as elsewhere, so Actions and
+    # Refresh need to work here the same as they do on the main list.
     if [[ "$pick_action" == "f4" ]]; then
         open_more_menu "" false
         pick_view
@@ -3499,7 +3513,7 @@ refresh_cache_and_state() {
     return 1
 }
 
-# Opt-in (More → Open to Categories) — shows the view picker as the
+# Opt-in (Actions → Open to Categories) — shows the view picker as the
 # very first screen instead of "All", so a launch lands you straight
 # in your categories rather than a long flat list. Only makes sense
 # once categories are actually populated (bundled, manual, or both);
@@ -4274,7 +4288,7 @@ toggle_category() {
 
 create_preset() {
 
-    # Reachable directly from More even without tmux now (see
+    # Reachable directly from Actions even without tmux now (see
     # footer_actions() for why that's shown rather than hidden) — a
     # preset built without tmux would only ever error the moment
     # someone tried to launch it, so this is where that gets explained
@@ -4382,7 +4396,7 @@ create_preset() {
         # one tool isn't really what presets are for (you'd just launch
         # that tool directly). Now it's an explicit error, and this
         # loop just reopens the same screen rather than dropping all
-        # the way back out to More.
+        # the way back out to Actions.
         if (( ${#selected_commands[@]} == 0 )); then
             printf '\n'
             printf 'Mark at least one tool with Tab before saving a preset.\n'
@@ -4633,17 +4647,25 @@ launch_preset() {
 # cut. build_footer() tries progressively narrower renderings instead
 # of ever handing fzf something that might get chopped:
 #
-#   1. every item, with ⌥ aliases, widest gap   (needs ~93 cols)
-#   2. every item, F-keys only, widest gap      (needs ~78 cols)
-#   3. every item, F-keys only, narrowest gap   (needs ~70 cols)
+#   1. every item, with ⌥ aliases, widest gap   (needs ~102 cols)
+#   2. every item, F-keys only, widest gap      (needs ~87 cols)
+#   3. every item, F-keys only, narrowest gap   (needs ~79 cols)
 #
 # The ⌥ aliases go first since the F-keys alone already work without
 # the "Option as Meta" terminal setting — losing them costs nothing
 # a plain F-key press can't already do. No item is ever dropped
-# outright; (3) is the floor, so anything narrower than it (under
-# about 74 columns) is the one case this still hands fzf a line that
-# can get silently truncated — well under the ~80-column terminal
-# width this project otherwise assumes as a baseline.
+# outright; (3) is the floor, so anything narrower than it is the one
+# case this still hands fzf a line that can get silently truncated —
+# just above the ~80-column terminal width this project otherwise
+# assumes as a baseline, so a plain 80-column terminal already sits in
+# that one gap; there's no narrower tier below it to fall back to.
+#
+# The border/padding overhead below is a real measured constant, not
+# an estimate — reported live after the [Actions] rename (3 characters
+# wider than the old [More]) pushed tier 1's line to exactly the old
+# budget's ceiling with zero margin, which turned out to still overflow
+# in practice: rendering it at every width from 96 to 106 columns found
+# the true cutover at 102, six wider than the string itself, not four.
 # ------------------------------------------------------------
 
 terminal_width() {
@@ -4674,12 +4696,15 @@ footer_actions() {
     local -a parts=()
 
     # Browsing/navigation, plus the one organizing action that's worth
-    # reaching for repeatedly rather than tucked away in [More] —
+    # reaching for repeatedly rather than tucked away in [Actions] —
     # Presets, since running one is a recurring thing, not a one-time
-    # setup step. Everything else still lives behind [More].
+    # setup step. Everything else still lives behind [Actions] — named
+    # that, not "More", specifically so it reads as "what can I do to
+    # the highlighted row" the way a GUI right-click menu would,
+    # rather than something vaguer like "more info" or "more results."
     parts+=("$(footer_key F2 V $with_alt)  [Views]")
     parts+=("$(footer_key F3 D $with_alt)  [Details]")
-    parts+=("$(footer_key F4 M $with_alt)  [More]")
+    parts+=("$(footer_key F4 M $with_alt)  [Actions]")
     parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
 
     # Always shown, even without tmux — unlike Create Shortcut on an
@@ -4687,7 +4712,7 @@ footer_actions() {
     # tmux explains exactly what to install rather than failing
     # silently, and hiding it entirely turned out to mean someone who
     # never had tmux would never learn Presets exist at all. The
-    # More-menu row carries the "needs tmux" indicator; the footer
+    # Actions-menu row carries the "needs tmux" indicator; the footer
     # stays terse like every other entry here.
     parts+=("$(footer_key F9 P $with_alt)  [Presets]")
 
@@ -4705,7 +4730,7 @@ footer_actions() {
 build_footer() {
 
     local esc_hint="$1"
-    local width=$(( $(terminal_width) - 4 ))   # border and padding
+    local width=$(( $(terminal_width) - 6 ))   # border and padding — measured live, see comment above
 
     local nav="  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]"
     local legend="    +  Favorited    #  Categorized    *  Outdated"
@@ -4908,7 +4933,7 @@ while true; do
             '[Refresh]'|Refresh|F5/⌥R|F5) action="f5" ;;
             '[Favorite]'|Favorite|F7/⌥F|F7) action="f7" ;;
             '[Categorize]'|Categorize|F8/⌥C|F8) action="f8" ;;
-            '[More]'|More|F4/⌥M|F4) action="f4" ;;
+            '[Actions]'|Actions|F4/⌥M|F4) action="f4" ;;
             '[Quit]'|Quit|'[Close]'|Close) action="esc" ;;
             Enter|'[Launch]'|Launch) action="enter" ;;
         esac
@@ -4921,7 +4946,7 @@ while true; do
     # --------------------------------------------------------
 
     # --------------------------------------------------------
-    # F1 / ⌥? — help. Purely informational, so unlike F4/More below
+    # F1 / ⌥? — help. Purely informational, so unlike F4/Actions below
     # it never falls through to another handler; it just redraws
     # where it was.
     # --------------------------------------------------------
@@ -4934,7 +4959,7 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # F4 / ⌥M — the [More] menu.
+    # F4 / ⌥M — the [Actions] menu.
     #
     # open_more_menu() runs the whole menu to completion, including
     # the toggle-and-reopen loop for the settings rows — see its own
@@ -4948,7 +4973,7 @@ while true; do
 
     if [[ "$action" == "f4" || "$action" == "alt-m" ]]; then
 
-        open_more_menu "$hide_label" true
+        open_more_menu "$hide_label" true "${selection%%$'\t'*}"
         more_menu_status=$?
 
         if (( more_menu_status != 2 )); then
@@ -4960,7 +4985,7 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # F9 / ⌥P — Launch Preset. Direct key, not just via More: unlike
+    # F9 / ⌥P — Launch Preset. Direct key, not just via Actions: unlike
     # Create Preset (a one-time setup step), running a preset is
     # something to reach for repeatedly, closer in spirit to F6/F7/F8
     # than to Theme/Create Preset. launch_preset() does its own picker
@@ -4971,7 +4996,7 @@ while true; do
     if [[ "$action" == "f9" || "$action" == "alt-p" ]]; then
 
         # Same message shown whether reached via direct keypress or via
-        # the footer/More entry — Presets stay visible everywhere even
+        # the footer/Actions entry — Presets stay visible everywhere even
         # without tmux (see footer_actions()), so this is the one place
         # that actually explains the requirement instead of opening
         # launch_preset()'s own picker only to error once something's
@@ -5096,7 +5121,7 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # Create shortcut — reached only through More now, not a direct
+    # Create shortcut — reached only through Actions now, not a direct
     # key. Made once per tool and rarely touched again, so it moved
     # off F9 in favor of Launch Preset; see pick_more_action().
     # --------------------------------------------------------
