@@ -4063,7 +4063,7 @@ build_entries() {
     # sort flag treats a key embedded partway through a longer string,
     # since a zero-padded prefix sorts correctly as plain text too.
     if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" \
-          || "$SORT_ORDER" == "size" ]]; then
+          || "${SORT_ORDER:-name}" == "size" ]]; then
 
         sort_prep=()
 

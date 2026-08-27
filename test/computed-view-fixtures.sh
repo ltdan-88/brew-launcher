@@ -61,6 +61,15 @@ max_size=6
 typeset -A hidden_commands category_members favorite_commands
 typeset -A categorized_commands outdated_formulas install_times launch_counts
 
+# build_entries() records every row's size into this unconditionally
+# (for SORT_ORDER=size — see sort-fixtures.sh), regardless of which
+# view is being built. Needs declaring here too even though this test
+# never sets SORT_ORDER itself, same "set -u" reason install_times
+# etc. above already need declaring — caught live: this test failed
+# with "apple: parameter not set" the moment that line shipped,
+# without this test itself having changed at all.
+typeset -A entry_sizes
+
 # Sourced from the real file, not reimplemented, so a regression here
 # fails this test rather than needing another visual catch.
 source <(sed -n '/^build_entries() {/,/^}/p' "$LAUNCHER")
