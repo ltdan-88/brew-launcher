@@ -9,8 +9,11 @@
 # driven directly against a fixture cache/categories/presets dir, same
 # technique preset-in-details-fixtures.sh already uses for the main
 # list's own --internal-preview. pick_view()/launch_preset() wiring
-# (the f3 key itself, pointed at the right subcommand) is checked as
-# source-text assertions, same reasoning as rename-fixtures.sh.
+# (pointed at the right subcommand) is checked as source-text
+# assertions, same reasoning as rename-fixtures.sh. F9's own pane was
+# later made unconditional (no F3 toggle at all — see
+# actions-menu-fixtures.sh), so only F2's wiring still checks for an
+# f3 key specifically.
 
 set -u
 
@@ -214,8 +217,12 @@ echo "$output" | grep -qi "not found" ||
     fail "preset preview for a nonexistent preset should say so, got: $output"
 
 # ------------------------------------------------------------
-# 7. Wiring: F2 and F9 actually offer F3 and point it at the right
-#    subcommand — a preview subcommand nobody calls is as good as none.
+# 7. Wiring: F2 offers F3 and points it at the right subcommand — a
+#    preview subcommand nobody calls is as good as none. F9's own pane
+#    is unconditional now (no F3 toggle at all — see
+#    actions-menu-fixtures.sh section 7, "Preset menu F9 should offer
+#    same behavior as F4 menu"), so it's checked for the subcommand
+#    only, not for an f3 key that no longer exists there.
 # ------------------------------------------------------------
 
 pick_view_block="$(sed -n '/^pick_view() {/,/^}/p' "$LAUNCHER")"
@@ -225,9 +232,7 @@ pick_view_block="$(sed -n '/^pick_view() {/,/^}/p' "$LAUNCHER")"
     fail "pick_view (F2) should preview via --internal-preview-category"
 
 launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
-[[ "$launch_preset_block" == *'f3'* ]] ||
-    fail "launch_preset (F9) should expect f3"
 [[ "$launch_preset_block" == *'--internal-preview-preset'* ]] ||
     fail "launch_preset (F9) should preview via --internal-preview-preset"
 
-printf 'PASS: F3 in F2/F9 previews category/preset contents (alphabetical vs. launch order respectively), explains bundled-only/built-in/empty/missing cases instead of showing nothing\n'
+printf 'PASS: F2 previews category contents via F3, F9 always previews preset contents (alphabetical vs. launch order respectively), explains bundled-only/built-in/empty/missing cases instead of showing nothing\n'

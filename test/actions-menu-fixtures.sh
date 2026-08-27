@@ -27,6 +27,22 @@
 # pane's own content (--internal-preview-action) IS run directly,
 # though — it's a plain CLI subcommand like --internal-preview-category,
 # no fzf involved.
+#
+# Extended again for a third live batch, restructuring the menu itself:
+#   - "I think that launch preset should be removed from this menu,
+#     since it is redundant having F9 always shown."
+#   - "Also i would move Create Preset and Create Shortcut up under
+#     Categorize."
+#   - "All other items are basically settings, so they should be
+#     clustered together."
+#   - "Preset menu F9 should offer same behavior as F4 menu (details
+#     pane always on)."
+# The row reorder is checked by position within pick_more_action()'s
+# rows array (source text, same reasoning as ever). F9's own
+# always-on pane is checked by running launch_preset()'s underlying
+# --internal-preview-preset (already covered elsewhere) and by
+# confirming its fzf call no longer conditions the preview window on
+# DETAILS_VISIBLE or offers f3 at all.
 
 set -u
 
@@ -122,9 +138,10 @@ open_menu_block="$(sed -n '/^open_more_menu() {/,/^}/p' "$LAUNCHER")"
 [[ "$pick_view_block" == *'DETAILS_VISIBLE'* ]] ||
     fail "pick_view (F2) should reference DETAILS_VISIBLE for its own F3 preview"
 
+# launch_preset (F9) no longer shares DETAILS_VISIBLE at all — see
+# section 7 below, "Preset menu F9 should offer same behavior as F4
+# menu (details pane always on)."
 launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
-[[ "$launch_preset_block" == *'DETAILS_VISIBLE'* ]] ||
-    fail "launch_preset (F9) should reference DETAILS_VISIBLE for its own F3 preview"
 
 # ------------------------------------------------------------
 # 4. DETAILS_PINNED: Esc closing the details pane and the Details
@@ -143,9 +160,6 @@ launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 
 [[ "$pick_view_block" == *'DETAILS_PINNED=false'* ]] ||
     fail "pick_view's (F2) F3 handler should clear DETAILS_PINNED — F3 is always a peek"
-
-[[ "$launch_preset_block" == *'DETAILS_PINNED=false'* ]] ||
-    fail "launch_preset's (F9) F3 handler should clear DETAILS_PINNED — F3 is always a peek"
 
 main_loop_f3_line="$(grep -n 'DETAILS_VISIBLE=false || DETAILS_VISIBLE=true' "$LAUNCHER" | tail -1 | cut -d: -f1)"
 [[ -n "$main_loop_f3_line" ]] ||
@@ -215,4 +229,43 @@ action_preview_output="$("$LAUNCHER" --internal-preview-action nonexistent-row-i
 [[ -n "$action_preview_output" ]] ||
     fail "--internal-preview-action should print something even for a row id it doesn't recognize, not go silent"
 
-printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Actions offers a Details toggle mirroring F3, DETAILS_PINNED keeps Esc from undoing a Details choice made via Actions, Alt Keybinds is wired end to end, and Actions has its own always-on details pane\n'
+# ------------------------------------------------------------
+# 7. Actions menu restructure: Launch Preset removed (redundant with
+#    the always-shown F9), Create Preset/Create Shortcut moved up
+#    under Categorize, everything settings-like clustered together,
+#    and F9's own details pane made unconditional like F4's.
+# ------------------------------------------------------------
+
+# Checked against the actual row-producing line, not a blanket
+# substring search — the code's own explanatory comment about this
+# removal legitimately says "Launch Preset" too.
+[[ "$more_action_block" != *'rows+=("f9"'* ]] ||
+    fail "pick_more_action should no longer offer an f9 row — Launch Preset is redundant with F9 already always shown"
+[[ "$open_menu_block" != *$'\n            f9)'* ]] ||
+    fail "open_more_menu should no longer dispatch f9 to launch_preset — the row is gone"
+
+# Position, not just presence: Create Preset/Create Shortcut should
+# come before the has_entry check that starts the settings cluster,
+# i.e. right after Categorize (f8), not after Sort/Details/Alt
+# Keybinds like before.
+rows_order="$(printf '%s\n' "$more_action_block" | grep -oE 'rows\+=\("(f6|f7|f8|create_preset|shortcut|theme|toggle_default_categories|toggle_default_hidden|toggle_open_to_categories|toggle_sort|toggle_details|toggle_alt_keybinds|backup)"')"
+
+f8_pos="$(echo "$rows_order" | grep -n '"f8"' | cut -d: -f1)"
+create_preset_pos="$(echo "$rows_order" | grep -n '"create_preset"' | cut -d: -f1)"
+shortcut_pos="$(echo "$rows_order" | grep -n '"shortcut"' | cut -d: -f1)"
+theme_pos="$(echo "$rows_order" | grep -n '"theme"' | cut -d: -f1)"
+backup_pos="$(echo "$rows_order" | grep -n '"backup"' | cut -d: -f1)"
+
+(( f8_pos < create_preset_pos && create_preset_pos < shortcut_pos && shortcut_pos < theme_pos )) ||
+    fail "expected row order Categorize -> Create Preset -> Create Shortcut -> Theme, got: $rows_order"
+(( theme_pos < backup_pos )) ||
+    fail "the settings cluster (starting at Theme) should still come before Backup, got: $rows_order"
+
+# F9's own pane: no longer conditioned on DETAILS_VISIBLE, no f3 in
+# --expect, no f3 in its footer spec, no DETAILS_PINNED to clear.
+[[ "$launch_preset_block" != *"DETAILS_VISIBLE\" == false"* ]] ||
+    fail "launch_preset's preview window should no longer be conditioned on DETAILS_VISIBLE — it's always on now"
+[[ "$launch_preset_block" != *'f3'* ]] ||
+    fail "launch_preset should no longer expect or offer f3 — its details pane has no toggle anymore"
+
+printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Actions offers a Details toggle mirroring F3, DETAILS_PINNED keeps Esc from undoing a Details choice made via Actions, Alt Keybinds is wired end to end, Actions has its own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize with settings clustered after, and F9 has its own unconditional details pane\n'

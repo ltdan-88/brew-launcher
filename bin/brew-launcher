@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.43.0"
+VERSION="0.44.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -385,8 +385,9 @@ Keyboard shortcuts:
             entry it's about to act on. Its own details pane, always
             on, explains what each row/toggle actually does.
   F5 / ⌥R   Refresh the cache without leaving the launcher
-  F9 / ⌥P   Launch a preset — see Presets below. Ctrl-R in that
-            picker renames the highlighted preset, Ctrl-D deletes it.
+  F9 / ⌥P   Launch a preset — see Presets below. Its own details pane,
+            always on like F4's, previews what's actually in the
+            highlighted preset. Ctrl-R renames it, Ctrl-D deletes it.
 
   F4, F5 and F9 also work from inside the view picker (F2) itself, not
   just the main list — no entry needs to be highlighted for either of
@@ -398,13 +399,13 @@ Keyboard shortcuts:
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
 
-  In the Actions menu only — Launch Preset (same as F9), switch color
-  theme, Sort by name or size, toggle the details pane (same toggle as
-  F3 itself, mirrored here so its state is visible before opening it),
-  toggle Alt Keybinds (see above), Open to Categories, the two toggles
-  under "Bundled defaults" below, Create Preset, Create a macOS or
-  Linux shortcut, Backup. None of these need a highlighted entry, so
-  they're also offered when Actions is opened from the view picker
+  In the Actions menu only — Create Preset, Create a macOS or Linux
+  shortcut, switch color theme, the two toggles under "Bundled
+  defaults" below, Open to Categories, Sort by name or size, toggle
+  the details pane (same toggle as F3 itself, mirrored here so its
+  state is visible before opening it), toggle Alt Keybinds (see
+  above), Backup. All but Create Shortcut need no highlighted entry,
+  so they're also offered when Actions is opened from the view picker
   (Hide/Favorite/Categorize/Create Shortcut are
   not, since those act on a specific entry — and the view picker has
   no single row to name anyway). Esc from any of them returns to the
@@ -833,10 +834,11 @@ if [[ "$1" == "--internal-preview-category" ]]; then
 fi
 
 # ------------------------------------------------------------
-# F3 details preview for the preset picker (F9): what's actually in
-# the highlighted preset, at a glance. Same motivation as the category
+# Details preview for the preset picker (F9): what's actually in the
+# highlighted preset, at a glance. Same motivation as the category
 # preview above; a preset is always a real file (no bundled-only case
-# to worry about), so this is the simpler of the two.
+# to worry about), so this is the simpler of the two. Always shown in
+# F9 itself, not gated behind F3 — see launch_preset()'s own comment.
 # ------------------------------------------------------------
 
 if [[ "$1" == "--internal-preview-preset" ]]; then
@@ -906,9 +908,6 @@ if [[ "$1" == "--internal-preview-action" ]]; then
         f8)
             printf 'Categorize\n\nFile the highlighted entry into a category, typed or\npicked from existing ones. Picking a category it is\nalready in removes it instead — same key adds and removes.\nMarked with a # in every list.\n'
             ;;
-        f9)
-            printf 'Launch Preset\n\nOpen the preset picker and launch one — every command in\nit starts together, one tmux pane each. Needs tmux.\n'
-            ;;
         theme)
             printf 'Theme\n\nSwitch the color theme used throughout the picker.\n'
             ;;
@@ -925,7 +924,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used or Recently Added, which already have\ntheir own meaningful order.\n'
             ;;
         toggle_details)
-            printf 'Details\n\nShow or hide the F3 preview pane — on the main list, the\nview picker (F2), and the preset picker (F9) alike.\nToggling it here makes it a standing choice (it stays on\nuntil you turn it off again, here or with F3); pressing F3\ndirectly instead is just a quick peek, and Esc there closes\nit first before doing anything else.\n'
+            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice (it stays on until you turn it off again, here or\nwith F3); pressing F3 directly instead is just a quick\npeek, and Esc there closes it first before doing anything\nelse. The preset picker (F9) has its own details pane that'"'"'s\nalways on, no toggle needed.\n'
             ;;
         toggle_alt_keybinds)
             printf 'Alt Keybinds\n\nOn: the footer also lists each action'"'"'s ⌥ (Option)\nalternative, e.g. F2/⌥V, wherever it fits. Off: the footer\nshows plain F-keys only. The F-keys and their direct presses\nalways work regardless of this setting — it only changes\nwhat the footer prints.\n'
@@ -3326,8 +3325,9 @@ pick_help() {
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
         rows+=("            otherwise reattaches if it's already running")
-        rows+=("            F3 there previews what's in the highlighted preset,")
-        rows+=("            Ctrl-R renames it, Ctrl-D deletes it")
+        rows+=("            Its own details pane, always on, previews what's in")
+        rows+=("            the highlighted preset. Ctrl-R renames it, Ctrl-D")
+        rows+=("            deletes it")
     else
         rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
     fi
@@ -3429,37 +3429,47 @@ pick_more_action() {
         rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
     fi
 
-    # Launch Preset doesn't actually need a highlighted row — it opens
-    # its own picker — so it's offered regardless of has_entry, same
-    # as the settings/setup rows below. Always shown even without
-    # tmux — see footer_actions() for why we moved away from hiding
-    # these outright. The hint column doubles as the discovery
-    # mechanism: it shows the normal keybind when tmux is present, or
-    # "needs tmux" when it isn't, so the requirement is visible at a
-    # glance without pressing anything.
-    local preset_hint='F9 / ⌥P'
+    # Launch Preset used to have a row here too, but F9 already runs it
+    # directly and is always in the footer on every screen this menu is
+    # reachable from — a second, Actions-only path to the exact same
+    # thing was pure redundancy. Raised live: "I think that launch
+    # preset should be removed from this menu, since it is redundant
+    # having F9 always shown." Removed outright, not just deprioritized.
     local create_preset_hint=''
-    if [[ "$TMUX_AVAILABLE" == false ]]; then
-        preset_hint='needs tmux'
-        create_preset_hint='needs tmux'
-    fi
-    rows+=("f9"$'\t'"$(printf '%-20s%s' 'Launch Preset' "$preset_hint")")
+    [[ "$TMUX_AVAILABLE" == false ]] && create_preset_hint='needs tmux'
 
+    # Create Preset/Create Shortcut moved up here, right after
+    # Categorize — raised live: "I would move Create Preset and Create
+    # Shortcut up under Categorize." Both build something new (a
+    # preset, a shortcut file) rather than adjust a setting, which puts
+    # them closer in spirit to Hide/Favorite/Categorize above than to
+    # the settings cluster below. Create Preset doesn't need a
+    # highlighted row (it opens its own picker), so it's offered
+    # regardless of has_entry; Create Shortcut does (a shortcut is made
+    # *for* the highlighted row) and is macOS/Linux-only, so it isn't
+    # offered elsewhere rather than being offered and apologising.
+    rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
+    if [[ "$has_entry" == true ]] &&
+       [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
+        rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
+    fi
+
+    # Everything below here is a setting — adjust something, then get
+    # back to what you were doing — clustered together as one group
+    # rather than split across the menu. Raised live: "all other items
+    # are basically settings, so they should be clustered together."
+    #
     # No F-key of its own — every F1-F9 is already spoken for, and
     # this is settings-adjacent rather than something reached for
     # often enough to need a direct shortcut.
     rows+=("theme"$'\t'"$(printf '%-20s%s' 'Theme' '')")
 
-    # Grouped with Theme rather than off on their own — all four are
-    # "adjust something, then get back to what you were doing" in the
-    # same way, unlike Create Preset/Create Shortcut below, which each
-    # build a brand new thing from scratch. Global overrides for the
-    # bundled curated defaults (categories and pre-hidden commands).
-    # Off means "don't apply the bundled data to anything I haven't
-    # touched myself" — a user's own F3/F8 choice on any individual
-    # entry always wins regardless of this setting, so this is only an
-    # escape hatch for someone who wants a blank slate from the start,
-    # not the everyday way to override one entry.
+    # Global overrides for the bundled curated defaults (categories and
+    # pre-hidden commands). Off means "don't apply the bundled data to
+    # anything I haven't touched myself" — a user's own F3/F8 choice on
+    # any individual entry always wins regardless of this setting, so
+    # this is only an escape hatch for someone who wants a blank slate
+    # from the start, not the everyday way to override one entry.
     local categories_state='On'
     [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && categories_state='Off'
     rows+=("toggle_default_categories"$'\t'"$(printf '%-20s%s' 'Default Categories' "$categories_state")")
@@ -3489,7 +3499,7 @@ pick_more_action() {
 
     # Raised live: "implement a toggle for details pane (F3) in F4
     # Actions." Same DETAILS_VISIBLE flag F3 itself toggles — on
-    # every screen with an F3 details/preview pane (main list, F2, F9
+    # every screen with an F3 details/preview pane (main list, F2
     # alike, see DETAILS_VISIBLE's own comment) — just also reachable
     # (and its current state visible) from here, for anyone who
     # reaches for Actions before remembering F3 exists.
@@ -3511,29 +3521,10 @@ pick_more_action() {
     [[ "$CONFIG_ALT_KEYBINDS" == off ]] && alt_keybinds_state='Off'
     rows+=("toggle_alt_keybinds"$'\t'"$(printf '%-20s%s' 'Alt Keybinds' "$alt_keybinds_state")")
 
-    # Same reasoning as Theme above — also setup-adjacent rather than
-    # everyday, so it doesn't need a key of its own either. Grouped
-    # with Create Shortcut below rather than up near Theme: both build
-    # something new from scratch (a preset, a shortcut file) instead
-    # of adjusting a setting, and Launch Preset doesn't need a
-    # highlighted row so it's offered here regardless of has_entry.
-    rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
-
-    # Shortcuts are macOS/Linux-only; elsewhere the action can only
-    # refuse, so it isn't offered rather than being offered and
-    # apologising. Entry-scoped (a shortcut is made *for* the
-    # highlighted row), so also gated on has_entry like Hide/Favorite/
-    # Categorize above.
-    if [[ "$has_entry" == true ]] &&
-       [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
-    fi
-
-    # Last, not grouped with anything above — this isn't "adjust a
-    # setting" (Theme/the three toggles) or "build one new thing"
-    # (Create Preset/Create Shortcut), it's "export everything," which
-    # reads more like a closing action than a peer of either group.
-    # Not gated on has_entry: nothing about it concerns one row.
+    # Last, not part of the settings cluster above — this isn't "adjust
+    # a setting," it's "export everything," which reads more like a
+    # closing action than a peer of that group. Not gated on has_entry:
+    # nothing about it concerns one row.
     rows+=("backup"$'\t'"$(printf '%-20s%s' 'Backup' '')")
 
     [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
@@ -3577,12 +3568,12 @@ pick_more_action() {
 
 # ------------------------------------------------------------
 # Runs the Actions menu to completion — loops on pick_more_action() so
-# the three settings toggles (and now Theme/Create Preset/Launch
-# Preset, none of which need a highlighted row either) flip or run in
-# place and reopen Actions right after, rather than dropping back to
-# whatever screen called this. Reused from both the main list (with an
-# entry) and the view picker (without one), so this behavior can't
-# drift apart between the two.
+# the settings toggles (and Theme/Create Preset, neither of which
+# needs a highlighted row either) flip or run in place and reopen
+# Actions right after, rather than dropping back to whatever screen
+# called this. Reused from both the main list (with an entry) and the
+# view picker (without one), so this behavior can't drift apart
+# between the two.
 #
 # Returns 1 if Esc was pressed with nothing left to do — the caller
 # just redraws whatever it was already showing. Returns 2 only when
@@ -3677,10 +3668,6 @@ open_more_menu() {
                 ;;
             create_preset)
                 create_preset
-                continue
-                ;;
-            f9)
-                launch_preset
                 continue
                 ;;
             backup)
@@ -5795,9 +5782,17 @@ launch_preset() {
         build_picker_footer \
             '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
             '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
-            $'F3\tD\t[Details]' $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
+            $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
     )"
 
+    # Preview pane always on here, no F3 toggle — raised live: "Preset
+    # menu F9 should offer same behavior as F4 menu (details pane
+    # always on)." A preset list is usually short and the whole point
+    # of glancing at one before launching it is seeing what's actually
+    # in it, so — like Actions' own always-on pane — there's nothing to
+    # remember to turn on. DETAILS_VISIBLE (and F3) still control the
+    # pane elsewhere (main list, F2); this screen just doesn't share
+    # that particular toggle anymore.
     result="$(
         printf '%s\n' "${existing_presets[@]}" |
         fzf \
@@ -5810,9 +5805,9 @@ launch_preset() {
             --prompt=' 󰣇  ' \
             --pointer='▌' \
             --preview "${(q)SCRIPT_PATH} --internal-preview-preset {1}" \
-            --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
+            --preview-window="down,35%,border-top,wrap" \
             --footer="$preset_footer" \
-            --expect=enter,ctrl-d,ctrl-r,f3 \
+            --expect=enter,ctrl-d,ctrl-r \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -5838,21 +5833,11 @@ launch_preset() {
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[Rename]'|Rename) pick_action="ctrl-r" ;;
-            '[Details]'|Details) pick_action="f3" ;;
             '[Launch]'|Launch) pick_action="enter" ;;
         esac
     fi
 
     [[ -z "$preset_name" ]] && return 1
-
-    if [[ "$pick_action" == "f3" ]]; then
-        [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
-        # F3 is always a peek, never a standing choice — see
-        # DETAILS_PINNED's own comment.
-        DETAILS_PINNED=false
-        launch_preset
-        return $?
-    fi
 
     if [[ "$pick_action" == "ctrl-r" ]]; then
 
@@ -6385,20 +6370,23 @@ while true; do
     fi
 
     # --------------------------------------------------------
-    # F9 / ⌥P — Launch Preset. Direct key, not just via Actions: unlike
-    # Create Preset (a one-time setup step), running a preset is
-    # something to reach for repeatedly, closer in spirit to F6/F7/F8
-    # than to Theme/Create Preset. launch_preset() does its own picker
-    # and, on success, execs into tmux and never returns — a failure
-    # (or Esc) falls back to the picker, same as any other action here.
+    # F9 / ⌥P — Launch Preset. Direct key and footer only, deliberately
+    # not duplicated in Actions too — unlike Create Preset (a one-time
+    # setup step), running a preset is something to reach for
+    # repeatedly, worth its own always-visible key rather than a menu
+    # row buried behind F4. Raised live: "I think that launch preset
+    # should be removed from this menu, since it is redundant having
+    # F9 always shown." launch_preset() does its own picker and, on
+    # success, execs into tmux and never returns — a failure (or Esc)
+    # falls back to the picker, same as any other action here.
     # --------------------------------------------------------
 
     if [[ "$action" == "f9" || "$action" == "alt-p" ]]; then
 
         # Same message shown whether reached via direct keypress or via
-        # the footer/Actions entry — Presets stay visible everywhere even
-        # without tmux (see footer_actions()), so this is the one place
-        # that actually explains the requirement instead of opening
+        # the footer — Presets stay visible everywhere even without
+        # tmux (see footer_actions()), so this is the one place that
+        # actually explains the requirement instead of opening
         # launch_preset()'s own picker only to error once something's
         # actually selected.
         if [[ "$TMUX_AVAILABLE" == false ]]; then
