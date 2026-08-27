@@ -138,6 +138,22 @@ name: CI
 #       already-built string, so this picker footer can show the same
 #       ⌥ aliases the main list's own footer does, gated by the same
 #       CONFIG_ALT_KEYBINDS toggle.
+#
+#   19. function-order-fixtures — a static check (embedded python3, no
+#       fzf/brew/tmux) that no top-level codepath (one that can run
+#       before the main loop, like Actions -> Open to Categories'
+#       startup pick_view() call) can reach a function that isn't
+#       defined yet at that point in the file. zsh doesn't hoist
+#       function definitions, so this class of bug is silent at
+#       write-time and only shows up live: raised via a screenshot,
+#       "bottom menu is missing when launching into view screen
+#       (toggle on)" — pick_view() reached build_picker_footer(),
+#       defined hundreds of lines later, and several Actions rows
+#       (Create Preset, Backup, every settings toggle) turned out to
+#       be broken the same way. Fixed by moving the Open to Categories
+#       startup trigger itself to just before the main loop, after
+#       every function in the script has been defined, rather than
+#       chasing each broken function one at a time.
 
 on:
   push:
@@ -396,6 +412,19 @@ jobs:
       # trips a genuine zsh strict-mode quirk elsewhere in this suite.
       - name: F2/F9 footer width test
         run: zsh test/picker-footer-fixtures.sh
+
+  function-order-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — a static check (embedded
+      # python3, already a project dependency) over the script's own
+      # source text: no top-level call can reach a function defined
+      # later in the file than the call site itself.
+      - name: Function-definition-order test
+        run: zsh test/function-order-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

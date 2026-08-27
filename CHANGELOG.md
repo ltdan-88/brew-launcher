@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.44.1] — 2026-08-28
+
+### Fixed
+
+- **"Bottom menu is missing when launching into view screen (toggle
+  on)."** Actions → Open to Categories runs `pick_view()` once at
+  startup, before the main loop — and `pick_view()` calls
+  `build_picker_footer()`, which was defined hundreds of lines later
+  in the script. zsh doesn't hoist function definitions, so that call
+  silently failed ("command not found") and the footer variable came
+  back empty. Investigating further turned up the same bug reaching
+  several other Actions rows from that same startup screen (Create
+  Preset, Backup, every settings toggle) — all called functions that
+  weren't defined yet either. Fixed generally rather than one function
+  at a time: the Open to Categories startup trigger now runs just
+  before the main loop, after every function in the script has been
+  defined. Confirmed live (a real tmux session, the previously-
+  released binary) reproducing the exact reported blank-footer
+  screenshot, then confirming the fix. New `function-order-fixtures`
+  test statically checks that no top-level codepath can reach a
+  not-yet-defined function, so this class of bug can't come back
+  unnoticed as new Actions rows get added later.
+
 ## [0.44.0] — 2026-08-28
 
 ### Changed
