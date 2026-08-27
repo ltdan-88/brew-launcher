@@ -87,6 +87,13 @@ name: CI
 #       fixture cache/categories/presets dir. F2/F9's own wiring (the
 #       f3 key pointed at the right subcommand) is a source-text
 #       assertion, same reasoning as rename-fixtures.sh.
+#
+#   14. preset-in-details-fixtures — "which presets is this command
+#       in?" in the main list's own F3 pane: --internal-preview is a
+#       plain CLI subcommand too, driven directly against a fixture
+#       cache (containing the real @@PRESETS@@ marker a real cache
+#       build embeds) and a fixture PRESETS_DIR. No fzf/brew/tmux
+#       needed.
 
 on:
   push:
@@ -246,6 +253,19 @@ jobs:
       # refactors" stance.
       - name: Rename category/preset test
         run: zsh test/rename-fixtures.sh
+
+  preset-in-details-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — --internal-preview is a plain
+      # CLI subcommand, driven directly against a fixture cache
+      # (containing the real @@PRESETS@@ marker) and a fixture
+      # PRESETS_DIR.
+      - name: "Which presets is this in?" test
+        run: zsh test/preset-in-details-fixtures.sh
 
   backup-fixtures:
     runs-on: macos-latest
