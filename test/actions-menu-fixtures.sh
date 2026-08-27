@@ -37,12 +37,15 @@
 #     clustered together."
 #   - "Preset menu F9 should offer same behavior as F4 menu (details
 #     pane always on)."
-# The row reorder is checked by position within pick_more_action()'s
-# rows array (source text, same reasoning as ever). F9's own
-# always-on pane is checked by running launch_preset()'s underlying
-# --internal-preview-preset (already covered elsewhere) and by
-# confirming its fzf call no longer conditions the preview window on
-# DETAILS_VISIBLE or offers f3 at all.
+#
+# Extended a fourth time: "it seems Actions menu mixes up actual
+# Actions and System Settings, how do we solve this (e.g. create a
+# separate Settings menu)?" Every settings-shaped row (Theme, Default
+# Categories, Default Hidden, Open to Categories, Sort, Details, Alt
+# Keybinds) moved out of pick_more_action()/open_more_menu() into a
+# new pick_settings_action()/open_settings_menu() pair, reached via a
+# single "Settings" row in Actions. Checked the same way as everything
+# else here — source text, since these all call fzf.
 
 set -u
 
@@ -105,20 +108,55 @@ pick_view_block="$(sed -n '/^pick_view() {/,/^}/p' "$LAUNCHER")"
     fail "pick_view (F2) footer should mention [Presets]"
 
 # ------------------------------------------------------------
-# 3. A "Details" toggle in Actions, mirroring F3 itself.
+# 3. Settings now lives in its own screen, reached via a single
+#    "Settings" row in Actions, not scattered across Actions itself.
+#    pick_settings_action()/open_settings_menu() hold every row that
+#    used to live directly in pick_more_action()/open_more_menu().
 # ------------------------------------------------------------
 
 more_action_block="$(sed -n '/^pick_more_action() {/,/^}/p' "$LAUNCHER")"
-[[ "$more_action_block" == *'toggle_details'* ]] ||
-    fail "pick_more_action should offer a toggle_details row"
-[[ "$more_action_block" == *"'Details'"* ]] ||
-    fail "pick_more_action's Details row should be labeled \"Details\""
-
 open_menu_block="$(sed -n '/^open_more_menu() {/,/^}/p' "$LAUNCHER")"
-[[ "$open_menu_block" == *'toggle_details)'* ]] ||
-    fail "open_more_menu should dispatch toggle_details"
-[[ "$open_menu_block" == *'DETAILS_VISIBLE=false'* && "$open_menu_block" == *'DETAILS_VISIBLE=true'* ]] ||
-    fail "open_more_menu's toggle_details case should actually flip DETAILS_VISIBLE"
+settings_action_block="$(sed -n '/^pick_settings_action() {/,/^}/p' "$LAUNCHER")"
+open_settings_block="$(sed -n '/^open_settings_menu() {/,/^}/p' "$LAUNCHER")"
+
+[[ -n "$settings_action_block" ]] ||
+    fail "pick_settings_action() not found"
+[[ -n "$open_settings_block" ]] ||
+    fail "open_settings_menu() not found"
+
+# Actions offers exactly one row that leads to Settings, not the
+# settings rows themselves.
+[[ "$more_action_block" == *'rows+=("settings"'* ]] ||
+    fail "pick_more_action should offer a settings row"
+[[ "$more_action_block" == *"'Settings'"* ]] ||
+    fail "pick_more_action's Settings row should be labeled \"Settings\""
+[[ "$open_menu_block" == *'settings)'* && "$open_menu_block" == *'open_settings_menu'* ]] ||
+    fail "open_more_menu should dispatch settings to open_settings_menu"
+
+# Checked against the actual row-producing line, not a blanket
+# substring search — comments in pick_more_action legitimately mention
+# these settings by name now (explaining where they moved to).
+for row_id in toggle_default_categories toggle_default_hidden toggle_open_to_categories toggle_sort toggle_details toggle_alt_keybinds theme; do
+    [[ "$more_action_block" != *"rows+=(\"$row_id\""* ]] ||
+        fail "pick_more_action should no longer offer a $row_id row directly — it belongs in Settings now"
+    [[ "$settings_action_block" == *"rows+=(\"$row_id\""* ]] ||
+        fail "pick_settings_action should offer a $row_id row"
+done
+
+for case_label in 'toggle_default_categories)' 'toggle_default_hidden)' 'toggle_open_to_categories)' 'toggle_sort)' 'toggle_details)' 'toggle_alt_keybinds)' 'theme)'; do
+    [[ "$open_menu_block" != *"            $case_label"* ]] ||
+        fail "open_more_menu should no longer dispatch $case_label directly — see open_settings_menu"
+    [[ "$open_settings_block" == *"            $case_label"* ]] ||
+        fail "open_settings_menu should dispatch $case_label"
+done
+
+# ------------------------------------------------------------
+# 4. Details toggle: same DETAILS_VISIBLE flag F3 itself toggles,
+#    reachable from Settings now instead of Actions directly.
+# ------------------------------------------------------------
+
+[[ "$open_settings_block" == *'DETAILS_VISIBLE=false'* && "$open_settings_block" == *'DETAILS_VISIBLE=true'* ]] ||
+    fail "open_settings_menu's toggle_details case should actually flip DETAILS_VISIBLE"
 
 # One flag everywhere, not a separate one per screen — raised live:
 # "when it is on, it should always be on, on every screen where a
@@ -144,19 +182,15 @@ open_menu_block="$(sed -n '/^open_more_menu() {/,/^}/p' "$LAUNCHER")"
 launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 
 # ------------------------------------------------------------
-# 4. DETAILS_PINNED: Esc closing the details pane and the Details
+# 5. DETAILS_PINNED: Esc closing the details pane and the Details
 #    toggle used to conflict — raised live: "I think the toggle
-#    should override this behavior." Turning Details on via Actions
+#    should override this behavior." Turning Details on via Settings
 #    is meant to stick; F3 opening it is meant to be an Esc-closable
-#    peek. DETAILS_PINNED is what tells the two apart, so this checks
-#    each of the four places that touch it does its part: Actions'
-#    toggle_details sets it to match the new state, all three F3
-#    handlers (main list, F2, F9) always clear it, and the main list's
-#    own Esc auto-close only fires when it's clear.
+#    peek. DETAILS_PINNED is what tells the two apart.
 # ------------------------------------------------------------
 
-[[ "$open_menu_block" == *'DETAILS_PINNED="$DETAILS_VISIBLE"'* ]] ||
-    fail "open_more_menu's toggle_details case should set DETAILS_PINNED to match the new DETAILS_VISIBLE state"
+[[ "$open_settings_block" == *'DETAILS_PINNED="$DETAILS_VISIBLE"'* ]] ||
+    fail "open_settings_menu's toggle_details case should set DETAILS_PINNED to match the new DETAILS_VISIBLE state"
 
 [[ "$pick_view_block" == *'DETAILS_PINNED=false'* ]] ||
     fail "pick_view's (F2) F3 handler should clear DETAILS_PINNED — F3 is always a peek"
@@ -173,9 +207,9 @@ esc_block="$(grep -A3 'action" == "esc" \]\]; then' "$LAUNCHER" | head -4)"
     fail "the main list's Esc handler should check DETAILS_PINNED before auto-closing the details pane, got: $esc_block"
 
 # ------------------------------------------------------------
-# 5. Alt Keybinds: a persisted toggle (Actions -> Alt Keybinds) for
+# 6. Alt Keybinds: a persisted toggle (Settings -> Alt Keybinds) for
 #    whether the footer ever shows a ⌥ alias next to an F-key, wired
-#    into config parsing, the Actions row/dispatch, and both
+#    into config parsing, the Settings row/dispatch, and both
 #    footer-building functions.
 # ------------------------------------------------------------
 
@@ -184,15 +218,15 @@ esc_block="$(grep -A3 'action" == "esc" \]\]; then' "$LAUNCHER" | head -4)"
 [[ "$(grep -c 'ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="\$config_value"' "$LAUNCHER")" -ge 1 ]] ||
     fail "the config-file parser should recognize an ALT_KEYBINDS line"
 
-[[ "$more_action_block" == *'toggle_alt_keybinds'* ]] ||
-    fail "pick_more_action should offer a toggle_alt_keybinds row"
-[[ "$more_action_block" == *"'Alt Keybinds'"* ]] ||
-    fail "pick_more_action's Alt Keybinds row should be labeled \"Alt Keybinds\""
+[[ "$settings_action_block" == *'toggle_alt_keybinds'* ]] ||
+    fail "pick_settings_action should offer a toggle_alt_keybinds row"
+[[ "$settings_action_block" == *"'Alt Keybinds'"* ]] ||
+    fail "pick_settings_action's Alt Keybinds row should be labeled \"Alt Keybinds\""
 
-[[ "$open_menu_block" == *'toggle_alt_keybinds)'* ]] ||
-    fail "open_more_menu should dispatch toggle_alt_keybinds"
-[[ "$open_menu_block" == *'set_config_value ALT_KEYBINDS'* ]] ||
-    fail "open_more_menu's toggle_alt_keybinds case should persist via set_config_value"
+[[ "$open_settings_block" == *'toggle_alt_keybinds)'* ]] ||
+    fail "open_settings_menu should dispatch toggle_alt_keybinds"
+[[ "$open_settings_block" == *'set_config_value ALT_KEYBINDS'* ]] ||
+    fail "open_settings_menu's toggle_alt_keybinds case should persist via set_config_value"
 
 build_footer_block="$(sed -n '/^build_footer() {/,/^}/p' "$LAUNCHER")"
 [[ "$build_footer_block" == *'CONFIG_ALT_KEYBINDS" == off'* ]] ||
@@ -203,15 +237,22 @@ build_picker_footer_block="$(sed -n '/^build_picker_footer() {/,/^}/p' "$LAUNCHE
     fail "build_picker_footer should read the same CONFIG_ALT_KEYBINDS toggle as build_footer — see picker-footer-fixtures.sh for the behavior itself"
 
 # ------------------------------------------------------------
-# 6. Actions (F4) gets its own always-on F3 details pane, explaining
-#    what each row/toggle actually does — run directly, since
-#    --internal-preview-action is a plain CLI subcommand.
+# 7. Actions (F4) and Settings each get their own always-on details
+#    pane, explaining what each row/toggle actually does — run
+#    directly, since --internal-preview-action is a plain CLI
+#    subcommand. Row ids are unchanged by the Settings split, so the
+#    same subcommand serves both menus without any changes of its own.
 # ------------------------------------------------------------
 
 [[ "$more_action_block" == *'--internal-preview-action'* ]] ||
     fail "pick_more_action's fzf call should wire up a preview via --internal-preview-action"
 [[ "$more_action_block" != *"hidden')" ]] ||
     fail "pick_more_action's preview window should not be conditionally hidden — it's always on by default"
+
+[[ "$settings_action_block" == *'--internal-preview-action'* ]] ||
+    fail "pick_settings_action's fzf call should wire up a preview via --internal-preview-action"
+[[ "$settings_action_block" != *"hidden')" ]] ||
+    fail "pick_settings_action's preview window should not be conditionally hidden — it's always on by default"
 
 action_preview_output="$("$LAUNCHER" --internal-preview-action toggle_default_categories 2>&1)"
 [[ "$action_preview_output" == *'Default Categories'* ]] ||
@@ -230,10 +271,11 @@ action_preview_output="$("$LAUNCHER" --internal-preview-action nonexistent-row-i
     fail "--internal-preview-action should print something even for a row id it doesn't recognize, not go silent"
 
 # ------------------------------------------------------------
-# 7. Actions menu restructure: Launch Preset removed (redundant with
+# 8. Actions row restructure: Launch Preset removed (redundant with
 #    the always-shown F9), Create Preset/Create Shortcut moved up
-#    under Categorize, everything settings-like clustered together,
-#    and F9's own details pane made unconditional like F4's.
+#    under Categorize, Settings as one row (not scattered inline),
+#    Backup last, and F9's own details pane made unconditional like
+#    F4's.
 # ------------------------------------------------------------
 
 # Checked against the actual row-producing line, not a blanket
@@ -245,21 +287,18 @@ action_preview_output="$("$LAUNCHER" --internal-preview-action nonexistent-row-i
     fail "open_more_menu should no longer dispatch f9 to launch_preset — the row is gone"
 
 # Position, not just presence: Create Preset/Create Shortcut should
-# come before the has_entry check that starts the settings cluster,
-# i.e. right after Categorize (f8), not after Sort/Details/Alt
-# Keybinds like before.
-rows_order="$(printf '%s\n' "$more_action_block" | grep -oE 'rows\+=\("(f6|f7|f8|create_preset|shortcut|theme|toggle_default_categories|toggle_default_hidden|toggle_open_to_categories|toggle_sort|toggle_details|toggle_alt_keybinds|backup)"')"
+# come right after Categorize (f8), and Settings should come after
+# them but before Backup.
+rows_order="$(printf '%s\n' "$more_action_block" | grep -oE 'rows\+=\("(f6|f7|f8|create_preset|shortcut|settings|backup)"')"
 
 f8_pos="$(echo "$rows_order" | grep -n '"f8"' | cut -d: -f1)"
 create_preset_pos="$(echo "$rows_order" | grep -n '"create_preset"' | cut -d: -f1)"
 shortcut_pos="$(echo "$rows_order" | grep -n '"shortcut"' | cut -d: -f1)"
-theme_pos="$(echo "$rows_order" | grep -n '"theme"' | cut -d: -f1)"
+settings_pos="$(echo "$rows_order" | grep -n '"settings"' | cut -d: -f1)"
 backup_pos="$(echo "$rows_order" | grep -n '"backup"' | cut -d: -f1)"
 
-(( f8_pos < create_preset_pos && create_preset_pos < shortcut_pos && shortcut_pos < theme_pos )) ||
-    fail "expected row order Categorize -> Create Preset -> Create Shortcut -> Theme, got: $rows_order"
-(( theme_pos < backup_pos )) ||
-    fail "the settings cluster (starting at Theme) should still come before Backup, got: $rows_order"
+(( f8_pos < create_preset_pos && create_preset_pos < shortcut_pos && shortcut_pos < settings_pos && settings_pos < backup_pos )) ||
+    fail "expected row order Categorize -> Create Preset -> Create Shortcut -> Settings -> Backup, got: $rows_order"
 
 # F9's own pane: no longer conditioned on DETAILS_VISIBLE, no f3 in
 # --expect, no f3 in its footer spec, no DETAILS_PINNED to clear.
@@ -268,4 +307,4 @@ backup_pos="$(echo "$rows_order" | grep -n '"backup"' | cut -d: -f1)"
 [[ "$launch_preset_block" != *'f3'* ]] ||
     fail "launch_preset should no longer expect or offer f3 — its details pane has no toggle anymore"
 
-printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Actions offers a Details toggle mirroring F3, DETAILS_PINNED keeps Esc from undoing a Details choice made via Actions, Alt Keybinds is wired end to end, Actions has its own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize with settings clustered after, and F9 has its own unconditional details pane\n'
+printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Settings holds every setting (Theme, bundled defaults, Open to Categories, Sort, Details, Alt Keybinds) behind one Actions row, DETAILS_PINNED keeps Esc from undoing a Details choice made via Settings, Alt Keybinds is wired end to end, Actions and Settings each have their own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize, and F9 has its own unconditional details pane\n'

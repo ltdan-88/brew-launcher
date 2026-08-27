@@ -74,9 +74,10 @@ Three markers tell you the state of a row at a glance:
 Both `+` and `#` can appear together (`+#`). These describe *state* — they
 aren't things you press. Upgrading stays Homebrew's job.
 
-Every list is alphabetical by default. **F4 → Actions → Sort** switches to
-size instead, largest first — handy for "what's actually taking up space"
-without leaving for `ncdu`. Only reorders; nothing is filtered or capped.
+Every list is alphabetical by default. **F4 → Actions → Settings → Sort**
+switches to size instead, largest first — handy for "what's actually taking
+up space" without leaving for `ncdu`. Only reorders; nothing is filtered or
+capped.
 Doesn't touch `Most Used` or `Recently Added`, which already have their own
 meaningful order.
 
@@ -90,7 +91,7 @@ border, on every screen, once a newer brew-launcher itself is installable —
 above; brew-launcher is just another installed formula to it. Run
 `brew upgrade brew-launcher` and it's gone on the next launch.
 
-### Two tiers of keys
+### Two tiers of keys, plus Settings
 
 <p align="center"><img src="assets/more.gif" alt="Opening the Actions menu with F4 and favoriting an entry from it"></p>
 
@@ -98,40 +99,71 @@ The footer shows what browsing needs — **Views**, **Details**, **Refresh** —
 plus **Presets**, since running one is worth a key of its own, and **Help**
 last (lowest priority, first dropped on a narrow terminal — most people
 already know F1 means help, but not everyone does). Organizing —
-hide, favorite, categorize — and setup — create a preset, create a shortcut,
-theme, and the rest of the settings below — live behind **F4 / ⌥M**, labeled
-**Actions** rather than something vaguer, since it's a right-click-menu
-equivalent: whatever's highlighted when you press it is what it acts on, and
-its own border label says so by name (`Actions on fastfetch`), not just the
-generic word. Hide, Favorite and Categorize still have a direct key too; the
-setup actions are Actions-only, since they're one-time rather than everyday.
-Launch Preset isn't offered here at all — **F9** already runs it directly and
-sits in the footer on every screen Actions is reachable from, so a second,
-Actions-only path to the exact same thing would just be redundant.
+hide, favorite, categorize — and setup — create a preset, create a
+shortcut, back up — live behind **F4 / ⌥M**, labeled **Actions** rather than
+something vaguer, since it's a right-click-menu equivalent: whatever's
+highlighted when you press it is what it acts on, and its own border label
+says so by name (`Actions on fastfetch`), not just the generic word. Hide,
+Favorite and Categorize still have a direct key too; the setup actions are
+Actions-only, since they're one-time rather than everyday. Launch Preset
+isn't offered here at all — **F9** already runs it directly and sits in the
+footer on every screen Actions is reachable from, so a second, Actions-only
+path to the exact same thing would just be redundant.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
 teaches you the key and then gets out of the way. Rows are grouped by what
-they need: entry-scoped actions (Hide, Favorite, Categorize) first, then the
-two "build something new" actions, Create Preset and Create Shortcut, right
-after — closer in spirit to those than to a settings toggle — then every
-settings toggle clustered together as one group (Theme through Alt
-Keybinds), Backup last. A details pane below the list — on by default, no
-toggle to remember — spells out what the highlighted row actually does,
-since a one-line label like "Default Categories" doesn't say much on its own.
+they need: entry-scoped actions (Hide, Favorite, Categorize) and their bulk
+counterparts right under them, then the two "build something new" actions,
+Create Preset and Create Shortcut, right after — closer in spirit to those
+than to a setting — then **Settings** itself, then Backup last. A details
+pane below the list — on by default, no toggle to remember — spells out what
+the highlighted row actually does.
 
-Several rows in the settings cluster are on/off (or two-way) switches, not
-one-shot actions — Default Categories, Default Hidden, and Open to
-Categories (see [Bundled defaults](#bundled-defaults) below), Sort
-(Name/Size), Details, which mirrors **F3** itself so its current state is
-visible from Actions too, and Alt Keybinds, which controls whether the
-footer ever shows a key's **⌥** alias at all (on by default) — off keeps the
-footer to plain F-keys even on a terminal wide enough to fit the aliases.
-All of these flip with **Space** as well as Enter, and reopen the menu right
-after so you can flip more than one without leaving. Theme and Create Preset
-return to Actions once they're done too; only Create Shortcut exits back to
-wherever you opened Actions from, since it's the one action here that's
-actually finished when it's finished.
+**Hide Multiple**, **Favorite Multiple**, and **Categorize Multiple** — raised
+live: "I like the behavior of how we create presets (adding TUIs with tab).
+Would it be feasible to implement this behavior for Hide, Favorite, and
+Categorize as well?" Each opens a Tab-to-mark picker over whatever's
+currently on screen — fzf's own built-in multi-select, not Create Preset's
+custom ordered-badge mechanism, since order doesn't matter for any of these
+three, only membership does — and acts on every marked tool at once, or just
+the highlighted one if nothing was marked. A marked batch always moves to
+one end state rather than toggling each tool individually based on whatever
+it happened to already be: Hide Multiple hides everything marked (skipping
+anything already hidden), Favorite Multiple favorites everything marked
+(skipping anything already favorited) — a per-item toggle across a batch you
+just selected together would be a confusing surprise otherwise. Both relabel
+to their inverse (**Unhide Multiple**, **Unfavorite Multiple**) while
+viewing Hidden/Favorites, same as **F6**'s own per-entry label, since
+everything on screen there is already hidden/favorited. Categorize Multiple
+prompts for a category once for the whole marked batch — unless you're
+already viewing a real category, in which case every marked entry is
+necessarily already a member, so it removes them instantly instead, same as
+**F8**'s own instant per-entry toggle in that same context.
+
+Raised live: "it seems Actions menu mixes up actual Actions and System
+Settings, how do we solve this (e.g. create a separate Settings menu)?" —
+Actions used to also hold every standing preference (Theme, Default
+Categories, Default Hidden, Open to Categories, Sort, Details, Alt
+Keybinds) inline, mixing "things you do" with "things you set" in one list.
+**Settings** is a screen of its own now, one level down from Actions, the
+same way Theme or Create Preset already were — no key of its own (every
+F1-F9 is spoken for, and settings are visited far less often than
+Hide/Favorite/Categorize), just a single row that opens it.
+
+Every row in Settings is an on/off (or two-way) switch — Default
+Categories, Default Hidden, and Open to Categories (see [Bundled
+defaults](#bundled-defaults) below), Sort (Name/Size), Details, which
+mirrors **F3** itself so its current state is visible without opening the
+pane, and Alt Keybinds, which controls whether the footer ever shows a
+key's **⌥** alias at all (on by default) — off keeps the footer to plain
+F-keys even on a terminal wide enough to fit the aliases — plus Theme,
+which opens its own picker rather than flipping in place. All of the
+toggles flip with **Space** as well as Enter, and reopen Settings right
+after so you can touch more than one without leaving. Settings has its own
+always-on details pane too, explaining each one. Esc from Settings goes
+back to Actions, not all the way out to the main list; Theme returns to
+Settings once it's done, same as Create Preset returns to Actions.
 
 **F4**, **F5**, and **F9** also work from inside the view picker (**F2**)
 itself, not just the main list — no row needs to be highlighted for either
@@ -180,10 +212,11 @@ you can undo with the same key, so this is the one worth pausing on. `All`,
 `Hidden`, `Favorites`, `Most Used` and `Recently Added` can neither be renamed
 nor deleted.
 
-Once your categories are actually populated, **F4 → Actions → Open to Categories**
-opens straight into this picker on every launch instead of `All` — a long flat
-list stops being the first thing you see. Esc from it still falls back to
-`All`, exactly like pressing Esc from F2 any other time.
+Once your categories are actually populated, **F4 → Actions → Settings →
+Open to Categories** opens straight into this picker on every launch
+instead of `All` — a long flat list stops being the first thing you see.
+Esc from it still falls back to `All`, exactly like pressing Esc from F2
+any other time.
 
 ### Favorites
 
@@ -191,7 +224,9 @@ list stops being the first thing you see. Esc from it still falls back to
 
 **F7** toggles a favorite instantly — no prompt. **F8** does the same for any
 other category: instant while you're viewing one, or it asks which, if you're
-not.
+not. Doing this to several tools at once? **F4 → Actions → Favorite
+Multiple** / **Categorize Multiple** mark a batch with Tab and act on all of
+them together — see [Two tiers of keys, plus Settings](#two-tiers-of-keys-plus-settings).
 
 Uninstalling a favorited or categorized tool doesn't leave it behind forever —
 the next real cache rebuild (`--refresh`, **F5**, or the periodic background
@@ -207,6 +242,8 @@ elsewhere.
 **F6** hides an entry — it stays installed, Homebrew is untouched. Hidden isn't a
 special screen: it's just another view in the picker, so **Enter** still launches
 and **F6** unhides. Same key, opposite direction, exactly like Favorites.
+**F4 → Actions → Hide Multiple** does the same for a Tab-marked batch instead
+of one entry at a time.
 
 ### Already organized on day one
 
@@ -220,7 +257,7 @@ even before you've filed anything into it by hand.
 
 Your own **F6** or **F8** on any entry always overrides the bundled default
 for that entry, no exceptions. Turn either mechanism off entirely from
-**F4 → Actions → Default Categories** / **Default Hidden** — see
+**F4 → Actions → Settings → Default Categories** / **Default Hidden** — see
 [Bundled defaults](#bundled-defaults) for exactly what's included and how an
 override sticks.
 
@@ -260,7 +297,8 @@ stays closed until you ask for it. While it's open, **Esc** closes it first —
 the footer says `[Close]` instead of the usual `[Quit]`/`[Views]` so it's
 never a surprise — and only takes you further back on the next press. That's
 specifically for a pane opened with **F3** itself, though — turn it on from
-**F4 → Actions → Details** instead and it's a standing choice, not a peek:
+**F4 → Actions → Settings → Details** instead and it's a standing choice,
+not a peek:
 Esc leaves it alone and skips straight to whatever it would otherwise do, so
 turning Details on there doesn't get quietly undone by the very next Esc.
 
@@ -409,15 +447,19 @@ reference below, from inside the launcher.
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
 | **F1** / **⌥?** | Open this reference in the launcher — also in the footer, last | footer |
+| — | Hide/Unhide multiple entries (Tab to mark) | Actions only |
+| — | Favorite/Unfavorite multiple entries (Tab to mark) | Actions only |
+| — | Categorize multiple entries (Tab to mark) | Actions only |
 | — | Create a new preset | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
-| — | Switch color theme | Actions only |
-| — | Toggle Default Categories / Default Hidden | Actions only |
-| — | Toggle Open to Categories | Actions only |
-| — | Sort by name or size | Actions only |
-| — | Toggle the details pane (mirrors F3) | Actions only |
-| — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Actions only |
+| — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
+| — | Switch color theme | Settings only |
+| — | Toggle Default Categories / Default Hidden | Settings only |
+| — | Toggle Open to Categories | Settings only |
+| — | Sort by name or size | Settings only |
+| — | Toggle the details pane (mirrors F3) | Settings only |
+| — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Settings only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
 **⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails. They exist because
@@ -437,9 +479,10 @@ convention it has in every browser and file manager.
 The split is by what you're doing, not by how often. Finding, browsing, and
 running something together with launching a preset are what you open the
 launcher for, so those stay on screen. Organizing — hiding, favoriting,
-categorizing — and setup — theming, building a preset, making a shortcut —
-are things you do in bursts, and they were costing footer slots you'd
-otherwise look at on every single launch. **F9** followed the same logic in
+categorizing — and setup — building a preset, making a shortcut, adjusting a
+setting — are things you do in bursts, and they were costing footer slots
+you'd otherwise look at on every single launch. **F9** followed the same
+logic in
 reverse: unlike making a shortcut (once per tool, rarely repeated), running a
 preset is something you'd reach for over and over, so it earned a footer key
 of its own — and, once that key existed everywhere Actions is reachable
@@ -555,9 +598,10 @@ instead). Both apply automatically, on every cache rebuild, to anything you
 haven't already touched yourself — a fresh install already looks organized
 without any setup.
 
-Two switches control it: `Actions → Default Categories` and
-`Actions → Default Hidden` (`DEFAULT_CATEGORIES` / `DEFAULT_HIDDEN` in
-`config`, each `on`/`off`, default `on`). Your own F6 (hide) or F8
+Two switches control it: `Actions → Settings → Default Categories` and
+`Actions → Settings → Default Hidden` (`DEFAULT_CATEGORIES` /
+`DEFAULT_HIDDEN` in `config`, each `on`/`off`, default `on`). Your own F6
+(hide) or F8
 (categorize) choice on any individual entry always overrides the bundled
 data for that entry, no matter what these two settings say — they're only
 an escape hatch for someone who wants none of it applied, anywhere, from
@@ -719,7 +763,8 @@ launch. `brew-launcher --refresh` forces it.
 command defaults ships with the launcher and applies to anything you haven't
 touched yourself. Press **F8** to file it somewhere else (or **F6** to
 unhide it) and your choice sticks from then on, or turn the whole mechanism
-off from **F4 → Actions → Default Categories** / **Default Hidden**.
+off from **F4 → Actions → Settings → Default Categories** / **Default
+Hidden**.
 
 ## Contributing
 

@@ -121,7 +121,15 @@ name: CI
 #       for the same `${(l:...)}`-under-set -u reason as above) and
 #       Actions' own always-on F3 details pane, whose content
 #       (--internal-preview-action) IS run directly — it's a plain CLI
-#       subcommand, no fzf involved.
+#       subcommand, no fzf involved. Extended again for the Actions row
+#       restructure (Launch Preset removed, Create Preset/Create
+#       Shortcut moved under Categorize) and once more for the
+#       Actions/Settings split — every standing preference (Theme,
+#       bundled-defaults toggles, Open to Categories, Sort, Details,
+#       Alt Keybinds) moved out of pick_more_action()/open_more_menu()
+#       into a new pick_settings_action()/open_settings_menu() pair,
+#       reached via one "Settings" row, so Actions only holds one-shot
+#       actions.
 #
 #   17. prune-stale-favorites-fixtures — prune_stale_category_members()
 #       (a Favorites/category count that looked wrong because it
@@ -154,6 +162,17 @@ name: CI
 #       startup trigger itself to just before the main loop, after
 #       every function in the script has been defined, rather than
 #       chasing each broken function one at a time.
+#
+#   20. bulk-actions-fixtures — Hide Multiple/Favorite Multiple/
+#       Categorize Multiple: add_to_favorites()/add_to_category()
+#       (ensure-membership helpers, never removing, that a bulk action
+#       needs but the existing per-entry toggles don't provide) and
+#       pick_category_name() (the category prompt pulled out of
+#       toggle_category() so a bulk action can ask once for a whole
+#       batch) are pure filesystem functions, sourced and run directly.
+#       pick_multiple_entries()/bulk_hide()/bulk_favorite()/
+#       bulk_categorize() themselves call fzf, so they're checked as
+#       source text, same reasoning as rename-fixtures.sh.
 
 on:
   push:
@@ -425,6 +444,21 @@ jobs:
       # later in the file than the call site itself.
       - name: Function-definition-order test
         run: zsh test/function-order-fixtures.sh
+
+  bulk-actions-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — add_to_favorites()/
+      # add_to_category()/pick_category_name() are pure filesystem
+      # functions, sourced and run directly against a fixture
+      # $CONFIG_DIR. bulk_hide()/bulk_favorite()/bulk_categorize()/
+      # pick_multiple_entries() themselves call fzf, so they're checked
+      # as source text, same reasoning as rename-fixtures.sh.
+      - name: Bulk Hide/Favorite/Categorize test
+        run: zsh test/bulk-actions-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

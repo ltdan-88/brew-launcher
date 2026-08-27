@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.44.1"
+VERSION="0.45.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -325,27 +325,27 @@ Theme:
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
   var above always wins over it for that one run. The same file also
   holds DEFAULT_CATEGORIES and DEFAULT_HIDDEN (each on|off, default
-  on), toggled from Actions → Default Categories / Default Hidden —
-  see "Bundled defaults" below.
+  on), toggled from Actions → Settings → Default Categories / Default
+  Hidden — see "Bundled defaults" below.
 
-  OPEN_TO_CATEGORIES=on (default off, toggled from Actions → Open to
-  Categories) opens straight to the view picker on launch instead of
-  All — worth turning on once your categories are actually populated
-  (bundled, manual, or both), since an empty category list has nothing
-  useful to open to. Esc from that first screen falls back to All,
-  same as pressing it from F2 any other time.
+  OPEN_TO_CATEGORIES=on (default off, toggled from Actions → Settings
+  → Open to Categories) opens straight to the view picker on launch
+  instead of All — worth turning on once your categories are actually
+  populated (bundled, manual, or both), since an empty category list
+  has nothing useful to open to. Esc from that first screen falls back
+  to All, same as pressing it from F2 any other time.
 
-  ALT_KEYBINDS=off (default on, toggled from Actions → Alt Keybinds)
-  stops the footer from ever showing a key's ⌥ alias (e.g. F2/⌥V),
-  even where there'd be room — on leaves that decision to whatever
-  fits the terminal width, same as before this toggle existed. The
-  F-keys themselves always work either way; this only changes what
-  the footer prints.
+  ALT_KEYBINDS=off (default on, toggled from Actions → Settings → Alt
+  Keybinds) stops the footer from ever showing a key's ⌥ alias (e.g.
+  F2/⌥V), even where there'd be room — on leaves that decision to
+  whatever fits the terminal width, same as before this toggle
+  existed. The F-keys themselves always work either way; this only
+  changes what the footer prints.
 
-  All of these toggles flip with Space as well as Enter, and reopen
-  the Actions menu afterward rather than exiting to the main list —
-  useful for touching more than one in the same visit. Every other
-  action in Actions still exits normally once it's done.
+  All of these toggles (and Sort, and the details-pane toggle) flip
+  with Space as well as Enter, and reopen the Settings screen
+  afterward rather than exiting to the main list — useful for
+  touching more than one in the same visit.
 
 Bundled defaults:
   A curated set of well-known formula -> category mappings, and a
@@ -383,7 +383,7 @@ Keyboard shortcuts:
             would — its border label names that row too (e.g.
             "Actions on fastfetch"), so it's never ambiguous which
             entry it's about to act on. Its own details pane, always
-            on, explains what each row/toggle actually does.
+            on, explains what each row actually does.
   F5 / ⌥R   Refresh the cache without leaving the launcher
   F9 / ⌥P   Launch a preset — see Presets below. Its own details pane,
             always on like F4's, previews what's actually in the
@@ -399,17 +399,35 @@ Keyboard shortcuts:
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
 
+  In the Actions menu only, right under the three above — Hide
+  Multiple, Favorite Multiple, Categorize Multiple. Each opens its own
+  Tab-to-mark picker over whatever's currently on screen and acts on
+  every marked entry at once (or just the highlighted one, if nothing
+  was marked) — same idea as Create Preset's own tool picker, just
+  without an order to track, since none of these three care about it.
+  Relabel to their inverse (Unhide/Unfavorite Multiple) while viewing
+  Hidden/Favorites, same as F6's own per-entry label. Categorize
+  Multiple prompts for a category once for the whole batch — unless
+  you're already viewing a real category, in which case every marked
+  entry is already a member, so it removes them instantly instead,
+  same as F8's own instant per-entry toggle in that same context.
+
   In the Actions menu only — Create Preset, Create a macOS or Linux
-  shortcut, switch color theme, the two toggles under "Bundled
-  defaults" below, Open to Categories, Sort by name or size, toggle
-  the details pane (same toggle as F3 itself, mirrored here so its
-  state is visible before opening it), toggle Alt Keybinds (see
-  above), Backup. All but Create Shortcut need no highlighted entry,
-  so they're also offered when Actions is opened from the view picker
-  (Hide/Favorite/Categorize/Create Shortcut are
-  not, since those act on a specific entry — and the view picker has
-  no single row to name anyway). Esc from any of them returns to the
+  shortcut, Settings (see below), Backup. All but Create Shortcut need
+  no highlighted entry, so they're also offered when Actions is opened
+  from the view picker — same as the three Multiple actions above
+  (Hide/Favorite/Categorize/Create Shortcut are not offered there,
+  since those act on a specific entry — and the view picker has no
+  single row to name anyway). Esc from any of them returns to the
   Actions menu, not out to the main list.
+
+  Actions → Settings holds everything that's a standing preference
+  rather than a one-off action: switch color theme, the two toggles
+  under "Bundled defaults" below, Open to Categories, Sort by name or
+  size, toggle the details pane (same toggle as F3 itself, mirrored
+  here so its state is visible before opening it), toggle Alt
+  Keybinds (see above). Its own always-on details pane explains each
+  one. Esc from Settings returns to Actions, not out to the main list.
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -3337,7 +3355,31 @@ pick_help() {
     rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
     rows+=("  F8 / ⌥C   Categorize the selected entry")
     rows+=("")
+    rows+=("F4 only — bulk versions of the three above, no direct key")
+    rows+=("      Hide Multiple  Tab marks tools, Enter acts on everything")
+    rows+=("                    marked (or just the highlighted row, if")
+    rows+=("                    nothing's marked)")
+    rows+=("  Favorite Multiple  Same idea, for Favorites")
+    rows+=("Categorize Multiple  Same idea, for one category — prompts once")
+    rows+=("                    for the whole batch, not once per tool")
+    rows+=("")
     rows+=("F4 only — no direct key")
+    if [[ "$TMUX_AVAILABLE" == true ]]; then
+        rows+=("     Create Preset  Pick tools to save as a new preset")
+        rows+=("                    Tab shows the launch order as a number;")
+        rows+=("                    Tab again unmarks and renumbers the rest")
+    else
+        rows+=("     Create Preset  needs tmux: brew install tmux")
+    fi
+    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
+        rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
+    fi
+    rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
+    rows+=("                    Sort, Details, Alt Keybinds — see below")
+    rows+=("            Backup  Brewfile + categories/presets/theme in one")
+    rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
+    rows+=("")
+    rows+=("F4 -> Settings — one level down, its own screen")
     rows+=("            Theme  Switch color theme")
     rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
@@ -3350,23 +3392,11 @@ pick_help() {
     rows+=("      Alt Keybinds  On (default): footer shows each ⌥ alias too")
     rows+=("                    where it fits. Off: F-keys only. F-keys work")
     rows+=("                    either way, this only changes the footer text")
-    if [[ "$TMUX_AVAILABLE" == true ]]; then
-        rows+=("     Create Preset  Pick tools to save as a new preset")
-        rows+=("                    Tab shows the launch order as a number;")
-        rows+=("                    Tab again unmarks and renumbers the rest")
-    else
-        rows+=("     Create Preset  needs tmux: brew install tmux")
-    fi
-    if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
-    fi
-    rows+=("            Backup  Brewfile + categories/presets/theme in one")
-    rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
     rows+=("")
-    rows+=("The toggles above (Default Categories through Alt Keybinds) flip")
-    rows+=("with Space, not just Enter, and stay on this menu afterward. Theme,")
-    rows+=("Create Preset and Backup return to this menu too once done — only")
-    rows+=("Create Shortcut exits back to the list.")
+    rows+=("Every toggle in Settings flips with Space, not just Enter, and")
+    rows+=("stays on that screen afterward. Theme, Create Preset and Backup")
+    rows+=("return to whichever menu opened them once done — only Create")
+    rows+=("Shortcut exits back to the list.")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -3429,6 +3459,31 @@ pick_more_action() {
         rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
     fi
 
+    # Bulk counterparts of the three above — raised live: "I like the
+    # behavior of how we create presets (adding TUIs with tab). Would
+    # it be feasible to implement this behavior for Hide, Favorite, and
+    # Categorize as well?" Each opens its own mark-then-act picker (see
+    # pick_multiple_entries()) rather than acting on the highlighted
+    # row, so — like Create Preset — none of these need has_entry and
+    # are offered from the view picker too. Grouped right under their
+    # single-entry counterpart rather than off with Create Preset/
+    # Create Shortcut below, since they're the same action, just
+    # batched. Relabel to their inverse while viewing Hidden/Favorites,
+    # same idea as F6's own hide_label — every entry on screen there is
+    # already hidden/favorited, so acting on a marked batch removes
+    # rather than adds. Categorize doesn't relabel: F8's own single-key
+    # row doesn't either, even though it's instant-remove in the exact
+    # same situation.
+    local bulk_hide_label='Hide Multiple'
+    [[ "$CURRENT_VIEW" == "Hidden" ]] && bulk_hide_label='Unhide Multiple'
+    rows+=("bulk_hide"$'\t'"$(printf '%-20s%s' "$bulk_hide_label" '')")
+
+    local bulk_favorite_label='Favorite Multiple'
+    [[ "$CURRENT_VIEW" == "Favorites" ]] && bulk_favorite_label='Unfavorite Multiple'
+    rows+=("bulk_favorite"$'\t'"$(printf '%-20s%s' "$bulk_favorite_label" '')")
+
+    rows+=("bulk_categorize"$'\t'"$(printf '%-20s%s' 'Categorize Multiple' '')")
+
     # Launch Preset used to have a row here too, but F9 already runs it
     # directly and is always in the footer on every screen this menu is
     # reachable from — a second, Actions-only path to the exact same
@@ -3454,77 +3509,21 @@ pick_more_action() {
         rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
     fi
 
-    # Everything below here is a setting — adjust something, then get
-    # back to what you were doing — clustered together as one group
-    # rather than split across the menu. Raised live: "all other items
-    # are basically settings, so they should be clustered together."
-    #
-    # No F-key of its own — every F1-F9 is already spoken for, and
-    # this is settings-adjacent rather than something reached for
-    # often enough to need a direct shortcut.
-    rows+=("theme"$'\t'"$(printf '%-20s%s' 'Theme' '')")
+    # Everything settings-related now lives one level down, in its own
+    # screen — raised live: "it seems Actions menu mixes up actual
+    # Actions and System Settings, how do we solve this (e.g. create a
+    # separate Settings menu)?" This row is the only settings-shaped
+    # thing left here; Theme, the bundled-defaults toggles, Open to
+    # Categories, Sort, Details, and Alt Keybinds all moved into
+    # pick_settings_action()/open_settings_menu(). No F-key of its own
+    # — every F1-F9 is already spoken for, and settings as a whole are
+    # reached for far less often than Hide/Favorite/Categorize above.
+    rows+=("settings"$'\t'"$(printf '%-20s%s' 'Settings' '(7)')")
 
-    # Global overrides for the bundled curated defaults (categories and
-    # pre-hidden commands). Off means "don't apply the bundled data to
-    # anything I haven't touched myself" — a user's own F3/F8 choice on
-    # any individual entry always wins regardless of this setting, so
-    # this is only an escape hatch for someone who wants a blank slate
-    # from the start, not the everyday way to override one entry.
-    local categories_state='On'
-    [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && categories_state='Off'
-    rows+=("toggle_default_categories"$'\t'"$(printf '%-20s%s' 'Default Categories' "$categories_state")")
-
-    local hidden_state='On'
-    [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && hidden_state='Off'
-    rows+=("toggle_default_hidden"$'\t'"$(printf '%-20s%s' 'Default Hidden' "$hidden_state")")
-
-    # Opt-in, unlike the two above — this changes the very first thing
-    # you see on launch, so it defaults to the familiar "All" list
-    # rather than switching everyone's startup screen out from under
-    # them. Only worth turning on once categories are actually
-    # populated (bundled, manual, or both); an empty category list
-    # would just show a picker with nothing useful in it.
-    local open_to_categories_state='Off'
-    [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
-    rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
-
-    # A two-way toggle rather than an on/off one, unlike the three
-    # above — "Name" is just what every view already shows for free
-    # (the cache is written alphabetically), "Size" reorders it
-    # largest-first. Doesn't affect Most Used or Recently Added, which
-    # already have their own meaningful order.
-    local sort_state='Name'
-    [[ "$SORT_ORDER" == size ]] && sort_state='Size'
-    rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
-
-    # Raised live: "implement a toggle for details pane (F3) in F4
-    # Actions." Same DETAILS_VISIBLE flag F3 itself toggles — on
-    # every screen with an F3 details/preview pane (main list, F2
-    # alike, see DETAILS_VISIBLE's own comment) — just also reachable
-    # (and its current state visible) from here, for anyone who
-    # reaches for Actions before remembering F3 exists.
-    local details_state='Off'
-    [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
-    rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
-
-    # Raised live: "the bottom menu is inconsistent — All view shows
-    # Fn and alternative keybinds, F2/F9 don't. I prefer a toggle
-    # switch that switches between Fn and the alternative keybinds."
-    # Before this, whether ⌥ aliases showed was decided automatically,
-    # purely by whether they happened to fit the terminal width — never
-    # a real user choice, and F2/F9's own footer never even tried. Now
-    # a persisted preference: On tries to show the ⌥ alias next to
-    # every F-key wherever there's room (main list, F2, F9 alike — see
-    # build_footer()/build_picker_footer()), Off never does. The F-keys
-    # themselves always work either way; this only changes the footer.
-    local alt_keybinds_state='On'
-    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && alt_keybinds_state='Off'
-    rows+=("toggle_alt_keybinds"$'\t'"$(printf '%-20s%s' 'Alt Keybinds' "$alt_keybinds_state")")
-
-    # Last, not part of the settings cluster above — this isn't "adjust
-    # a setting," it's "export everything," which reads more like a
-    # closing action than a peer of that group. Not gated on has_entry:
-    # nothing about it concerns one row.
+    # Last, not part of anything above — this isn't "organize a row" or
+    # "adjust a setting," it's "export everything," which reads more
+    # like a closing action than a peer of either group. Not gated on
+    # has_entry: nothing about it concerns one row.
     rows+=("backup"$'\t'"$(printf '%-20s%s' 'Backup' '')")
 
     [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
@@ -3568,12 +3567,11 @@ pick_more_action() {
 
 # ------------------------------------------------------------
 # Runs the Actions menu to completion — loops on pick_more_action() so
-# the settings toggles (and Theme/Create Preset, neither of which
-# needs a highlighted row either) flip or run in place and reopen
-# Actions right after, rather than dropping back to whatever screen
-# called this. Reused from both the main list (with an entry) and the
-# view picker (without one), so this behavior can't drift apart
-# between the two.
+# Create Preset, Settings, and Backup (none of which need a highlighted
+# row) run or open in place and reopen Actions right after, rather than
+# dropping back to whatever screen called this. Reused from both the
+# main list (with an entry) and the view picker (without one), so this
+# behavior can't drift apart between the two.
 #
 # Returns 1 if Esc was pressed with nothing left to do — the caller
 # just redraws whatever it was already showing. Returns 2 only when
@@ -3591,11 +3589,175 @@ MORE_MENU_FALLTHROUGH_ACTION=""
 open_more_menu() {
 
     local hide_label="$1" has_entry="$2" entry_name="$3"
-    local chosen_action new_value
+    local chosen_action
 
     while true; do
 
         chosen_action="$(pick_more_action "$hide_label" "$has_entry" "$entry_name")"
+
+        [[ -z "$chosen_action" ]] && return 1
+
+        case "$chosen_action" in
+            bulk_hide)
+                bulk_hide
+                continue
+                ;;
+            bulk_favorite)
+                bulk_favorite
+                continue
+                ;;
+            bulk_categorize)
+                bulk_categorize
+                continue
+                ;;
+            settings)
+                open_settings_menu
+                continue
+                ;;
+            create_preset)
+                create_preset
+                continue
+                ;;
+            backup)
+                create_backup
+                continue
+                ;;
+        esac
+
+        # Only reachable when has_entry=true: f6/f7/f8/shortcut.
+        MORE_MENU_FALLTHROUGH_ACTION="$chosen_action"
+        return 2
+    done
+}
+
+# ------------------------------------------------------------
+# The Settings screen — Actions -> Settings.
+#
+# Raised live: "it seems Actions menu mixes up actual Actions and
+# System Settings, how do we solve this (e.g. create a separate
+# Settings menu)?" Actions had grown to mix two different kinds of
+# row: things you DO to the highlighted entry or to build something
+# new (Hide, Favorite, Categorize, Create Preset, Create Shortcut,
+# Backup), and standing preferences that change ongoing behavior
+# (Theme, the bundled-defaults toggles, Open to Categories, Sort,
+# Details, Alt Keybinds). Splitting them mirrors how most apps
+# separate "things to do" from "Preferences" — reached one level down
+# via a single "Settings" row rather than a new key, since every F1-F9
+# is already spoken for and settings are visited far less often than
+# Hide/Favorite/Categorize.
+#
+# Same shape as pick_more_action()/open_more_menu() — no has_entry
+# split needed here, since none of these rows are entry-scoped.
+# ------------------------------------------------------------
+
+pick_settings_action() {
+
+    local -a rows=()
+    local result
+
+    rows+=("theme"$'\t'"$(printf '%-20s%s' 'Theme' '')")
+
+    # Global overrides for the bundled curated defaults (categories and
+    # pre-hidden commands). Off means "don't apply the bundled data to
+    # anything I haven't touched myself" — a user's own F3/F8 choice on
+    # any individual entry always wins regardless of this setting, so
+    # this is only an escape hatch for someone who wants a blank slate
+    # from the start, not the everyday way to override one entry.
+    local categories_state='On'
+    [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && categories_state='Off'
+    rows+=("toggle_default_categories"$'\t'"$(printf '%-20s%s' 'Default Categories' "$categories_state")")
+
+    local hidden_state='On'
+    [[ "$CONFIG_DEFAULT_HIDDEN" == off ]] && hidden_state='Off'
+    rows+=("toggle_default_hidden"$'\t'"$(printf '%-20s%s' 'Default Hidden' "$hidden_state")")
+
+    # Opt-in, unlike the two above — this changes the very first thing
+    # you see on launch, so it defaults to the familiar "All" list
+    # rather than switching everyone's startup screen out from under
+    # them. Only worth turning on once categories are actually
+    # populated (bundled, manual, or both); an empty category list
+    # would just show a picker with nothing useful in it.
+    local open_to_categories_state='Off'
+    [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
+    rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
+
+    # A two-way toggle rather than an on/off one, unlike the three
+    # above — "Name" is just what every view already shows for free
+    # (the cache is written alphabetically), "Size" reorders it
+    # largest-first. Doesn't affect Most Used or Recently Added, which
+    # already have their own meaningful order.
+    local sort_state='Name'
+    [[ "$SORT_ORDER" == size ]] && sort_state='Size'
+    rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
+
+    # Raised live: "implement a toggle for details pane (F3) in F4
+    # Actions." Same DETAILS_VISIBLE flag F3 itself toggles — on
+    # every screen with an F3 details/preview pane (main list, F2
+    # alike, see DETAILS_VISIBLE's own comment) — just also reachable
+    # (and its current state visible) from here, for anyone who
+    # reaches for Settings before remembering F3 exists.
+    local details_state='Off'
+    [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
+    rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
+
+    # Raised live: "the bottom menu is inconsistent — All view shows
+    # Fn and alternative keybinds, F2/F9 don't. I prefer a toggle
+    # switch that switches between Fn and the alternative keybinds."
+    # Before this, whether ⌥ aliases showed was decided automatically,
+    # purely by whether they happened to fit the terminal width — never
+    # a real user choice, and F2/F9's own footer never even tried. Now
+    # a persisted preference: On tries to show the ⌥ alias next to
+    # every F-key wherever there's room (main list, F2, F9 alike — see
+    # build_footer()/build_picker_footer()), Off never does. The F-keys
+    # themselves always work either way; this only changes the footer.
+    local alt_keybinds_state='On'
+    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && alt_keybinds_state='Off'
+    rows+=("toggle_alt_keybinds"$'\t'"$(printf '%-20s%s' 'Alt Keybinds' "$alt_keybinds_state")")
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    # Same always-on details pane as Actions itself — the rows here
+    # are exactly the ones that moved out of pick_more_action(), so
+    # --internal-preview-action already has an entry for every one of
+    # them (keyed by row id, not by which menu shows it).
+    result="$(
+        printf '%s\n' "${rows[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Settings')" \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --delimiter=$'\t' \
+            --with-nth=2 \
+            --preview "${(q)SCRIPT_PATH} --internal-preview-action {1}" \
+            --preview-window="down,35%,border-top,wrap" \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter/Space  [Choose]    Esc  [Back]' \
+            --bind 'space:accept' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ -z "$result" ]] && return 1
+
+    printf '%s' "${result%%$'\t'*}"
+}
+
+# Runs the Settings screen to completion — same loop-until-Esc idea as
+# open_more_menu(), so every toggle here flips in place and reopens
+# Settings right after instead of dropping back out to Actions.
+open_settings_menu() {
+
+    local chosen_action new_value
+
+    while true; do
+
+        chosen_action="$(pick_settings_action)"
 
         [[ -z "$chosen_action" ]] && return 1
 
@@ -3666,24 +3828,13 @@ open_more_menu() {
                 pick_theme
                 continue
                 ;;
-            create_preset)
-                create_preset
-                continue
-                ;;
-            backup)
-                create_backup
-                continue
-                ;;
         esac
 
-        # Only reachable when has_entry=true: f6/f7/f8/shortcut.
-        MORE_MENU_FALLTHROUGH_ACTION="$chosen_action"
-        return 2
     done
 }
 
 # ------------------------------------------------------------
-# The Theme screen, reached from the Actions menu.
+# The Theme screen, reached from Actions -> Settings.
 #
 # Doesn't need a selected entry (nothing here is about any one row),
 # so its main-loop dispatch sits with F1/Help rather than falling
@@ -5291,29 +5442,25 @@ toggle_category_direct() {
 }
 
 # ------------------------------------------------------------
-# Toggle an entry's membership in a category by name, typed or picked
-#
-# Same add/remove toggle as toggle_favorite, generalized to any
-# category — picking or typing a category the entry is already in
-# removes it instead of being a no-op. That's how you unassign a
-# category: press F8/⌥C again and pick/type the same one.
+# Prompts for a category name — typed or picked from existing ones —
+# with the validation (no "/", no leading ".", not a built-in view
+# name) that used to live inline in toggle_category(). Pulled out so
+# bulk_categorize() below can reuse the exact same prompt once for a
+# whole marked batch, instead of toggle_category() asking once per
+# entry.
 #
 # Uses fzf's own --print-query: if the typed text matches an existing
 # category it's selected normally; if it matches nothing, Enter still
 # exits and --print-query reports the typed text, which is treated as
 # a brand-new category name and created on the spot.
 #
-# Return code notes what happened: 0 = added, 2 = removed, 1 =
-# cancelled (no category chosen). Not currently used by the caller —
-# F7 always just refreshes in place regardless of which happened —
-# kept for whoever's debugging next.
+# Prints the validated name on success, nothing on cancel/invalid —
+# callers should treat empty as "stop, nothing to do."
 # ------------------------------------------------------------
 
-toggle_category() {
+pick_category_name() {
 
-    local command="$1"
     local category_name
-    local tmp_category
     local default_query=""
     local name
     local choices=()
@@ -5381,6 +5528,31 @@ toggle_category() {
         return 1
     fi
 
+    printf '%s' "$category_name"
+}
+
+# ------------------------------------------------------------
+# Toggle an entry's membership in a category by name, typed or picked
+#
+# Same add/remove toggle as toggle_favorite, generalized to any
+# category — picking or typing a category the entry is already in
+# removes it instead of being a no-op. That's how you unassign a
+# category: press F8/⌥C again and pick/type the same one.
+#
+# Return code notes what happened: 0 = added, 2 = removed, 1 =
+# cancelled (no category chosen). Not currently used by the caller —
+# F7 always just refreshes in place regardless of which happened —
+# kept for whoever's debugging next.
+# ------------------------------------------------------------
+
+toggle_category() {
+
+    local command="$1"
+    local category_name
+    local tmp_category
+
+    category_name="$(pick_category_name)" || return 1
+
     mkdir -p "$CATEGORIES_DIR"
 
     local category_file="$CATEGORIES_DIR/$category_name"
@@ -5410,6 +5582,245 @@ toggle_category() {
         printf '%s\n' "$command" >> "$category_file"
         return 0
     fi
+}
+
+# ------------------------------------------------------------
+# "Ensure membership" counterparts to toggle_favorite()/
+# toggle_category_direct() above — add only, never remove, a no-op if
+# already a member. Used by the bulk_* actions below: a bulk action
+# marks a batch and moves everything in it to the SAME end state
+# (favorited / in this category), rather than toggling each one
+# individually based on whatever state it happened to already be in —
+# see bulk_favorite()/bulk_categorize() for why that's the right
+# default for a batch you just selected together.
+# ------------------------------------------------------------
+
+add_to_favorites() {
+
+    local command="$1"
+    local favorites_file="$CATEGORIES_DIR/Favorites"
+
+    [[ -f "$favorites_file" ]] &&
+        grep -Fqx "$command" "$favorites_file" 2>/dev/null &&
+        return 0
+
+    mkdir -p "$CATEGORIES_DIR"
+    printf '%s\n' "$command" >> "$favorites_file"
+}
+
+add_to_category() {
+
+    local command="$1" category_name="$2"
+    local category_file="$CATEGORIES_DIR/$category_name"
+
+    [[ -f "$category_file" ]] &&
+        grep -Fqx "$command" "$category_file" 2>/dev/null &&
+        return 0
+
+    # Already a member via the bundled default (and not excluded from
+    # it) — same "virtually already there" case toggle_category_direct()
+    # checks, just without the toggle: nothing to add.
+    if [[ "${default_category_commands[$command]-}" == "$category_name" ]] &&
+       ! grep -Fqx "$command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null; then
+        return 0
+    fi
+
+    mkdir -p "$CATEGORIES_DIR"
+    printf '%s\n' "$command" >> "$category_file"
+}
+
+# ------------------------------------------------------------
+# Shared multi-select picker for the bulk Hide/Favorite/Categorize
+# actions below — raised live: "I like the behavior of how we create
+# presets (adding TUIs with tab). Would it be feasible to implement
+# this behavior for Hide, Favorite, and Categorize as well?"
+#
+# Deliberately NOT Create Preset's own custom ordered-badge mechanism
+# (--internal-preset-tab and its side-channel state file) — that exists
+# solely because a preset's *launch order* matters. None of Hide,
+# Favorite, or Categorize care about order, only membership, so fzf's
+# own built-in --multi does the whole job: Tab marks/unmarks, Enter
+# outputs every marked line (or just the highlighted one if nothing
+# was marked — the ordinary single-entry case, handled for free). No
+# state file, no subprocess transform, far less code than presets
+# needed for the ordering it actually requires.
+#
+# Operates on whatever's currently on screen ($entries, i.e. whatever
+# CURRENT_VIEW already filtered to) rather than always resetting to
+# "All" the way Create Preset does — a preset draws from the whole
+# toolset by design, but bulk-hiding/favoriting/categorizing only what
+# you're already looking at (e.g. a handful of entries in "Games")
+# reads as the more useful default, and "All" is always one F2 press
+# away if that's what's wanted instead.
+#
+# Prints each marked entry (still the full tab-delimited $entries line)
+# on its own line, or nothing at all if Esc was pressed.
+# ------------------------------------------------------------
+
+pick_multiple_entries() {
+
+    local border_label="$1" action_verb="$2"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    printf '%s\n' "${entries[@]}" |
+    fzf \
+        --height=100% \
+        --no-clear \
+        --layout=reverse \
+        --border=rounded \
+        --border-label="$(screen_border_label "$border_label")" \
+        --border-label-pos=2 \
+        --prompt=' 󰣇  ' \
+        --pointer='▌' \
+        --delimiter=$'\t' \
+        --with-nth=2 \
+        --nth=1,2,3,4 \
+        --multi \
+        --header="Tab marks a tool. Enter acts on everything marked (or just this row, if nothing's marked)." \
+        --footer="  ↑ ↓  Navigate    Tab  Mark/unmark    Enter  [${action_verb}]    Esc  [Cancel]" \
+        --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+        --color="$FZF_COLORS"
+
+    rm -f "$FOOTER_CLICK_FILE"
+}
+
+# ------------------------------------------------------------
+# Bulk Hide/Unhide — mark several entries, act on all of them at once.
+#
+# Relabels to "Unhide multiple" while viewing Hidden, same idea as F6's
+# own per-entry hide_label. hide_entry()/unhide_entry() are already
+# each idempotent ("ensure hidden" / "ensure shown" regardless of
+# which of the two hidden-state mechanisms — IGNORE_FILE or a bundled
+# default — currently applies), so this can call either unconditionally
+# on every marked entry with no extra bookkeeping: a marked entry
+# that's already in the target state is just a no-op for that entry.
+# ------------------------------------------------------------
+
+bulk_hide() {
+
+    local -a selected=()
+    local line command
+    local border_label='Hide multiple' action_verb='Hide' unhiding=false
+
+    if [[ "$CURRENT_VIEW" == "Hidden" ]]; then
+        border_label='Unhide multiple'
+        action_verb='Unhide'
+        unhiding=true
+    fi
+
+    selected=("${(@f)$(pick_multiple_entries "$border_label" "$action_verb")}")
+
+    (( ${#selected[@]} == 0 )) && return 1
+
+    for line in "${selected[@]}"; do
+        [[ -z "$line" ]] && continue
+        command="${line%%$'\t'*}"
+        if [[ "$unhiding" == true ]]; then
+            unhide_entry "$command"
+        else
+            hide_entry "$command"
+        fi
+    done
+
+    load_hidden_commands
+    build_entries
+}
+
+# ------------------------------------------------------------
+# Bulk Favorite/Unfavorite — same shape as bulk_hide() above.
+#
+# Relabels to "Unfavorite multiple" while viewing Favorites, where
+# every entry on screen is necessarily already a member — toggle_favorite()
+# there is guaranteed to remove, never add, so it's safe to call
+# unconditionally. Everywhere else, add_to_favorites() (ensure-added,
+# not a toggle) is used instead — a mixed marked batch (some already
+# favorited, some not) ends with all of them favorited, not some newly
+# un-favorited by an unlucky toggle. See pick_multiple_entries()'s own
+# comment for why this is a plain --multi picker, not Create Preset's
+# ordered one.
+# ------------------------------------------------------------
+
+bulk_favorite() {
+
+    local -a selected=()
+    local line command
+    local border_label='Favorite multiple' action_verb='Favorite' unfavoriting=false
+
+    if [[ "$CURRENT_VIEW" == "Favorites" ]]; then
+        border_label='Unfavorite multiple'
+        action_verb='Unfavorite'
+        unfavoriting=true
+    fi
+
+    selected=("${(@f)$(pick_multiple_entries "$border_label" "$action_verb")}")
+
+    (( ${#selected[@]} == 0 )) && return 1
+
+    for line in "${selected[@]}"; do
+        [[ -z "$line" ]] && continue
+        command="${line%%$'\t'*}"
+        if [[ "$unfavoriting" == true ]]; then
+            toggle_favorite "$command"
+        else
+            add_to_favorites "$command"
+        fi
+    done
+
+    refresh_category_state
+    load_favorite_commands
+    load_category_members
+    build_entries
+}
+
+# ------------------------------------------------------------
+# Bulk Categorize — same shape again, but a category also needs a
+# *name*, unlike a plain on/off like Hide or Favorite.
+#
+# While viewing a real category (not All/Hidden/Favorites), every
+# entry on screen is already a member of it — same reasoning as
+# bulk_favorite() in the Favorites view, this instantly removes the
+# marked batch from the category being viewed, mirroring F8's own
+# instant per-entry toggle in that same context, no prompt needed.
+#
+# Everywhere else, pick_category_name() prompts ONCE for the whole
+# marked batch (not once per entry — the entire point of doing this in
+# bulk), then add_to_category() (ensure-added, not a toggle) files
+# every marked entry that isn't already in it. Entries already in that
+# category are left alone rather than removed, same "move the whole
+# batch to one end state" reasoning as bulk_favorite().
+# ------------------------------------------------------------
+
+bulk_categorize() {
+
+    local -a selected=()
+    local line command category_name
+
+    selected=("${(@f)$(pick_multiple_entries 'Categorize multiple' 'Categorize')}")
+
+    (( ${#selected[@]} == 0 )) && return 1
+
+    if [[ "$CURRENT_VIEW" != "All" && "$CURRENT_VIEW" != "Hidden" && "$CURRENT_VIEW" != "Favorites" ]]; then
+
+        for line in "${selected[@]}"; do
+            [[ -z "$line" ]] && continue
+            toggle_category_direct "${line%%$'\t'*}" "$CURRENT_VIEW"
+        done
+
+    else
+
+        category_name="$(pick_category_name)" || return 1
+
+        for line in "${selected[@]}"; do
+            [[ -z "$line" ]] && continue
+            add_to_category "${line%%$'\t'*}" "$category_name"
+        done
+    fi
+
+    refresh_category_state
+    load_favorite_commands
+    load_category_members
+    build_entries
 }
 
 # ------------------------------------------------------------
