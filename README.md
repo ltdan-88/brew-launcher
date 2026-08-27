@@ -222,6 +222,11 @@ shell instead? Open a new tab or window for that, same as you would with any
 other terminal app — the launcher reappearing is the more useful default for
 what a launcher's actually for.
 
+Either way, it pauses first with **press any key to return to brew-launcher**
+rather than bringing the picker back instantly — for a one-shot CLI that's the
+difference between actually seeing its output and having the picker paint
+over it before you get the chance.
+
 ### Launch several tools together
 
 <p align="center"><img src="assets/presets.gif" alt="Creating a preset by marking tools with Tab, naming it, then launching it with F9"></p>
