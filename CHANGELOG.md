@@ -5,6 +5,35 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.3] — 2026-08-27
+
+### Fixed
+
+- **F3's category preview now respects Default Categories being off,
+  and doesn't double-claim a manually-filed command.** "Reading &
+  Reference (0) lists 3 apps, which are gone." Not actually gone —
+  they're bundled defaults for a category the user had turned Default
+  Categories off for (Actions → Default Categories), so the count
+  correctly showed 0 while the preview, which had no idea that
+  setting existed, still resurrected all 3. Confirmed live against the
+  user's real config. The preview's bundled-category scan now checks
+  `CONFIG_DEFAULT_CATEGORIES` the same way `load_bundled_categories()`
+  itself does, and additionally skips a command already filed by hand
+  into some *other* real category, matching that function's
+  `manually_categorized_commands` check too — otherwise a tool could
+  appear to belong to two categories at once in the preview alone.
+- **The F2/F9 pickers' own footer is now width-aware, same as the main
+  list's.** "The bottom menu is becoming too wide, would harmonizing
+  it with All view make sense?" Both had grown a static single-line
+  footer past what fzf could safely render — F2 alone reached 6
+  actions past nav/search, and confirmed live that even the tightest
+  single-line rendering doesn't fit below roughly 95 columns, so fzf
+  was truncating it mid-word. New `build_picker_footer()` mirrors
+  `build_footer()`/`footer_actions()`'s own progressive-degradation
+  idea: full gap, tighter gap, and — new, since neither existing rung
+  was always enough here — wrapping the actions across two lines
+  before ever letting fzf cut one off mid-word.
+
 ## [0.42.2] — 2026-08-27
 
 ### Fixed

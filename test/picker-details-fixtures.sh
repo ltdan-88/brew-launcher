@@ -37,14 +37,19 @@ mkdir -p "$CATEGORIES_DIR" "$PRESETS_DIR" "$XDG_CACHE_HOME/brew-launcher"
 
 # Minimal fixture cache: command, description, formula, version, size,
 # outdated, full_name, resolved_path, install_time, default_category,
-# default_hidden. fastfetch's default_category ("System Info") is what
-# section 3 below uses to test the bundled-only case — a real
-# rebuild_cache() output always carries these same two trailing fields
-# (see the "9 —" comment near CACHE_FORMAT_VERSION in the real script).
+# default_hidden. macmon's default_category ("System Info") is what
+# section 3 below uses to test the bundled-only case — kept separate
+# from fastfetch specifically because section 1 files fastfetch into
+# a real category ("Morning") of its own, and section 3b's "already
+# filed elsewhere" check would otherwise make fastfetch a moving
+# target depending on what ran before it. A real rebuild_cache()
+# output always carries these same two trailing fields (see the "9 —"
+# comment near CACHE_FORMAT_VERSION in the real script).
 cat > "$CACHE_FILE" <<'EOF'
-fastfetch	Like neofetch, but much faster	fastfetch	2.67.1	1.7MB		fastfetch	/opt/homebrew/bin/fastfetch	100	System Info	0
+fastfetch	Like neofetch, but much faster	fastfetch	2.67.1	1.7MB		fastfetch	/opt/homebrew/bin/fastfetch	100	-	0
 newsboat	RSS/Atom feed reader	newsboat	2.44	15.7MB		newsboat	/opt/homebrew/bin/newsboat	200	-	0
 tele	TUI Telegram client	tele	1.11.2	27.3MB		tele	/opt/homebrew/bin/tele	300	-	0
+macmon	Sudoless performance monitoring	macmon	0.8.2	1.9MB		macmon	/opt/homebrew/bin/macmon	400	System Info	0
 EOF
 
 # ------------------------------------------------------------
@@ -124,9 +129,9 @@ done
 
 output="$("$LAUNCHER" --internal-preview-category "System Info" 2>&1)"
 
-echo "$output" | grep -q "fastfetch" ||
-    fail "bundled-only category preview should list fastfetch (its default_category is System Info), got: $output"
-echo "$output" | grep -q "Like neofetch" ||
+echo "$output" | grep -q "macmon" ||
+    fail "bundled-only category preview should list macmon (its default_category is System Info), got: $output"
+echo "$output" | grep -q "Sudoless performance monitoring" ||
     fail "bundled-only category preview should still show the description, got: $output"
 echo "$output" | grep -qi "not one of yours yet" &&
     fail "bundled-only category preview should show the tools, not refuse with an explanation, got: $output"
@@ -137,6 +142,35 @@ echo "$output" | grep -qi "not one of yours yet" &&
 output="$("$LAUNCHER" --internal-preview-category "NoSuchCategory" 2>&1)"
 echo "$output" | grep -qi "Empty" ||
     fail "category preview for a name with no real file and no bundled members should say Empty, got: $output"
+
+# ------------------------------------------------------------
+# 3b. Default Categories turned off (Actions -> Default Categories):
+#     bundled contributions stop showing up in the preview too, same
+#     as they already stop counting in the real picker
+#     (load_bundled_categories() itself skips entirely when this is
+#     off). Raised live: a category with an empty real file (left
+#     over from before this was turned off) still showed bundled tools
+#     in the preview while its own count correctly said 0 — the
+#     preview had no idea the setting existed. Also covers a command
+#     that's manually filed into some *other* real category — it
+#     shouldn't appear to double-belong here and there.
+# ------------------------------------------------------------
+
+mkdir -p "$XDG_CONFIG_HOME/brew-launcher"
+printf 'DEFAULT_CATEGORIES=off\n' > "$XDG_CONFIG_HOME/brew-launcher/config"
+
+output="$("$LAUNCHER" --internal-preview-category "System Info" 2>&1)"
+echo "$output" | grep -qi "Empty" ||
+    fail "with Default Categories off, a bundled-only category should preview as Empty, got: $output"
+
+printf 'DEFAULT_CATEGORIES=on\n' > "$XDG_CONFIG_HOME/brew-launcher/config"
+printf 'macmon\n' > "$CATEGORIES_DIR/Elsewhere"
+
+output="$("$LAUNCHER" --internal-preview-category "System Info" 2>&1)"
+echo "$output" | grep -q "macmon" &&
+    fail "macmon is manually filed into \"Elsewhere\" — System Info's bundled preview should not also claim it, got: $output"
+
+rm -f "$XDG_CONFIG_HOME/brew-launcher/config" "$CATEGORIES_DIR/Elsewhere"
 
 # ------------------------------------------------------------
 # 4. Empty category file: says so, not just a blank pane.
