@@ -98,36 +98,40 @@ The footer shows what browsing needs — **Views**, **Details**, **Refresh** —
 plus **Presets**, since running one is worth a key of its own, and **Help**
 last (lowest priority, first dropped on a narrow terminal — most people
 already know F1 means help, but not everyone does). Organizing —
-hide, favorite, categorize — and setup — theme, create a preset, create a
-shortcut — live behind **F4 / ⌥M**, labeled **Actions** rather than something
-vaguer, since it's a right-click-menu equivalent: whatever's highlighted when
-you press it is what it acts on, and its own border label says so by name
-(`Actions on fastfetch`), not just the generic word. Hide, Favorite and
-Categorize still have a direct key too; the setup actions are Actions-only,
-since they're one-time rather than everyday.
+hide, favorite, categorize — and setup — create a preset, create a shortcut,
+theme, and the rest of the settings below — live behind **F4 / ⌥M**, labeled
+**Actions** rather than something vaguer, since it's a right-click-menu
+equivalent: whatever's highlighted when you press it is what it acts on, and
+its own border label says so by name (`Actions on fastfetch`), not just the
+generic word. Hide, Favorite and Categorize still have a direct key too; the
+setup actions are Actions-only, since they're one-time rather than everyday.
+Launch Preset isn't offered here at all — **F9** already runs it directly and
+sits in the footer on every screen Actions is reachable from, so a second,
+Actions-only path to the exact same thing would just be redundant.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
 teaches you the key and then gets out of the way. Rows are grouped by what
-they need: entry-scoped actions (Hide, Favorite, Categorize) and Launch Preset
-first, then Theme and the toggles below, then the two "build something new"
-actions, Create Preset and Create Shortcut, last. A details pane below the
-list — on by default, no toggle to remember — spells out what the
-highlighted row actually does, since a one-line label like "Default
-Categories" doesn't say much on its own.
+they need: entry-scoped actions (Hide, Favorite, Categorize) first, then the
+two "build something new" actions, Create Preset and Create Shortcut, right
+after — closer in spirit to those than to a settings toggle — then every
+settings toggle clustered together as one group (Theme through Alt
+Keybinds), Backup last. A details pane below the list — on by default, no
+toggle to remember — spells out what the highlighted row actually does,
+since a one-line label like "Default Categories" doesn't say much on its own.
 
-Several rows in Actions are on/off (or two-way) switches, not one-shot
-actions — Default Categories, Default Hidden, and Open to Categories (see
-[Bundled defaults](#bundled-defaults) below), Sort (Name/Size), Details,
-which mirrors **F3** itself so its current state is visible from Actions
-too, and Alt Keybinds, which controls whether the footer ever shows a key's
-**⌥** alias at all (on by default) — off keeps the footer to plain F-keys
-even on a terminal wide enough to fit the aliases. All of these flip with
-**Space** as well as Enter, and reopen the menu right after so you can flip
-more than one without leaving. Theme and Create Preset return to Actions
-once they're done too; only Create Shortcut exits back to wherever you
-opened Actions from, since it's the one action here that's actually
-finished when it's finished.
+Several rows in the settings cluster are on/off (or two-way) switches, not
+one-shot actions — Default Categories, Default Hidden, and Open to
+Categories (see [Bundled defaults](#bundled-defaults) below), Sort
+(Name/Size), Details, which mirrors **F3** itself so its current state is
+visible from Actions too, and Alt Keybinds, which controls whether the
+footer ever shows a key's **⌥** alias at all (on by default) — off keeps the
+footer to plain F-keys even on a terminal wide enough to fit the aliases.
+All of these flip with **Space** as well as Enter, and reopen the menu right
+after so you can flip more than one without leaving. Theme and Create Preset
+return to Actions once they're done too; only Create Shortcut exits back to
+wherever you opened Actions from, since it's the one action here that's
+actually finished when it's finished.
 
 **F4**, **F5**, and **F9** also work from inside the view picker (**F2**)
 itself, not just the main list — no row needs to be highlighted for either
@@ -247,8 +251,8 @@ defaults](#bundled-defaults) place it somewhere, that shows too, marked
 `(default)` so it's never confused with a category you actually chose.
 
 Same idea for presets: if the highlighted command is part of one or more, a
-`Presets` line names them — the reverse of [F3 in the F9
-picker](#launch-several-tools-together), which shows a preset's commands
+`Presets` line names them — the reverse of [the F9 picker's own details
+pane](#launch-several-tools-together), which shows a preset's commands
 rather than a command's presets. Omitted when it isn't in any.
 
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
@@ -298,24 +302,25 @@ order they're listed in. Enter with nothing marked shows an error rather
 than quietly saving a one-tool "preset." **F9** lists your presets and
 launches the one you pick — in its own window when there's somewhere to put
 one, otherwise reattaching to it if it's already running rather than opening
-a second copy (see [Configuration](#configuration) for exactly which). **F3**
-previews what's in the highlighted preset — every command, with its
-description, in the order it launches in (not alphabetical — this is the same
-order Tab built when you created it). **Ctrl-R** on a highlighted preset
-renames it — same "type a new name over the prefilled
-current one" as renaming a category, since a preset is exactly the same shape:
-a name that's just its filename under `~/.config/brew-launcher/presets`. If a
-session for that preset is already running, it keeps working under the old
-name until it ends — renaming the file doesn't reach into a live tmux session
-to match. **Ctrl-D** on a highlighted preset deletes it instead — same
-confirm-first prompt as deleting a category, showing how many commands it
-holds before anything's removed. File format and the `--preset` CLI flag are
-also in [Configuration](#configuration).
+a second copy (see [Configuration](#configuration) for exactly which). Its
+own details pane — always on, no toggle needed — previews what's in the
+highlighted preset: every command, with its description, in the order it
+launches in (not alphabetical — this is the same order Tab built when you
+created it). **Ctrl-R** on a highlighted preset renames it — same "type a new
+name over the prefilled current one" as renaming a category, since a preset
+is exactly the same shape: a name that's just its filename under
+`~/.config/brew-launcher/presets`. If a session for that preset is already
+running, it keeps working under the old name until it ends — renaming the
+file doesn't reach into a live tmux session to match. **Ctrl-D** on a
+highlighted preset deletes it instead — same confirm-first prompt as deleting
+a category, showing how many commands it holds before anything's removed.
+File format and the `--preset` CLI flag are also in
+[Configuration](#configuration).
 
-Presets need [tmux](#terminal-backends). Both stay visible in the footer and
-Actions menu either way — the Actions menu's hint reads "needs tmux" in place of the
-usual keybind when it's missing, and pressing either explains the exact
-install command rather than silently failing.
+Presets need [tmux](#terminal-backends). **F9** and **F4 → Create Preset**
+both stay visible either way — Create Preset's hint reads "needs tmux" in
+place of the usual keybind when it's missing, and pressing either explains
+the exact install command rather than silently failing.
 
 ### Color themes
 
@@ -394,8 +399,7 @@ reference below, from inside the launcher.
 | **Esc** | Go back one level, or quit | footer |
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
-| **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker | footer |
-| **F3** | Preview what's in the highlighted preset — in the F9 picker | picker |
+| **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker; its own details pane is always on, previewing what's in the highlighted preset | footer |
 | **Ctrl-R** | Rename the highlighted preset — in the F9 picker | picker |
 | **Ctrl-D** | Delete the highlighted preset — in the F9 picker | picker |
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | Actions |
@@ -405,14 +409,14 @@ reference below, from inside the launcher.
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
 | **F1** / **⌥?** | Open this reference in the launcher — also in the footer, last | footer |
-| — | Switch color theme | Actions only |
 | — | Create a new preset | Actions only |
+| — | Create a desktop shortcut (macOS or Linux) | Actions only |
+| — | Switch color theme | Actions only |
 | — | Toggle Default Categories / Default Hidden | Actions only |
 | — | Toggle Open to Categories | Actions only |
 | — | Sort by name or size | Actions only |
 | — | Toggle the details pane (mirrors F3) | Actions only |
 | — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Actions only |
-| — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
@@ -438,7 +442,9 @@ are things you do in bursts, and they were costing footer slots you'd
 otherwise look at on every single launch. **F9** followed the same logic in
 reverse: unlike making a shortcut (once per tool, rarely repeated), running a
 preset is something you'd reach for over and over, so it earned a footer key
-of its own rather than staying Actions-only.
+of its own — and, once that key existed everywhere Actions is reachable
+from, a matching Actions row would've just been the same action twice, so it
+isn't offered there at all.
 
 The menu lists each action's key beside it, so it teaches its own shortcuts
 and works itself out of a job.

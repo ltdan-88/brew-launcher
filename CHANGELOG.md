@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.44.0] — 2026-08-28
+
+### Changed
+
+- **Reorganized the Actions menu (F4).** Four related requests in one
+  batch:
+  - "I think that launch preset should be removed from this menu,
+    since it is redundant having F9 always shown." Removed — F9
+    already runs it directly and sits in the footer on every screen
+    Actions is reachable from.
+  - "Also i would move Create Preset and Create Shortcut up under
+    Categorize." Both moved right after Categorize — closer in spirit
+    to Hide/Favorite/Categorize than to a settings toggle.
+  - "All other items are basically settings, so they should be
+    clustered together (challenge whether current order is correct)."
+    Theme through Alt Keybinds now form one contiguous settings
+    cluster, with Backup as the closing action.
+  - "Preset menu F9 should offer same behavior as F4 menu (details
+    pane always on)." F9's own preview pane is no longer gated behind
+    F3/`DETAILS_VISIBLE` — it's simply always shown, same as F4's own
+    pane, since a preset list is usually short and the point of
+    glancing at one is seeing what's in it before launching. F3 is no
+    longer offered in the F9 picker; it still works everywhere else
+    (main list, F2).
+
 ## [0.43.0] — 2026-08-27
 
 ### Fixed
