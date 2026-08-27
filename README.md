@@ -95,7 +95,9 @@ above; brew-launcher is just another installed formula to it. Run
 <p align="center"><img src="assets/more.gif" alt="Opening the Actions menu with F4 and favoriting an entry from it"></p>
 
 The footer shows what browsing needs — **Views**, **Details**, **Refresh** —
-plus **Presets**, since running one is worth a key of its own. Organizing —
+plus **Presets**, since running one is worth a key of its own, and **Help**
+last (lowest priority, first dropped on a narrow terminal — most people
+already know F1 means help, but not everyone does). Organizing —
 hide, favorite, categorize — and setup — theme, create a preset, create a
 shortcut — live behind **F4 / ⌥M**, labeled **Actions** rather than something
 vaguer, since it's a right-click-menu equivalent: whatever's highlighted when
@@ -111,19 +113,23 @@ they need: entry-scoped actions (Hide, Favorite, Categorize) and Launch Preset
 first, then Theme and the three toggles below, then the two "build something
 new" actions, Create Preset and Create Shortcut, last.
 
-Three rows in Actions are on/off switches, not one-shot actions — Default
-Categories, Default Hidden, and Open to Categories (see
-[Bundled defaults](#bundled-defaults) below). Those flip with **Space** as
-well as Enter, and reopen the menu right after so you can flip more than one
-without leaving. Theme and Create Preset return to Actions once they're done
-too; only Create Shortcut exits back to wherever you opened Actions from,
-since it's the one action here that's actually finished when it's finished.
+Several rows in Actions are on/off (or two-way) switches, not one-shot
+actions — Default Categories, Default Hidden, and Open to Categories (see
+[Bundled defaults](#bundled-defaults) below), plus Sort (Name/Size) and
+Details, which mirrors **F3** itself so its current state is visible from
+Actions too, for anyone who reaches for the menu before remembering the
+direct key. All of these flip with **Space** as well as Enter, and reopen
+the menu right after so you can flip more than one without leaving. Theme
+and Create Preset return to Actions once they're done too; only Create
+Shortcut exits back to wherever you opened Actions from, since it's the one
+action here that's actually finished when it's finished.
 
-**F4** and **F5** also work from inside the view picker (**F2**) itself, not
-just the main list — no row needs to be highlighted for either, so Actions
-opens there with just the entry-independent actions (no Hide/Favorite/
-Categorize/Create Shortcut) and its border label just says "Actions," with
-no row to name. Esc backs out to the view picker, not all the way to `All`.
+**F4**, **F5**, and **F9** also work from inside the view picker (**F2**)
+itself, not just the main list — no row needs to be highlighted for either
+of the first two, so Actions opens there with just the entry-independent
+actions (no Hide/Favorite/Categorize/Create Shortcut) and its border label
+just says "Actions," with no row to name. Esc backs out to the view picker,
+not all the way to `All`.
 
 ### One place to switch views
 
@@ -147,9 +153,10 @@ turning into "everything, just re-sorted."
 
 **F3** previews what's actually inside the highlighted category — every
 command it holds, with its description, at a glance rather than opening it
-to find out. A category that only exists via the
-[bundled defaults](#bundled-defaults), with no real file of its own yet,
-explains that instead of showing nothing.
+to find out. Includes tools that are only there via the
+[bundled defaults](#bundled-defaults) too, not just ones filed by hand — the
+preview shows what F2 would actually list if you opened it, regardless of
+who did the categorizing.
 
 **Ctrl-R** in that picker renames the highlighted category — type a new name
 over the prefilled current one and press Enter. A category's name is just its
@@ -369,7 +376,7 @@ reference below, from inside the launcher.
 | **Esc** | Go back one level, or quit | footer |
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
-| **F9** / **⌥P** | Launch a preset (reattaches if it's already running) | footer |
+| **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker | footer |
 | **F3** | Preview what's in the highlighted preset — in the F9 picker | picker |
 | **Ctrl-R** | Rename the highlighted preset — in the F9 picker | picker |
 | **Ctrl-D** | Delete the highlighted preset — in the F9 picker | picker |
@@ -379,12 +386,13 @@ reference below, from inside the launcher.
 | **F3** | Preview what's in the highlighted category — in the F2 picker | picker |
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
-| **F1** | Open this reference in the launcher | — |
+| **F1** / **⌥?** | Open this reference in the launcher — also in the footer, last | footer |
 | — | Switch color theme | Actions only |
 | — | Create a new preset | Actions only |
 | — | Toggle Default Categories / Default Hidden | Actions only |
 | — | Toggle Open to Categories | Actions only |
 | — | Sort by name or size | Actions only |
+| — | Toggle the details pane (mirrors F3) | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
 

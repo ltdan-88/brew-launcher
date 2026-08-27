@@ -36,11 +36,15 @@ CACHE_FILE="$XDG_CACHE_HOME/brew-launcher/entries"
 mkdir -p "$CATEGORIES_DIR" "$PRESETS_DIR" "$XDG_CACHE_HOME/brew-launcher"
 
 # Minimal fixture cache: command, description, formula, version, size,
-# outdated, full_name, resolved_path, install_time.
+# outdated, full_name, resolved_path, install_time, default_category,
+# default_hidden. fastfetch's default_category ("System Info") is what
+# section 3 below uses to test the bundled-only case — a real
+# rebuild_cache() output always carries these same two trailing fields
+# (see the "9 —" comment near CACHE_FORMAT_VERSION in the real script).
 cat > "$CACHE_FILE" <<'EOF'
-fastfetch	Like neofetch, but much faster	fastfetch	2.67.1	1.7MB		fastfetch	/opt/homebrew/bin/fastfetch	100
-newsboat	RSS/Atom feed reader	newsboat	2.44	15.7MB		newsboat	/opt/homebrew/bin/newsboat	200
-tele	TUI Telegram client	tele	1.11.2	27.3MB		tele	/opt/homebrew/bin/tele	300
+fastfetch	Like neofetch, but much faster	fastfetch	2.67.1	1.7MB		fastfetch	/opt/homebrew/bin/fastfetch	100	System Info	0
+newsboat	RSS/Atom feed reader	newsboat	2.44	15.7MB		newsboat	/opt/homebrew/bin/newsboat	200	-	0
+tele	TUI Telegram client	tele	1.11.2	27.3MB		tele	/opt/homebrew/bin/tele	300	-	0
 EOF
 
 # ------------------------------------------------------------
@@ -77,13 +81,32 @@ for builtin_view in All Hidden "Most Used" "Recently Added"; do
 done
 
 # ------------------------------------------------------------
-# 3. Bundled-only category (no real file): explains rather than
-#    showing nothing, same boundary rename_category() already draws.
+# 3. Bundled-only category (no real file, members come purely from the
+#    cache's default_category field): shows the actual tools, not an
+#    explanation of why it can't. Raised live right after the F3
+#    preview shipped: "I still want to see the tools, regardless of
+#    who has categorized them" — first version refused this case with
+#    a message instead.
 # ------------------------------------------------------------
 
+[[ ! -e "$CATEGORIES_DIR/System Info" ]] ||
+    fail "test setup error: a real 'System Info' file would defeat this test"
+
+output="$("$LAUNCHER" --internal-preview-category "System Info" 2>&1)"
+
+echo "$output" | grep -q "fastfetch" ||
+    fail "bundled-only category preview should list fastfetch (its default_category is System Info), got: $output"
+echo "$output" | grep -q "Like neofetch" ||
+    fail "bundled-only category preview should still show the description, got: $output"
+echo "$output" | grep -qi "not one of yours yet" &&
+    fail "bundled-only category preview should show the tools, not refuse with an explanation, got: $output"
+
+# A category name matching neither a real file nor any cached
+# default_category has genuinely nothing to show — that's the one case
+# that should still say so.
 output="$("$LAUNCHER" --internal-preview-category "NoSuchCategory" 2>&1)"
-echo "$output" | grep -qi "bundled default category" ||
-    fail "category preview for a category with no real file should explain that, got: $output"
+echo "$output" | grep -qi "Empty" ||
+    fail "category preview for a name with no real file and no bundled members should say Empty, got: $output"
 
 # ------------------------------------------------------------
 # 4. Empty category file: says so, not just a blank pane.

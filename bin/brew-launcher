@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.40.0"
+VERSION="0.41.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -359,8 +359,9 @@ Bundled defaults:
 Keyboard shortcuts:
 
   F1 / ⌥?   Help — the same reference shown below, from inside the
-            launcher. Off the footer on purpose: F1 = help is close
-            to universal, so it costs nothing to leave undocumented.
+            launcher. Shown in the footer too now, last — lowest
+            priority, so it's the first thing dropped on a narrow
+            terminal, but visible whenever there's room.
 
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
@@ -377,8 +378,9 @@ Keyboard shortcuts:
   F9 / ⌥P   Launch a preset — see Presets below. Ctrl-R in that
             picker renames the highlighted preset, Ctrl-D deletes it.
 
-  F4 and F5 also work from inside the view picker (F2) itself, not
-  just the main list — no entry needs to be highlighted for either.
+  F4, F5 and F9 also work from inside the view picker (F2) itself, not
+  just the main list — no entry needs to be highlighted for either of
+  the first two.
 
   In the Actions menu, and always available directly:
   F6 / ⌥H   Hide or unhide selected entry
@@ -387,10 +389,11 @@ Keyboard shortcuts:
             viewing a category, otherwise prompts for which one)
 
   In the Actions menu only — Launch Preset (same as F9), switch color
-  theme, Sort by name or size, the three toggles under "Bundled
-  defaults" below, Create Preset, Create a macOS or Linux shortcut,
-  Backup. None of these need a highlighted entry, so they're also
-  offered when Actions is opened
+  theme, Sort by name or size, toggle the details pane (same toggle as
+  F3 itself, mirrored here so its state is visible before opening it),
+  the three toggles under "Bundled defaults" below, Create Preset,
+  Create a macOS or Linux shortcut, Backup. None of these need a
+  highlighted entry, so they're also offered when Actions is opened
   from the view picker (Hide/Favorite/Categorize/Create Shortcut are
   not, since those act on a specific entry — and the view picker has
   no single row to name anyway). Esc from any of them returns to the
@@ -403,12 +406,13 @@ Keyboard shortcuts:
 Views:
   F2/⌥V switches what you're looking at: All, Favorites, your
   categories, then the computed views and Hidden last. "Hidden" is an
-  ordinary view — Enter still launches there, and F6 unhides. F3 in
-  the picker previews what's actually in the highlighted category —
-  every command it holds, with its description — same built-in views
-  (All, Hidden, Most Used, Recently Added) say there's nothing stored
-  to preview, and a bundled-only category with no real file yet says
-  so instead of showing nothing. Ctrl-R in the picker renames the
+  ordinary view — Enter still launches there, and F6 unhides. F9 also
+  works here, same as the main list. F3 in the picker previews what's
+  actually in the highlighted category — every command it holds, with
+  its description, including ones only there via the bundled defaults
+  — built-in views (All, Hidden, Most Used, Recently Added) say
+  there's nothing stored to preview instead. Ctrl-R in the picker
+  renames the
   highlighted category (just a file rename —
   a category's name is its filename in
   ~/.config/brew-launcher/categories, nothing else to update); a
@@ -523,6 +527,7 @@ if [[ "$1" == "--internal-footer-click" ]]; then
         '[Favorite]'|Favorite|F7/⌥F|F7| \
         '[Categorize]'|Categorize|F8/⌥C|F8| \
         '[Actions]'|Actions|F4/⌥M|F4| \
+        '[Help]'|Help|F1/⌥\?|F1| \
         '[Choose]'|Choose| \
         '[Quit]'|Quit|'[Close]'|Close|Enter|'[Launch]'|Launch| \
         '[View]'|View|'[Delete]'|Delete)
@@ -651,14 +656,18 @@ fi
 #
 # Raised live: "would F2 and F9 benefit from an F3 details pane, where
 # you could see at a glance what TUIs are within the categories or
-# presets?" Scoped to real category files only — a bundled-only
-# category (see load_bundled_categories) has no single file to read,
-# and reconstructing its membership here would mean duplicating
-# load_category_members()'s bundled-merge logic against a
-# default_category_commands table this early code path doesn't
-# populate, for a case Ctrl-R already draws the same line around
-# (rename also refuses a bundled-only category until F8 makes it
-# real). Says so instead of silently showing nothing.
+# presets?" First shipped scoped to real category files only, refusing
+# a bundled-only category (see load_bundled_categories) with an
+# explanation instead — raised live again right after: "I still want
+# to see the tools, regardless who has categorized them." Shows the
+# union of both now: real file membership, plus every command whose
+# cached default_category (field 10, the same one --internal-preview
+# already reads for its own "(default)" note) matches this category
+# name, minus anything CATEGORY_EXCLUDE_FILE says was explicitly taken
+# back out — the exact membership load_category_members() computes for
+# the real picker, just without needing that function's own globals
+# (default_category_commands isn't populated this early — see it for
+# why), reading straight from the cache instead.
 # ------------------------------------------------------------
 
 if [[ "$1" == "--internal-preview-category" ]]; then
@@ -673,21 +682,48 @@ if [[ "$1" == "--internal-preview-category" ]]; then
 
     preview_category_file="$CATEGORIES_DIR/$preview_view_name"
 
-    if [[ ! -f "$preview_category_file" ]]; then
-        print -r -- "  Bundled default category, not one of yours yet."
-        print -r -- "  Categorize one entry into it with F8 to see it here."
-        exit 0
-    fi
-
+    typeset -A preview_category_seen
     preview_category_commands=()
 
-    while IFS= read -r preview_member; do
-        preview_member="${preview_member#"${preview_member%%[![:space:]]*}"}"
-        preview_member="${preview_member%"${preview_member##*[![:space:]]}"}"
-        [[ -z "$preview_member" ]] && continue
-        [[ "$preview_member" == \#* ]] && continue
-        preview_category_commands+=("$preview_member")
-    done < "$preview_category_file"
+    if [[ -f "$preview_category_file" ]]; then
+        while IFS= read -r preview_member; do
+            preview_member="${preview_member#"${preview_member%%[![:space:]]*}"}"
+            preview_member="${preview_member%"${preview_member##*[![:space:]]}"}"
+            [[ -z "$preview_member" ]] && continue
+            [[ "$preview_member" == \#* ]] && continue
+            [[ -n "${preview_category_seen[$preview_member]-}" ]] && continue
+            preview_category_seen[$preview_member]=1
+            preview_category_commands+=("$preview_member")
+        done < "$preview_category_file"
+    fi
+
+    # Deliberately doesn't filter out hidden commands the way the real
+    # picker's own count does (compute_category_counts()) — that needs
+    # load_hidden_commands() plus the two loaders it calls in turn,
+    # none defined yet this early, and duplicating three functions'
+    # worth of logic here to stay in sync forever felt like a worse
+    # trade than an occasional preview slightly wider than what F2
+    # actually lists. Matches the spirit of what was actually asked
+    # for here anyway: "I still want to see the tools, regardless of
+    # who has categorized them."
+    #
+    # Reads field 10 via awk, not a zsh `read` loop with placeholder
+    # variables for the fields in between — confirmed live that
+    # `IFS=$'\t' read` collapses a genuinely empty field (field 6,
+    # "outdated", empty for anything not outdated) together with its
+    # neighboring tab, silently shifting every field after it left by
+    # one. awk's explicit -F'\t' doesn't have that problem, which is
+    # exactly why --internal-preview's own default-category lookup
+    # above already uses awk instead of read for the same field.
+    if [[ -f "$CACHE_FILE" ]]; then
+        while IFS= read -r preview_bundled_command; do
+            [[ -z "$preview_bundled_command" ]] && continue
+            [[ -n "${preview_category_seen[$preview_bundled_command]-}" ]] && continue
+            grep -Fqx -- "$preview_bundled_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
+            preview_category_seen[$preview_bundled_command]=1
+            preview_category_commands+=("$preview_bundled_command")
+        done < <(awk -F'\t' -v cat="$preview_view_name" '$10 == cat { print $1 }' "$CACHE_FILE")
+    fi
 
     if (( ${#preview_category_commands[@]} == 0 )); then
         print -r -- "  Empty."
@@ -3007,12 +3043,16 @@ rename_category() {
 # ------------------------------------------------------------
 # F1 — the help screen.
 #
-# F1 = help is close to universal, so it's the one key in this
-# launcher deliberately left off both the footer and the Actions menu's
-# main listing: teaching it would spend space on something most
-# people already know to try. It's still reachable — the same fzf
-# list idiom as every other screen here, purely informational, so
-# every row is inert and Enter/Esc both just go back.
+# Used to be deliberately left off the footer on the theory that
+# F1=help is close to universal knowledge, not worth spending space
+# teaching. Raised live — "why is there no F1 help mentioned?" — a
+# real user not finding it is direct evidence that assumption doesn't
+# hold for everyone; now the last (lowest-priority, first-dropped on a
+# narrow terminal) item in footer_actions(). Still not in the Actions
+# menu's own listing — Actions already means "act on the highlighted
+# row," and Help isn't that. Purely informational: the same fzf list
+# idiom as every other screen here, every row inert, Enter/Esc both
+# just go back.
 # ------------------------------------------------------------
 
 pick_help() {
@@ -3034,7 +3074,7 @@ pick_help() {
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
-    rows+=("            Both also work from inside the view picker (F2)")
+    rows+=("            F4, F5 and F9 also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
         rows+=("            otherwise reattaches if it's already running")
@@ -3057,6 +3097,8 @@ pick_help() {
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
     rows+=("                    first) — not Most Used/Recently Added, which")
     rows+=("                    already have their own order")
+    rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
+    rows+=("                    state shows before you even open the pane")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("     Create Preset  Pick tools to save as a new preset")
         rows+=("                    Tab shows the launch order as a number;")
@@ -3194,6 +3236,15 @@ pick_more_action() {
     [[ "$SORT_ORDER" == size ]] && sort_state='Size'
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
 
+    # Raised live: "implement a toggle for details pane (F3) in F4
+    # Actions." F3 already toggles this directly on the main list —
+    # this is the same flag, just also reachable (and its current
+    # state visible) from here, for anyone who reaches for Actions
+    # before remembering F3 exists.
+    local details_state='Off'
+    [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
+    rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
+
     # Same reasoning as Theme above — also setup-adjacent rather than
     # everyday, so it doesn't need a key of its own either. Grouped
     # with Create Shortcut below rather than up near Theme: both build
@@ -3320,6 +3371,16 @@ open_more_menu() {
                 # stale order on screen until something else refreshes
                 # it would look exactly like the toggle did nothing.
                 build_entries
+                continue
+                ;;
+            toggle_details)
+                # Not persisted like the toggles above — same as F3
+                # itself, this is a per-session view preference, not a
+                # setting. No rebuild needed either: unlike Sort, this
+                # only changes whether the preview window shows, not
+                # the data in it, so the main loop's own next fzf
+                # redraw already picks it up.
+                [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
                 continue
                 ;;
             theme)
@@ -3544,8 +3605,8 @@ pick_view() {
             --with-nth=2 \
             --preview "${(q)SCRIPT_PATH} --internal-preview-category {1}" \
             --preview-window="down,35%,border-top,wrap$([[ "$PICKER_DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F3  [Details]    F4  [Actions]    F5  [Refresh]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
-            --expect=enter,ctrl-d,ctrl-r,f3,f4,f5 \
+            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F3  [Details]    F4  [Actions]    F5  [Refresh]    F9  [Presets]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --expect=enter,ctrl-d,ctrl-r,f3,f4,f5,f9 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -3570,6 +3631,7 @@ pick_view() {
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[Rename]'|Rename) pick_action="ctrl-r" ;;
             '[Details]'|Details) pick_action="f3" ;;
+            '[Presets]'|Presets|F9/⌥P|F9) pick_action="f9" ;;
             '[View]'|View) pick_action="enter" ;;
             '[Actions]'|Actions|F4/⌥M|F4) pick_action="f4" ;;
             '[Refresh]'|Refresh|F5/⌥R|F5) pick_action="f5" ;;
@@ -3592,6 +3654,24 @@ pick_view() {
 
     if [[ "$pick_action" == "f5" ]]; then
         refresh_cache_and_state
+        pick_view
+        return $?
+    fi
+
+    # F9 — Launch Preset, reachable from here too now. Raised live:
+    # "why is there no F9 preset access in view picker?" F4/F5 already
+    # worked from this screen; F9 not doing the same read as an
+    # inconsistency once someone actually looked for it. Same
+    # not-installed message as the main list's own F9 handling, not a
+    # duplicate — TMUX_AVAILABLE is a global, checked the same way here.
+    if [[ "$pick_action" == "f9" ]]; then
+        if [[ "$TMUX_AVAILABLE" == false ]]; then
+            printf '\n'
+            printf 'Presets need tmux: brew install tmux\n'
+            sleep 2
+        else
+            launch_preset
+        fi
         pick_view
         return $?
     fi
@@ -5584,6 +5664,17 @@ footer_actions() {
     # stays terse like every other entry here.
     parts+=("$(footer_key F9 P $with_alt)  [Presets]")
 
+    # Last, not grouped up with the rest — raised live: "why is there
+    # no F1 help mentioned?" It used to be deliberately left off
+    # everywhere on the theory that F1=help is close to universal
+    # knowledge, not worth spending footer space teaching; a real user
+    # not finding it is direct evidence that assumption doesn't hold
+    # for everyone. Placed last specifically so it's still the first
+    # thing dropped if a narrower terminal can't fit everything (see
+    # build_footer()'s three-attempt fallback) — worth showing when
+    # there's room, least costly of these five to lose when there isn't.
+    parts+=("$(footer_key F1 '?' $with_alt)  [Help]")
+
     local separator="${(l:$gap:: :)}"
     local out="" part
 
@@ -5802,6 +5893,7 @@ while true; do
             '[Favorite]'|Favorite|F7/⌥F|F7) action="f7" ;;
             '[Categorize]'|Categorize|F8/⌥C|F8) action="f8" ;;
             '[Actions]'|Actions|F4/⌥M|F4) action="f4" ;;
+            '[Help]'|Help|F1/⌥\?|F1) action="f1" ;;
             '[Quit]'|Quit|'[Close]'|Close) action="esc" ;;
             Enter|'[Launch]'|Launch) action="enter" ;;
         esac

@@ -5,6 +5,47 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.41.0] — 2026-08-27
+
+### Added
+
+- **A "Details" toggle in Actions, mirroring F3.** "Implement a toggle
+  for details pane (F3) in F4 Actions." Same `DETAILS_VISIBLE` flag F3
+  itself already flips, just also reachable — and its current state
+  visible — from Actions, for anyone who reaches for the menu before
+  remembering the direct key.
+- **F9 (Launch Preset) now works from the view picker (F2) too.**
+  "Why is there no F9 preset access in view picker?" F4 and F5 already
+  worked there; F9 not doing the same read as an inconsistency once
+  someone actually went looking for it.
+- **F1/Help is now shown in the footer**, last (lowest priority, first
+  dropped on a narrow terminal). "Why is F1 help nowhere mentioned?"
+  It used to be deliberately left off everywhere on the theory that
+  F1=help is close to universal knowledge — a real user not finding
+  it is direct evidence that assumption doesn't hold for everyone.
+
+### Fixed
+
+- **The F3 category preview (0.39.0) now actually shows a bundled-only
+  category's tools, instead of explaining why it won't.** "I still
+  want to see the tools, regardless of who has categorized them."
+  Shows the union of a category's real file (if any) and every command
+  whose cached default_category matches, minus anything explicitly
+  excluded — the same membership the real F2 view itself shows when
+  you open it. Deliberately doesn't filter out hidden commands the
+  way the real view's own count does, on the theory that replicating
+  three functions' worth of hidden-status logic here to stay in sync
+  forever was a worse trade than an occasional preview slightly wider
+  than what F2 lists — and it matches what was actually asked for.
+  Caught a second, more fundamental bug while fixing this: the first
+  draft read the cache's default_category column via a zsh `read`
+  loop with placeholder variables for the fields in between, which
+  silently collapses a genuinely empty field (field 6, "outdated")
+  together with its neighboring tab and shifts every later field left
+  by one — the exact reason `--internal-preview`'s own equivalent
+  lookup already used `awk` instead of `read` for this, which the new
+  code now does too.
+
 ## [0.40.0] — 2026-08-27
 
 ### Added
