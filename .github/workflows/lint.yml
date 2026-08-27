@@ -49,6 +49,14 @@ name: CI
 #      to current, and locally resolves to ghostty or current
 #      depending on whether Ghostty.app is actually present on the
 #      runner. No fzf, brew, or tmux needed.
+#
+#   9. relaunch-fixtures — quitting a launched tool relaunches the
+#      launcher rather than dropping to a plain shell.
+#      launch_in_current_terminal() is sourced and actually run (in a
+#      subshell, so its exec doesn't take out the test) against a fake
+#      stand-in launcher; launch_in_tmux()/launch_in_ghostty() are
+#      covered as source-text assertions since they need a real tmux
+#      session / Ghostty.app to run end to end.
 
 on:
   push:
@@ -180,6 +188,20 @@ jobs:
       # technique category-fixtures.sh already uses.
       - name: Auto terminal-backend detection test
         run: zsh test/terminal-auto-fixtures.sh
+
+  relaunch-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — launch_in_current_terminal() is
+      # sourced and run for real (in a subshell, so its exec doesn't
+      # take out the test) against a fake stand-in launcher; the tmux
+      # and Ghostty paths are covered as source-text assertions since
+      # they need a real tmux session / Ghostty.app to run end to end.
+      - name: Relaunch-after-quit test
+        run: zsh test/relaunch-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

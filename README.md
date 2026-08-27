@@ -216,8 +216,11 @@ row. Inside a tmux session, `BREW_LAUNCHER_TERMINAL=tmux` does the same with a
 
 This works the same for a long-running TUI (`htop`, `lazygit`) and a one-shot
 CLI that prints and exits (`eza`, `jq`, `shellcheck`) — quitting or finishing
-either one leaves you at a normal shell prompt in that tab, exactly like typing
-the command yourself would.
+either one brings the launcher right back, in that same tab or window, so you
+can pick the next tool without running `brew-launcher` again. Want a plain
+shell instead? Open a new tab or window for that, same as you would with any
+other terminal app — the launcher reappearing is the more useful default for
+what a launcher's actually for.
 
 ### Launch several tools together
 
