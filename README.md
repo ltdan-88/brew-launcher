@@ -184,6 +184,13 @@ list stops being the first thing you see. Esc from it still falls back to
 other category: instant while you're viewing one, or it asks which, if you're
 not.
 
+Uninstalling a favorited or categorized tool doesn't leave it behind forever —
+the next real cache rebuild (`--refresh`, **F5**, or the periodic background
+one) drops it from every category file it was in, Favorites included. There's
+no live hook into `brew uninstall` itself, so this happens whenever the
+launcher next confirms what's actually installed, not the instant it happens
+elsewhere.
+
 ### Hide what you don't use
 
 <p align="center"><img src="assets/hidden.gif" alt="Hiding an entry with F6, then finding it again in the Hidden view"></p>

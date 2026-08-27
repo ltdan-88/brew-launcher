@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.41.0"
+VERSION="0.42.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -439,6 +439,14 @@ Categories:
 
   F7 never touches Favorites — F6 owns that exclusively — and it
   always refreshes in place rather than navigating you elsewhere.
+
+  Uninstalling a favorited or categorized tool doesn't leave it behind
+  forever — the next real cache rebuild (--refresh, F5, or the
+  periodic background one) drops it from every category file it was
+  in, Favorites included, once that rebuild confirms it's actually
+  gone. Comments and blank lines in a category file are left alone;
+  only an actual command line for something no longer installed is
+  removed.
 
   No manual file editing needed for any of this. Categories match on
   command name (use --list to find it), not formula name.
@@ -1728,6 +1736,70 @@ for formula in data.get("formulae", []):
 }
 
 # ------------------------------------------------------------
+# Prune category files (Favorites included — it's just another file
+# under CATEGORIES_DIR) of any command that's no longer installed.
+#
+# Raised live: a Favorites count of "0" despite two genuine entries in
+# the file read as a bug, not obviously-correct behavior. Both had
+# been uninstalled since being favorited — compute_category_counts()
+# already excludes anything not currently known when it counts, so
+# the number itself was accurate, but the stale line just sat there
+# forever with nothing explaining the gap. Presented as a real design
+# question rather than assumed: leave the stale reference (so
+# reinstalling brings the favorite/category back automatically), show
+# the gap explicitly ("2, 0 installed"), or clean it up when a rebuild
+# confirms it's actually gone. Chosen live: clean it up.
+#
+# Runs once per real cache rebuild, not on every launch — the set of
+# installed formulae has to be freshly confirmed for "no longer
+# installed" to mean anything, and rebuild_cache() just finished doing
+# exactly that. Comments and blank lines pass through untouched; only
+# an actual command line for something no longer installed is removed.
+# Presets are deliberately left alone — a stale command in a preset
+# already fails gracefully at run time (that pane just doesn't open),
+# and silently shrinking someone's saved pane layout felt like a
+# different, more surprising kind of change than trimming a list.
+# ------------------------------------------------------------
+
+prune_stale_category_members() {
+
+    [[ -d "$CATEGORIES_DIR" ]] || return 0
+    [[ -s "$CACHE_FILE" ]] || return 0
+
+    local -A prune_known_commands
+    local prune_known_command
+    local category_file member trimmed tmp_pruned
+
+    while IFS=$'\t' read -r prune_known_command _; do
+        [[ -n "$prune_known_command" ]] && prune_known_commands[$prune_known_command]=1
+    done < "$CACHE_FILE"
+
+    for category_file in "$CATEGORIES_DIR"/*(N); do
+
+        [[ -f "$category_file" ]] || continue
+
+        tmp_pruned="$(mktemp "$CACHE_DIR/prune.XXXXXX")" || continue
+
+        while IFS= read -r member; do
+
+            trimmed="${member#"${member%%[![:space:]]*}"}"
+            trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+
+            if [[ -z "$trimmed" || "$trimmed" == \#* ]]; then
+                printf '%s\n' "$member" >> "$tmp_pruned"
+                continue
+            fi
+
+            [[ -n "${prune_known_commands[$trimmed]-}" ]] &&
+                printf '%s\n' "$member" >> "$tmp_pruned"
+
+        done < "$category_file"
+
+        mv "$tmp_pruned" "$category_file"
+    done
+}
+
+# ------------------------------------------------------------
 # Build cache
 # ------------------------------------------------------------
 
@@ -2380,6 +2452,11 @@ PY
     if [[ -s "$tmp_entries" ]]; then
 
         mv "$tmp_entries" "$CACHE_FILE"
+
+        # See prune_stale_category_members() — needs the fresh
+        # CACHE_FILE just moved into place above to know what's
+        # actually still installed.
+        prune_stale_category_members
 
         # Format version first, then the Homebrew state snapshot.
         #

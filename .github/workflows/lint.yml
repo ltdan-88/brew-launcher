@@ -113,6 +113,12 @@ name: CI
 #       unrelated to anything shipped here (`${(l:$gap:: :)}` reports
 #       "parameter not set" in strict mode even though the real script
 #       never runs under set -u).
+#
+#   17. prune-stale-favorites-fixtures — prune_stale_category_members()
+#       (a Favorites/category count that looked wrong because it
+#       silently excluded no-longer-installed entries forever, rather
+#       than ever cleaning them out): sourced and run directly against
+#       a fixture categories dir and cache. No fzf/brew/tmux needed.
 
 on:
   push:
@@ -309,6 +315,18 @@ jobs:
       # same reasoning as rename-fixtures.sh for the pickers themselves.
       - name: F1/F9/Details wiring test
         run: zsh test/actions-menu-fixtures.sh
+
+  prune-stale-favorites-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — prune_stale_category_members()
+      # is sourced and run directly against a fixture categories dir
+      # and cache.
+      - name: Stale category-member pruning test
+        run: zsh test/prune-stale-favorites-fixtures.sh
 
   backup-fixtures:
     runs-on: macos-latest

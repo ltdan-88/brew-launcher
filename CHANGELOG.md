@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.42.0] — 2026-08-27
+
+### Added
+
+- **Uninstalling a favorited or categorized tool no longer leaves it
+  behind forever.** Follow-up to the same batch as 0.41.0: a Favorites
+  count showing "0" despite two genuine entries in the file read as a
+  bug — both had been uninstalled since being favorited, and the
+  count already correctly excluded them, but the stale lines just sat
+  there forever with nothing to explain the gap. Asked what should
+  happen (leave it, show the gap explicitly, or clean it up); answer
+  was auto-clean. Since this launcher has no way to hook a live
+  uninstall event, the real mechanism is `prune_stale_category_members()`,
+  run once per real cache rebuild (`--refresh`, F5, or the periodic
+  background one) rather than on every launch — the set of installed
+  formulae has to be freshly confirmed for "no longer installed" to
+  mean anything. Comments and blank lines in a category file pass
+  through untouched; only an actual command line for something no
+  longer installed is removed. Presets are deliberately left alone —
+  a stale command there already fails gracefully at run time, and
+  silently shrinking a saved pane layout felt like a different,
+  more surprising kind of change than trimming a list.
+
 ## [0.41.0] — 2026-08-27
 
 ### Added
