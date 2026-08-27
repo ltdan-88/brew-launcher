@@ -5,6 +5,44 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.43.0] — 2026-08-27
+
+### Fixed
+
+- **Renaming a category or preset to a name that still fuzzy-matches
+  the old one silently did nothing.** "I cannot rename category
+  'Weathers' into 'Weather'." Root cause: `rename_category()`/
+  `rename_preset()` read the typed name from fzf's `--print-query`
+  output via `tail -n1`, but that output is *[typed query, then the
+  matched row]* — and the picker's only row is the old name itself, so
+  almost any edit that keeps a prefix of it (dropping the trailing
+  "s", for instance) still matches that row, and `tail -n1` grabbed
+  the stale match instead of what was typed. Reads `head -n1` now.
+  Confirmed live with the exact reported case before and after.
+
+### Added
+
+- **A footer toggle: Fn keys only, or Fn plus their ⌥ alternatives.**
+  "The bottom menu is inconsistent — while in All-view it shows Fn and
+  alternative keybinds, it doesn't in F2 (view picker) or F9
+  (presets). I prefer a toggle switch in F4 that switches between Fn
+  and the alternative keybinds, changes must be reflected in bottom
+  menu." Before this, whether a ⌥ alias showed was decided purely by
+  whether it happened to fit the terminal width — never a real choice,
+  and F2/F9's own footer never even tried to show one. New **Actions →
+  Alt Keybinds** (on by default): on tries to show each action's ⌥
+  alias wherever it fits, same as before; off never shows one, on the
+  main list, F2, or F9 alike. The F-keys themselves always work either
+  way — this only changes what the footer prints.
+- **A details pane in the Actions menu (F4), on by default.** "Can we
+  add a details pane to F4 that is always on by default. This should
+  describe what the toggles mean etc." Unlike the shared Details
+  toggle elsewhere (off by default, something you turn on), there's
+  nothing to have deliberately hidden here yet — the whole point is
+  explaining rows whose one-line label doesn't say what they actually
+  do (Default Categories, Default Hidden, Sort, Alt Keybinds, and so
+  on), so it just always shows.
+
 ## [0.42.3] — 2026-08-27
 
 ### Fixed

@@ -61,6 +61,30 @@ done
 [[ "$rename_category_block" == *'mv "$CATEGORIES_DIR/$old_name" "$CATEGORIES_DIR/$new_name"'* ]] ||
     fail "rename_category should mv the file from its old name to its new one"
 
+# 1b. Regression: the typed query must come from the FIRST line of
+# fzf's --print-query output (head -n1), not the last (tail -n1).
+# Raised live: renaming "Weathers" to "Weather" silently did nothing.
+# --print-query's output is [query, then any matched row], in that
+# order — the picker's only row is old_name itself, and almost any
+# edit that keeps a prefix of it (like dropping the trailing "s")
+# still fuzzy-matches that row. tail -n1 grabbed that stale match
+# (the OLD name) instead of what was typed, which then reads as
+# "new name == old name" and silently no-ops. Confirmed live with the
+# exact fzf invocation shape below before fixing.
+# Checked against the actual extraction line, not the whole block —
+# the explanatory comment above it legitimately says "tail -n1" too
+# (to explain what NOT to do), which a plain substring check on the
+# whole block would trip over.
+rename_category_extract_line="$(printf '%s\n' "$rename_category_block" | grep -E '^\s*(head|tail) -n1\s*$')"
+[[ "$rename_category_extract_line" == *'head -n1'* ]] ||
+    fail "rename_category should read the typed name from the first line (head -n1) of --print-query's output, not the last — got extraction line: $rename_category_extract_line"
+
+if command -v fzf >/dev/null 2>&1; then
+    repro="$(printf 'Weathers\n' | fzf --print-query --query='Weather' --filter='Weather' | head -n1)"
+    [[ "$repro" == "Weather" ]] ||
+        fail "fzf repro: expected --print-query's first line to be the typed query \"Weather\", got: $repro"
+fi
+
 # ------------------------------------------------------------
 # 2. rename_preset(): same shape, same checks.
 # ------------------------------------------------------------
@@ -81,6 +105,11 @@ rename_preset_block="$(sed -n '/^rename_preset() {/,/^}/p' "$LAUNCHER")"
     fail "rename_preset should refuse a name that collides with an existing preset"
 [[ "$rename_preset_block" == *'mv "$PRESETS_DIR/$old_name" "$PRESETS_DIR/$new_name"'* ]] ||
     fail "rename_preset should mv the file from its old name to its new one"
+
+# 2b. Same regression, same fix, same reason as 1b above.
+rename_preset_extract_line="$(printf '%s\n' "$rename_preset_block" | grep -E '^\s*(head|tail) -n1\s*$')"
+[[ "$rename_preset_extract_line" == *'head -n1'* ]] ||
+    fail "rename_preset should read the typed name from the first line (head -n1) of --print-query's output, not the last — got extraction line: $rename_preset_extract_line"
 
 # ------------------------------------------------------------
 # 3. Both pickers actually offer Ctrl-R and wire it up — a guard

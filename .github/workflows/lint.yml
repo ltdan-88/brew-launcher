@@ -65,7 +65,11 @@ name: CI
 #       the text entry itself calls fzf, so driving it headlessly needs
 #       either a real TTY or a drive-by refactor of working code purely
 #       to make it testable, not attempted here. The full interactive
-#       flow was verified live in a real tmux pane instead.
+#       flow was verified live in a real tmux pane instead. Also checks
+#       (and, via a real fzf invocation, reproduces) the "renaming to a
+#       name that still fuzzy-matches the old one silently does
+#       nothing" bug — --print-query's output must be read with
+#       head -n1, not tail -n1.
 #
 #   11. backup-fixtures — create_backup() (Actions → Backup): no fzf
 #       involved at all, so this one is sourced and actually run
@@ -112,7 +116,12 @@ name: CI
 #       it trips a real zsh quirk under this test's own `set -u`
 #       unrelated to anything shipped here (`${(l:$gap:: :)}` reports
 #       "parameter not set" in strict mode even though the real script
-#       never runs under set -u).
+#       never runs under set -u). Extended for a second live batch: the
+#       Alt Keybinds toggle (wired end to end, checked as source text
+#       for the same `${(l:...)}`-under-set -u reason as above) and
+#       Actions' own always-on F3 details pane, whose content
+#       (--internal-preview-action) IS run directly — it's a plain CLI
+#       subcommand, no fzf involved.
 #
 #   17. prune-stale-favorites-fixtures — prune_stale_category_members()
 #       (a Favorites/category count that looked wrong because it
@@ -124,7 +133,11 @@ name: CI
 #       pickers' own width-aware footer, added once their static one
 #       grew wide enough that fzf started truncating it mid-word):
 #       sourced and called directly with terminal_width() overridden.
-#       No fzf/brew/tmux needed.
+#       No fzf/brew/tmux needed. Extended for the Alt Keybinds toggle:
+#       each action is now a spec (FKEY/LETTER/label) rather than an
+#       already-built string, so this picker footer can show the same
+#       ⌥ aliases the main list's own footer does, gated by the same
+#       CONFIG_ALT_KEYBINDS toggle.
 
 on:
   push:
