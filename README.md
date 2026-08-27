@@ -133,10 +133,18 @@ install date Homebrew already records for every formula. Both cap themselves
 to the 15 most relevant tools, so they stay a short, useful list instead of
 turning into "everything, just re-sorted."
 
+**Ctrl-R** in that picker renames the highlighted category — type a new name
+over the prefilled current one and press Enter. A category's name is just its
+filename under `~/.config/brew-launcher/categories`, so renaming is nothing
+more than that; nothing else needs updating. A category that only exists via
+the [bundled defaults](#bundled-defaults), with no real file of its own yet,
+needs one entry categorized into it with F8 first.
+
 **Ctrl-D** in that picker deletes the highlighted category. It asks first and
 shows how many entries the category holds — every other action here is a toggle
 you can undo with the same key, so this is the one worth pausing on. `All`,
-`Hidden`, `Favorites`, `Most Used` and `Recently Added` can't be deleted.
+`Hidden`, `Favorites`, `Most Used` and `Recently Added` can neither be renamed
+nor deleted.
 
 Once your categories are actually populated, **F4 → Actions → Open to Categories**
 opens straight into this picker on every launch instead of `All` — a long flat
@@ -242,11 +250,16 @@ order they're listed in. Enter with nothing marked shows an error rather
 than quietly saving a one-tool "preset." **F9** lists your presets and
 launches the one you pick — in its own window when there's somewhere to put
 one, otherwise reattaching to it if it's already running rather than opening
-a second copy (see [Configuration](#configuration) for exactly which). **Ctrl-D**
-on a highlighted preset deletes it instead — same confirm-first prompt as
-deleting a category, showing how many commands it holds before anything's
-removed. File format and the `--preset` CLI flag are also in
-[Configuration](#configuration).
+a second copy (see [Configuration](#configuration) for exactly which). **Ctrl-R**
+on a highlighted preset renames it — same "type a new name over the prefilled
+current one" as renaming a category, since a preset is exactly the same shape:
+a name that's just its filename under `~/.config/brew-launcher/presets`. If a
+session for that preset is already running, it keeps working under the old
+name until it ends — renaming the file doesn't reach into a live tmux session
+to match. **Ctrl-D** on a highlighted preset deletes it instead — same
+confirm-first prompt as deleting a category, showing how many commands it
+holds before anything's removed. File format and the `--preset` CLI flag are
+also in [Configuration](#configuration).
 
 Presets need [tmux](#terminal-backends). Both stay visible in the footer and
 Actions menu either way — the Actions menu's hint reads "needs tmux" in place of the
@@ -290,6 +303,25 @@ Either way it's the same shell command underneath, so a one-shot CLI's output
 stays readable: the window drops to a live shell afterward instead of closing
 the instant the command finishes.
 
+### Backup
+
+**F4 → Actions → Backup** writes one file — always
+`~/brew-launcher-backup.tar.gz`, overwritten on every run, so it's something
+you point a synced folder (iCloud Drive, Dropbox) at once and forget about
+rather than clean up after — with everything needed to rebuild this exact
+setup on a fresh machine:
+
+- A Brewfile from `brew bundle dump`: every installed formula, cask and tap,
+  including the tap this launcher itself comes from.
+- `brew-launcher-config/`, a copy of `~/.config/brew-launcher` — categories,
+  presets, hidden entries, favorites, theme, terminal backend. `brew bundle`
+  has no idea this launcher exists, so this is the half it can't cover.
+
+Restoring on a fresh machine is two manual steps rather than a launcher
+action of its own: untar the archive, run
+`brew bundle install --file=Brewfile`, then copy `brew-launcher-config` back
+to `~/.config/brew-launcher`.
+
 ### Mouse support
 
 Click a row to select it, double-click to launch. Footer items shown in
@@ -312,15 +344,20 @@ reference below, from inside the launcher.
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) | footer |
+| **Ctrl-R** | Rename the highlighted preset — in the F9 picker | picker |
+| **Ctrl-D** | Delete the highlighted preset — in the F9 picker | picker |
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | Actions |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | Actions |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | Actions |
+| **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
+| **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
 | **F1** | Open this reference in the launcher | — |
 | — | Switch color theme | Actions only |
 | — | Create a new preset | Actions only |
 | — | Toggle Default Categories / Default Hidden | Actions only |
 | — | Toggle Open to Categories | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
+| — | Back up installed apps + launcher config to one file | Actions only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
 **⌥R**efresh, **⌥F**avorite, **⌥C**ategorize, **⌥D**etails. They exist because
