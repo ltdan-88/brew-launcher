@@ -101,6 +101,18 @@ name: CI
 #       a fixture cache, same technique computed-view-fixtures.sh
 #       already uses for Most Used/Recently Added. No fzf/brew/tmux
 #       needed.
+#
+#   16. actions-menu-fixtures — three small things raised live in one
+#       batch: F1/[Help] actually appearing (and last) in
+#       footer_actions(), F9 (Launch Preset) working from the view
+#       picker (F2) too, and a "Details" toggle in Actions mirroring
+#       F3 itself. Mostly source-text assertions, same reasoning as
+#       rename-fixtures.sh for the pickers themselves; footer_actions()
+#       specifically is checked as text too, not sourced and run —
+#       it trips a real zsh quirk under this test's own `set -u`
+#       unrelated to anything shipped here (`${(l:$gap:: :)}` reports
+#       "parameter not set" in strict mode even though the real script
+#       never runs under set -u).
 
 on:
   push:
@@ -286,6 +298,17 @@ jobs:
       # already uses for Most Used/Recently Added.
       - name: Sort-by-size test
         run: zsh test/sort-fixtures.sh
+
+  actions-menu-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — mostly source-text assertions,
+      # same reasoning as rename-fixtures.sh for the pickers themselves.
+      - name: F1/F9/Details wiring test
+        run: zsh test/actions-menu-fixtures.sh
 
   backup-fixtures:
     runs-on: macos-latest
