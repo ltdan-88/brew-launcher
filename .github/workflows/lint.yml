@@ -94,6 +94,13 @@ name: CI
 #       cache (containing the real @@PRESETS@@ marker a real cache
 #       build embeds) and a fixture PRESETS_DIR. No fzf/brew/tmux
 #       needed.
+#
+#   15. sort-fixtures — SORT_ORDER=size (Actions → Sort): size_sort_key()
+#       (parsing a display string like "1.7MB" into bytes) and
+#       build_entries()'s reuse of it, sourced and run directly against
+#       a fixture cache, same technique computed-view-fixtures.sh
+#       already uses for Most Used/Recently Added. No fzf/brew/tmux
+#       needed.
 
 on:
   push:
@@ -266,6 +273,19 @@ jobs:
       # PRESETS_DIR.
       - name: Command-in-which-presets test
         run: zsh test/preset-in-details-fixtures.sh
+
+  sort-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — size_sort_key() and
+      # build_entries() are sourced and run directly against a
+      # fixture cache, same technique computed-view-fixtures.sh
+      # already uses for Most Used/Recently Added.
+      - name: Sort-by-size test
+        run: zsh test/sort-fixtures.sh
 
   backup-fixtures:
     runs-on: macos-latest

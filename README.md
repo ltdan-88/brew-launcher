@@ -74,6 +74,12 @@ Three markers tell you the state of a row at a glance:
 Both `+` and `#` can appear together (`+#`). These describe *state* — they
 aren't things you press. Upgrading stays Homebrew's job.
 
+Every list is alphabetical by default. **F4 → Actions → Sort** switches to
+size instead, largest first — handy for "what's actually taking up space"
+without leaving for `ncdu`. Only reorders; nothing is filtered or capped.
+Doesn't touch `Most Used` or `Recently Added`, which already have their own
+meaningful order.
+
 The top border also shows how much disk space Homebrew's own installs are
 using and how much is still free on the volume — visible on `All`, hidden on
 filtered views to leave room for the view's own name.
@@ -378,6 +384,7 @@ reference below, from inside the launcher.
 | — | Create a new preset | Actions only |
 | — | Toggle Default Categories / Default Hidden | Actions only |
 | — | Toggle Open to Categories | Actions only |
+| — | Sort by name or size | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
 
