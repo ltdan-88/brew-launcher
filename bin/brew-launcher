@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.42.2"
+VERSION="0.42.3"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -750,20 +750,51 @@ if [[ "$1" == "--internal-preview-category" ]]; then
         done < "$preview_category_file"
     fi
 
-    # Reads field 10 via awk, not a zsh `read` loop with placeholder
-    # variables for the fields in between — confirmed live that
-    # `IFS=$'\t' read` collapses a genuinely empty field (field 6,
-    # "outdated", empty for anything not outdated) together with its
-    # neighboring tab, silently shifting every field after it left by
-    # one. awk's explicit -F'\t' doesn't have that problem, which is
-    # exactly why --internal-preview's own default-category lookup
-    # above already uses awk instead of read for the same field.
-    if [[ -f "$CACHE_FILE" ]]; then
+    # Bundled contributions are skipped outright when Default
+    # Categories is off (Actions -> Default Categories) — same guard
+    # load_bundled_categories() itself opens with. Confirmed live: a
+    # category with no real members of its own (an empty real file,
+    # left over from before Default Categories was turned off) still
+    # showed 3 bundled tools in the preview even though the count
+    # correctly showed 0 — the preview had no idea the setting existed.
+    #
+    # Also skips a command that's already filed into some *other* real
+    # category by hand — same as load_bundled_categories()'s own
+    # manually_categorized_commands check, so a tool doesn't appear to
+    # double-belong here and wherever it was actually filed.
+    if [[ "$CONFIG_DEFAULT_CATEGORIES" != off && -f "$CACHE_FILE" ]]; then
+
+        typeset -A preview_manually_categorized
+        local preview_other_file preview_other_member
+
+        for preview_other_file in "$CATEGORIES_DIR"/*(N); do
+            [[ -f "$preview_other_file" ]] || continue
+            [[ "${preview_other_file:t}" == "Favorites" ]] && continue
+
+            while IFS= read -r preview_other_member; do
+                preview_other_member="${preview_other_member#"${preview_other_member%%[![:space:]]*}"}"
+                preview_other_member="${preview_other_member%"${preview_other_member##*[![:space:]]}"}"
+                [[ -z "$preview_other_member" ]] && continue
+                [[ "$preview_other_member" == \#* ]] && continue
+                preview_manually_categorized[$preview_other_member]=1
+            done < "$preview_other_file"
+        done
+
+        # Reads field 10 via awk, not a zsh `read` loop with
+        # placeholder variables for the fields in between — confirmed
+        # live that `IFS=$'\t' read` collapses a genuinely empty field
+        # (field 6, "outdated", empty for anything not outdated)
+        # together with its neighboring tab, silently shifting every
+        # field after it left by one. awk's explicit -F'\t' doesn't
+        # have that problem, which is exactly why --internal-preview's
+        # own default-category lookup above already uses awk instead
+        # of read for the same field.
         while IFS= read -r preview_bundled_command; do
             [[ -z "$preview_bundled_command" ]] && continue
             [[ -n "${preview_category_seen[$preview_bundled_command]-}" ]] && continue
             preview_category_seen[$preview_bundled_command]=1
             preview_is_hidden "$preview_bundled_command" && continue
+            [[ -n "${preview_manually_categorized[$preview_bundled_command]-}" ]] && continue
             grep -Fqx -- "$preview_bundled_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
             preview_category_commands+=("$preview_bundled_command")
         done < <(awk -F'\t' -v cat="$preview_view_name" '$10 == cat { print $1 }' "$CACHE_FILE")
@@ -3723,6 +3754,21 @@ pick_view() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
+    # Width-aware, same idea as the main list's own footer — raised
+    # live: "the bottom menu is becoming too wide, would harmonizing
+    # it with All view make sense?" This screen alone had grown to 7
+    # actions plus nav/search, more than a single static footer string
+    # can safely promise; fzf was truncating it mid-word instead of
+    # degrading gracefully. See build_picker_footer() for how.
+    local view_footer
+    view_footer="$(
+        build_picker_footer \
+            '  ↑ ↓  Navigate    Type  Search    Enter  [View]    Esc  [Back]' \
+            '  ↑ ↓  Navigate    Enter  [View]    Esc  [Back]' \
+            'F3  [Details]' 'F4  [Actions]' 'F5  [Refresh]' 'F9  [Presets]' \
+            'Ctrl-R  [Rename]' 'Ctrl-D  [Delete]'
+    )"
+
     result="$(
         printf '%s\n' "${choices[@]}" |
         fzf \
@@ -3738,7 +3784,7 @@ pick_view() {
             --with-nth=2 \
             --preview "${(q)SCRIPT_PATH} --internal-preview-category {1}" \
             --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
-            --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F3  [Details]    F4  [Actions]    F5  [Refresh]    F9  [Presets]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
+            --footer="$view_footer" \
             --expect=enter,ctrl-d,ctrl-r,f3,f4,f5,f9 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
@@ -5617,6 +5663,16 @@ launch_preset() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
+    # Width-aware, same idea as pick_view()'s own footer — see
+    # build_picker_footer() for why.
+    local preset_footer
+    preset_footer="$(
+        build_picker_footer \
+            '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
+            '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
+            'F3  [Details]' 'Ctrl-R  [Rename]' 'Ctrl-D  [Delete]'
+    )"
+
     result="$(
         printf '%s\n' "${existing_presets[@]}" |
         fzf \
@@ -5630,7 +5686,7 @@ launch_preset() {
             --pointer='▌' \
             --preview "${(q)SCRIPT_PATH} --internal-preview-preset {1}" \
             --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
-            --footer='  ↑ ↓  Navigate    Enter  [Launch]    F3  [Details]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Cancel]' \
+            --footer="$preset_footer" \
             --expect=enter,ctrl-d,ctrl-r,f3 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
@@ -5850,6 +5906,83 @@ build_footer() {
     done
 
     printf '%s\n%s' "$line1" "$line2"
+}
+
+# ------------------------------------------------------------
+# Same two-line, width-aware idea as build_footer()/footer_actions()
+# above, generalized for the F2 and F9 pickers' own footers — raised
+# live: "the bottom menu is becoming too wide, would harmonizing it
+# with All view make sense?" Both had grown past what a single static
+# footer string can safely promise (Ctrl-R/Ctrl-D, F3 Details, F9
+# Presets all landed there over a few PRs, with nothing checking
+# whether they'd actually fit on screen) — fzf just truncates
+# mid-word instead of degrading gracefully the way the main list
+# already does.
+#
+# $1 = the full nav line (navigate/search/launch/back, however much
+# of that the caller wants), $2 = a shorter fallback nav line, $3+ =
+# each already-built action string (e.g. "F3  [Details]"). Line 1
+# tries $1 first, falls back to $2 if too wide. Then the action
+# strings are joined onto one line with a 4-space gap, falling back to
+# a 2-space gap if that doesn't fit — the same rung footer_actions()
+# uses once its own ⌥-alias rung (not applicable here; neither picker
+# shows those) has already been skipped. F2 alone has 6 actions past
+# nav, more than even a 2-space gap reliably fits below ~95 columns —
+# confirmed live rather than assumed — so a final rung splits the
+# actions across two lines (roughly half each) instead of handing fzf
+# something it can only truncate mid-word.
+# ------------------------------------------------------------
+
+build_picker_footer() {
+
+    local nav="$1" nav_short="$2"
+    shift 2
+    local -a action_parts=("$@")
+
+    local width=$(( $(terminal_width) - 6 ))
+
+    local line1="$nav"
+    (( ${#line1} > width )) && line1="$nav_short"
+
+    local gap_str line2 attempt part
+    for attempt in 4 2; do
+        gap_str="${(l:$attempt:: :)}"
+        line2=""
+        for part in "${action_parts[@]}"; do
+            [[ -n "$line2" ]] && line2+="$gap_str"
+            line2+="$part"
+        done
+        line2="  $line2"
+        (( ${#line2} <= width )) && { printf '%s\n%s' "$line1" "$line2"; return; }
+    done
+
+    # Neither single-line rung fit — split the actions across two
+    # lines instead. Halved by count, not by rendered width; close
+    # enough given how similar each action string's length already is
+    # (an F-key/Ctrl-combo, two spaces, a short bracketed word).
+    local -a first_half second_half
+    local half_count=$(( (${#action_parts[@]} + 1) / 2 ))
+    first_half=("${action_parts[@]:0:$half_count}")
+    second_half=("${action_parts[@]:$half_count}")
+
+    local line2a line2b
+    gap_str="${(l:2:: :)}"
+
+    line2a=""
+    for part in "${first_half[@]}"; do
+        [[ -n "$line2a" ]] && line2a+="$gap_str"
+        line2a+="$part"
+    done
+    line2a="  $line2a"
+
+    line2b=""
+    for part in "${second_half[@]}"; do
+        [[ -n "$line2b" ]] && line2b+="$gap_str"
+        line2b+="$part"
+    done
+    line2b="  $line2b"
+
+    printf '%s\n%s\n%s' "$line1" "$line2a" "$line2b"
 }
 
 run_fzf() {

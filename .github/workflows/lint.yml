@@ -119,6 +119,12 @@ name: CI
 #       silently excluded no-longer-installed entries forever, rather
 #       than ever cleaning them out): sourced and run directly against
 #       a fixture categories dir and cache. No fzf/brew/tmux needed.
+#
+#   18. picker-footer-fixtures — build_picker_footer() (the F2/F9
+#       pickers' own width-aware footer, added once their static one
+#       grew wide enough that fzf started truncating it mid-word):
+#       sourced and called directly with terminal_width() overridden.
+#       No fzf/brew/tmux needed.
 
 on:
   push:
@@ -363,6 +369,20 @@ jobs:
       # presets dir.
       - name: F2/F9 details-pane test
         run: zsh test/picker-details-fixtures.sh
+
+  picker-footer-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — build_picker_footer() is
+      # sourced and called directly, with terminal_width() overridden
+      # after sourcing. No set -u here (see the test file's own
+      # comment) — it uses the same ${(l:...)} padding idiom that
+      # trips a genuine zsh strict-mode quirk elsewhere in this suite.
+      - name: F2/F9 footer width test
+        run: zsh test/picker-footer-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
