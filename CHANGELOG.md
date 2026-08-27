@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.0] — 2026-08-27
+
+### Changed
+
+- **Quitting a launched tool now brings the picker back**, instead of
+  always dropping to a plain shell. Raised live: "someone who wants
+  to continue working in a plain shell can just create a new tab or
+  open a new window. the experience seems better if you use the
+  launcher to launch a TUI, and quit the TUI [back to the launcher]."
+  All three single-tool launch paths — `current`, `tmux`, and
+  Ghostty — now exec into the launcher itself (`$SCRIPT_PATH`) as the
+  fallback once a tool exits, rather than a bare `zsh`. Presets are
+  unchanged: each pane still falls to a plain shell, since a pane is
+  one of several TUIs in a multi-tool session, not "using the
+  launcher" the way a single-tool launch is. Desktop shortcuts
+  (`.command`/`.desktop` files) are also unchanged, for the same
+  reason in reverse — a shortcut is meant for direct access to one
+  tool, not a detour through the picker.
+
+  New `test/relaunch-fixtures.sh`: `launch_in_current_terminal()` is
+  sourced and actually run (dependency-free — no tmux or Ghostty
+  needed) against a fake stand-in launcher, confirming the exec chain
+  really does relaunch; the tmux and Ghostty paths are covered as
+  source-text assertions, since running those two end to end needs a
+  real tmux session and a real Ghostty.app respectively.
+
 ## [0.33.0] — 2026-08-27
 
 ### Changed

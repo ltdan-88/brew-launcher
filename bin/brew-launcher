@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.33.0"
+VERSION="0.34.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -423,7 +423,8 @@ Behavior:
   • Over SSH, 'auto' never reaches for Ghostty (no display to open a
     window in) — tmux if you're already inside a tmux session,
     otherwise the current terminal.
-  • The launcher remains available after launching an app in Ghostty.
+  • Quitting a launched tool relaunches the picker (in place, or in
+    that same tab/window) rather than dropping to a plain shell.
 EOF
     exit 0
 fi
@@ -3741,15 +3742,19 @@ launch_in_current_terminal() {
     # terminal at all, so the tab looks broken or dies, even though
     # the command ran fine.
     #
-    # Running it in a sub-shell that falls through to a fresh
-    # interactive zsh afterwards fixes both cases the same way, and
-    # matches what typing the same command into an ordinary terminal
-    # tab would do — no "is this a TUI?" classification needed. The
-    # command path is passed as "$1" to the inner `zsh -c` rather than
-    # interpolated into its script text, so a path containing spaces
-    # or shell metacharacters is still passed through as one argument.
+    # Running it in a sub-shell that falls through to a fresh instance
+    # of the launcher itself afterwards (rather than a plain shell)
+    # fixes the one-shot-CLI case above and matches what a *launcher*
+    # should feel like: pick a tool, use it, quit, and you're back
+    # picking another one. Raised live: someone who wants a plain
+    # shell after a tool can already open a new tab or window for that
+    # themselves — the launcher reappearing is the more useful default
+    # for the case it's actually for. Both paths are passed as
+    # positional args to the inner `zsh -c` rather than interpolated
+    # into its script text, so either one containing spaces or shell
+    # metacharacters is still passed through as a single argument.
     #
-    # The printf between the command and the fresh shell exits
+    # The printf between the command and the relaunch exits
     # alternate-screen mode and shows the cursor again — no-ops if the
     # command already cleaned up after itself, but a real fix for one
     # that crashed or got killed mid-TUI without doing so. Confirmed
@@ -3757,7 +3762,7 @@ launch_in_current_terminal() {
     # leaves tmux's own #{alternate_on} stuck at 1 even though a
     # perfectly ordinary shell is now running underneath — the terminal
     # can look frozen or blank until something else forces a redraw.
-    exec zsh -c '"$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; exec zsh' -- "$command_path"
+    exec zsh -c '"$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; exec "$2"' -- "$command_path" "$SCRIPT_PATH"
 }
 
 # ------------------------------------------------------------
@@ -3784,16 +3789,17 @@ launch_in_tmux() {
         return $?
     fi
 
-    # Same one-shot-CLI fix as the other two launch paths: run the
-    # command, then fall through to a fresh interactive shell in the
-    # new window, rather than exec-ing straight into it. tmux runs
-    # this string through a shell itself, so command_path is quoted
-    # with zsh's own (q) flag — the same tool already used to build
-    # the details pane's --preview command — rather than interpolated
-    # raw, so a path containing spaces still arrives as one argument.
+    # Same fresh-launcher-instead-of-plain-shell fix as the other two
+    # launch paths: run the command, then fall through to a fresh
+    # instance of the launcher in the new window, rather than exec-ing
+    # straight into it or leaving a bare shell behind. tmux runs this
+    # string through a shell itself, so both paths are quoted with
+    # zsh's own (q) flag — the same tool already used to build the
+    # details pane's --preview command — rather than interpolated raw,
+    # so either one containing spaces still arrives as one argument.
     # The printf between the two exits alternate-screen mode and shows
     # the cursor — see launch_in_current_terminal for why.
-    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec zsh' -- ${(q)command_path}"
+    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec \"\$2\"' -- ${(q)command_path} ${(q)SCRIPT_PATH}"
 }
 
 # ------------------------------------------------------------
@@ -3804,10 +3810,11 @@ launch_in_ghostty() {
 
     local command_path="$1"
 
-    osascript - "$command_path" <<'APPLESCRIPT'
+    osascript - "$command_path" "$SCRIPT_PATH" <<'APPLESCRIPT'
 on run argv
 
     set commandPath to item 1 of argv
+    set launcherPath to item 2 of argv
 
     tell application "Ghostty"
 
@@ -3826,13 +3833,14 @@ on run argv
         end if
 
         -- Same reasoning as launch_in_current_terminal: run the
-        -- command, then fall through to a fresh interactive shell in
-        -- the same tab, rather than exec-ing straight into it. A
-        -- one-shot CLI (eza, jq, bat, ...) prints and exits in under
-        -- a second; exec-ing into it left the tab with no process to
-        -- show for it, so it looked broken. The printf before that
-        -- fresh shell exits alternate-screen mode and shows the
-        -- cursor again — see launch_in_current_terminal for why.
+        -- command, then fall through to a fresh instance of the
+        -- launcher in the same tab, rather than exec-ing straight
+        -- into it or leaving a bare shell behind. A one-shot CLI
+        -- (eza, jq, bat, ...) prints and exits in under a second;
+        -- exec-ing into it left the tab with no process to show for
+        -- it, so it looked broken. The printf before the relaunch
+        -- exits alternate-screen mode and shows the cursor again —
+        -- see launch_in_current_terminal for why.
         --
         -- \\033, not \033: AppleScript has no numeric escape of its
         -- own (confirmed live — \033 alone is a genuine syntax error
@@ -3840,7 +3848,7 @@ on run argv
         -- needs its own literal-backslash escape first to produce the
         -- four real characters \, 0, 3, 3 that the shell on the other
         -- end is the one actually interpreting as an escape code.
-        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; exec zsh' -- " & quoted form of commandPath) to newTerminal
+        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; exec \"$2\"' -- " & quoted form of commandPath & " " & quoted form of launcherPath) to newTerminal
 
         send key "enter" to newTerminal
 
