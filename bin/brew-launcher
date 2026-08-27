@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.44.0"
+VERSION="0.44.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -4486,12 +4486,6 @@ build_entries() {
 # Doesn't need a selected entry. Returns 0 on success (entries/state
 # reloaded, ready to redraw) or 1 on failure (already reported to the
 # terminal, caller should just redraw with the existing state).
-#
-# Defined here — before the Open to Categories block below — rather
-# than down by the main loop, because when that startup toggle is on,
-# pick_view() (and therefore F5 inside it) can run before the launcher
-# loop is ever reached. Defining it any later left F5 from that very
-# first screen failing with "command not found".
 # ------------------------------------------------------------
 
 refresh_cache_and_state() {
@@ -4521,20 +4515,6 @@ refresh_cache_and_state() {
     sleep 2
     return 1
 }
-
-# Opt-in (Actions → Open to Categories) — shows the view picker as the
-# very first screen instead of "All", so a launch lands you straight
-# in your categories rather than a long flat list. Only makes sense
-# once categories are actually populated (bundled, manual, or both);
-# reuses pick_view() as-is rather than a separate startup path, so
-# every behavior it already has — typing to search, Esc falling back
-# to "All", counts reflecting hidden/bundled state — comes for free
-# and can never drift out of sync with the F2 screen itself.
-if [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]]; then
-    pick_view
-fi
-
-build_entries
 
 # ------------------------------------------------------------
 # Find an entry's 1-based line number in the current entries array,
@@ -6211,6 +6191,40 @@ run_fzf() {
 
 FREE_SPACE="$(df -h "$(brew --prefix)" 2>/dev/null | awk 'NR==2 {print $4}' | sed -E 's/([0-9])([KMGT])i?$/\1\2/')"
 HOMEBREW_USAGE="$(cat "$HOMEBREW_USAGE_FILE" 2>/dev/null)"
+
+# Opt-in (Actions → Open to Categories) — shows the view picker as the
+# very first screen instead of "All", so a launch lands you straight
+# in your categories rather than a long flat list. Only makes sense
+# once categories are actually populated (bundled, manual, or both);
+# reuses pick_view() as-is rather than a separate startup path, so
+# every behavior it already has — typing to search, Esc falling back
+# to "All", counts reflecting hidden/bundled state — comes for free
+# and can never drift out of sync with the F2 screen itself.
+#
+# Deliberately placed here — after every function in the script has
+# been defined, immediately before the loop that will (eventually)
+# call all of them anyway — rather than up near where CONFIG_* is
+# parsed. zsh doesn't hoist function definitions: a top-level call
+# only works once the interpreter's own top-to-bottom pass has already
+# reached that function's "name() {" line. pick_view() reaches deep
+# into the rest of the app (F4's whole Actions menu — Create Preset,
+# Backup, every settings toggle, Launch Preset...), and this used to
+# run from up there, near CONFIG_OPEN_TO_CATEGORIES's own declaration —
+# fine for whichever of those happened to already be defined by that
+# point, silently broken for whichever weren't. Raised live via a
+# screenshot: "bottom menu is missing when launching into view screen
+# (toggle on)" — build_picker_footer() was one of the not-yet-defined
+# ones, so the footer variable came back empty. Confirmed live (a real
+# tmux session, the previously-released binary, this exact toggle) and
+# fixed generally rather than one function at a time: see
+# test/function-order-fixtures.sh, which checks that no top-level call
+# anywhere in the script can reach a not-yet-defined function, so a
+# future addition to Actions can't reintroduce this by accident.
+if [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]]; then
+    pick_view
+fi
+
+build_entries
 
 # ------------------------------------------------------------
 # Launcher loop
