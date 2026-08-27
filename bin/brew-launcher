@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.32.0"
+VERSION="0.33.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -225,13 +225,21 @@ Requirements:
   tmux    Optional — only for the tmux terminal backend and Presets
 
 Terminal:
-  BREW_LAUNCHER_TERMINAL=auto     Default behavior
+  BREW_LAUNCHER_TERMINAL=auto     Default behavior — see below for
+                                  exactly what "auto" picks and when
   BREW_LAUNCHER_TERMINAL=current  Run in the current terminal
   BREW_LAUNCHER_TERMINAL=ghostty  Launch in a new Ghostty tab
   BREW_LAUNCHER_TERMINAL=tmux     Launch in a new tmux window (only
                                   when already inside a tmux session;
                                   falls back to "current" otherwise —
                                   never auto-starts tmux for you)
+
+  "auto" itself: a Mac with Ghostty installed gets "ghostty", unless
+  connected over SSH — a display to open a Ghostty window in doesn't
+  exist there, so "auto" checks for that first (via the standard
+  SSH_TTY/SSH_CONNECTION/SSH_CLIENT env vars) and picks "tmux" instead
+  if already inside a tmux session, or "current" otherwise. Everywhere
+  else — Linux, or a Mac without Ghostty — "auto" is just "current".
 
 Presets:
   brew-launcher --preset <name>  Launch every command listed in
@@ -412,6 +420,9 @@ Behavior:
   • The launcher maintains a local cache for fast startup.
   • On macOS, 'auto' prefers Ghostty when available.
   • On Linux, 'auto' uses the current terminal.
+  • Over SSH, 'auto' never reaches for Ghostty (no display to open a
+    window in) — tmux if you're already inside a tmux session,
+    otherwise the current terminal.
   • The launcher remains available after launching an app in Ghostty.
 EOF
     exit 0
@@ -678,6 +689,18 @@ for dependency in brew fzf python3; do
 done
 
 # ------------------------------------------------------------
+# The standard env-var trio every other SSH-aware tool checks — good
+# enough to tell "remote text session" from "local GUI session"
+# without a heavier dependency. Shared by preset_show_session() below
+# and the "auto" terminal-backend detection further down, so both stay
+# in agreement about what counts as SSH rather than drifting apart.
+# ------------------------------------------------------------
+
+is_ssh_session() {
+    [[ -n "${SSH_TTY:-}${SSH_CONNECTION:-}${SSH_CLIENT:-}" ]]
+}
+
+# ------------------------------------------------------------
 # Shows a preset's tmux session to the user — the one place that
 # decides *how*, since a preset with several TUIs at once deserves its
 # own window rather than always replacing whatever's already on
@@ -707,17 +730,13 @@ done
 #      no existing tmux session to switch within, taking over the only
 #      screen there is is the only way to show a multi-pane preset at
 #      all. Says so first, so it's never a silent surprise.
-#
-# SSH detection is the standard env-var trio every other SSH-aware
-# tool checks — good enough to tell "remote text session" from "local
-# GUI session" without a heavier dependency.
 # ------------------------------------------------------------
 
 preset_show_session() {
 
     local session="$1"
 
-    if [[ -z "${SSH_TTY:-}${SSH_CONNECTION:-}${SSH_CLIENT:-}" ]] &&
+    if ! is_ssh_session &&
        [[ "$(uname -s)" == "Darwin" ]] &&
        command -v osascript >/dev/null 2>&1 &&
        [[ -d "/Applications/Ghostty.app" ]]; then
@@ -1020,15 +1039,45 @@ case "$TERMINAL" in
         ;;
 esac
 
-if [[ "$TERMINAL" == "auto" ]]; then
-    if [[ "$(uname -s)" == "Darwin" ]] &&
+# A plain function (rather than inlined below) specifically so it can
+# be sourced and tested directly with real env vars, the same way
+# test/*.sh already does for other pure decision logic in this file —
+# this exact choice has now caused two live-reported hangs (Ghostty
+# reached for over SSH, no display to put a window in), so it earns
+# a real regression test rather than only living inline.
+#
+# SSH is checked first, ahead of Ghostty — a Mac reachable over SSH
+# still has Ghostty.app sitting in /Applications, so that check alone
+# can't tell "GUI available" from "GUI unreachable from here."
+#
+# Picking "tmux" for the SSH+already-in-tmux case is *not* the thing
+# the comment below (on the real tmux-selection check) warns against —
+# that's about never choosing tmux just because it happens to be
+# installed, an incidental machine fact. $TMUX being set means the
+# opposite: the user already, deliberately, ran `tmux` themselves
+# before this launcher. Detecting a session someone is already sitting
+# in isn't starting one on their behalf, and it's a strictly better
+# default than a GUI window it can't actually open — the "reattach"
+# fallback presets already rely on, now the default over SSH for
+# single tools too.
+resolve_auto_terminal() {
+
+    if is_ssh_session; then
+        if [[ -n "$TMUX" ]]; then
+            printf 'tmux'
+        else
+            printf 'current'
+        fi
+    elif [[ "$(uname -s)" == "Darwin" ]] &&
        command -v osascript >/dev/null 2>&1 &&
        [[ -d "/Applications/Ghostty.app" ]]; then
-        TERMINAL="ghostty"
+        printf 'ghostty'
     else
-        TERMINAL="current"
+        printf 'current'
     fi
-fi
+}
+
+[[ "$TERMINAL" == "auto" ]] && TERMINAL="$(resolve_auto_terminal)"
 
 if [[ "$TERMINAL" == "ghostty" ]] &&
    ! command -v osascript >/dev/null 2>&1; then
@@ -1036,12 +1085,17 @@ if [[ "$TERMINAL" == "ghostty" ]] &&
     exit 1
 fi
 
-# tmux is deliberately never chosen by "auto" — it's opt-in only. It
-# would be a genuinely surprising thing for "auto" to do to someone:
-# wrapping their launcher (or worse, silently changing behavior) based
-# on whether tmux happens to be installed, whether or not they use it
-# day to day, is exactly the kind of behavior-that-differs-by-what's-
-# on-your-machine this project has otherwise avoided throughout.
+# "auto" otherwise never chooses tmux just because it happens to be
+# installed — it would be a genuinely surprising thing for "auto" to
+# do to someone: wrapping their launcher (or worse, silently changing
+# behavior) based on an incidental machine fact, whether or not they
+# use tmux day to day, is exactly the kind of behavior-that-differs-
+# by-what's-on-your-machine this project has otherwise avoided
+# throughout. The SSH case above is a different signal, not an
+# exception to this: $TMUX being set there means the user already,
+# deliberately, ran `tmux` themselves before this launcher — detecting
+# a session someone is already sitting in isn't the same as starting
+# one on their behalf just because the binary exists.
 if [[ "$TERMINAL" == "tmux" ]] &&
    ! command -v tmux >/dev/null 2>&1; then
     echo "Error: tmux is required when using BREW_LAUNCHER_TERMINAL=tmux."

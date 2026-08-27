@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] — 2026-08-27
+
+### Changed
+
+- **`BREW_LAUNCHER_TERMINAL=auto` is now SSH-aware**, so a single-tool
+  launch over SSH no longer hangs reaching for a Ghostty GUI window it
+  has no display to open in — the same class of problem
+  `preset_show_session()` already learned to avoid for presets, now
+  the default for individual tools too. `auto` checks the standard
+  `SSH_TTY`/`SSH_CONNECTION`/`SSH_CLIENT` trio first: over SSH and
+  already inside a tmux session it picks `tmux`; over SSH otherwise,
+  `current`. Local behavior (Ghostty on a Mac that has it, `current`
+  everywhere else) is unchanged. The detection logic is shared with
+  the preset code via a new `is_ssh_session()` helper rather than
+  duplicated, and the decision itself is now a standalone
+  `resolve_auto_terminal()` function with direct test coverage
+  (`test/terminal-auto-fixtures.sh`) — this exact class of "auto
+  reaches for a GUI it can't use" bug has now shown up twice, so it
+  earns a real regression test rather than only living inline.
+
 ## [0.32.0] — 2026-08-27
 
 ### Added
