@@ -249,7 +249,13 @@ rather than a command's presets. Omitted when it isn't in any.
 **Shift-Up** / **Shift-Down** scrolls it for long entries. It starts closed and
 stays closed until you ask for it. While it's open, **Esc** closes it first —
 the footer says `[Close]` instead of the usual `[Quit]`/`[Views]` so it's
-never a surprise — and only takes you further back on the next press.
+never a surprise — and only takes you further back on the next press. That's
+specifically for a pane opened with **F3** itself, though — turn it on from
+**F4 → Actions → Details** instead and it's a standing choice, not a peek:
+Esc leaves it alone and skips straight to whatever it would otherwise do, so
+turning Details on there doesn't get quietly undone by the very next Esc.
+
+
 
 ### Launch without leaving the launcher
 
