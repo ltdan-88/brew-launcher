@@ -5,6 +5,38 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.0] — 2026-08-28
+
+### Added
+
+- **Bulk Hide, Favorite, and Categorize.** "I like the behavior of how
+  we create presets (adding TUIs with tab). Would it be feasible to
+  implement this behavior for Hide, Favorite, and Categorize as
+  well?" New Actions rows — **Hide Multiple**, **Favorite Multiple**,
+  **Categorize Multiple** — each open a Tab-to-mark picker over
+  whatever's currently on screen and act on every marked entry at
+  once (or just the highlighted one, if nothing was marked). Unlike
+  Create Preset's own picker, this uses fzf's plain built-in
+  multi-select rather than the custom ordered-badge mechanism —
+  launch order doesn't apply here, only membership does, so it needed
+  far less machinery. A marked batch always moves to one end state
+  (hidden / favorited / in the category) rather than toggling each
+  entry individually based on its own prior state, which would be a
+  confusing surprise for a batch you just selected together. Hide
+  Multiple/Favorite Multiple relabel to their inverse while viewing
+  Hidden/Favorites, same as F6's own per-entry label; Categorize
+  Multiple prompts for a category once for the whole batch, or —
+  while already viewing a real category — removes the marked batch
+  from it instantly, same as F8's own instant per-entry toggle there.
+- **A separate Settings screen.** "It seems Actions menu mixes up
+  actual Actions and System Settings, how do we solve this (e.g.
+  create a separate Settings menu)?" Every standing preference (Theme,
+  Default Categories, Default Hidden, Open to Categories, Sort,
+  Details, Alt Keybinds) moved out of Actions into a new **Settings**
+  screen, reached via a single Actions row — the same one-level-down
+  pattern Theme or Create Preset already used. Actions now holds only
+  one-shot actions; Settings has its own always-on details pane too.
+
 ## [0.44.1] — 2026-08-28
 
 ### Fixed
