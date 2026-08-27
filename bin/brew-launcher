@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.36.0"
+VERSION="0.37.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -3801,16 +3801,38 @@ launch_in_current_terminal() {
     # perfectly ordinary shell is now running underneath — the terminal
     # can look frozen or blank until something else forces a redraw.
     #
+    # The same printf *before* the command runs turned out to matter
+    # just as much, for a different reason: fzf's own picker UI runs
+    # inside the alternate screen too (confirmed live — `--height=100%`
+    # still opens with a genuine `?1049h`, `--no-clear` only skips
+    # fzf's own erase-on-exit, it doesn't mean "stay off the alt
+    # screen"). A one-shot CLI (fastfetch, eza, jq, ...) that never
+    # touches screen modes itself just inherits whatever's already
+    # active and ends up drawing onto that same alternate buffer —
+    # which the *after* printf then switches away from once the
+    # command's done, discarding output that had nowhere else to go.
+    # Reported live as "fastfetch still quickly exits" even after the
+    # press-any-key pause landed: the pause was working, but by the
+    # time it appeared the output was already gone, switched out from
+    # under it. Confirmed with a real tmux pane and pipe-pane capture
+    # of the raw byte stream — fastfetch's output was genuinely being
+    # written in full, just onto a buffer this exact printf then hid.
+    # Exiting alternate-screen mode *before* the command runs as well
+    # means a plain one-shot CLI now lands on the real, persistent
+    # screen from the start; a TUI is still free to enter its own
+    # alternate screen fresh when it starts, and the *after* printf
+    # still recovers that if it crashes without exiting cleanly.
+    #
     # The "press any key" pause right before the relaunch was raised
-    # live too: a one-shot CLI (fastfetch, eza, jq, ...) prints and
-    # exits in under a second, and without this the relaunch landed
-    # so fast it painted the picker's full-screen UI over that output
-    # before there was any real chance to read it — looked exactly
-    # like the command had silently failed, when it had actually run
-    # fine. `read` with no real terminal attached (a test, a pipe)
-    # returns immediately on EOF rather than hanging, so this doesn't
-    # need a timeout to stay test-safe.
-    exec zsh -c '"$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; printf "\n\033[2mPress any key to return to brew-launcher...\033[0m"; read -k 1 -s 2>/dev/null; exec "$2"' -- "$command_path" "$SCRIPT_PATH"
+    # live too: a one-shot CLI prints and exits in under a second, and
+    # without this the relaunch landed so fast it painted the picker's
+    # full-screen UI over that output before there was any real chance
+    # to read it — looked exactly like the command had silently
+    # failed, when it had actually run fine. `read` with no real
+    # terminal attached (a test, a pipe) returns immediately on EOF
+    # rather than hanging, so this doesn't need a timeout to stay
+    # test-safe.
+    exec zsh -c 'printf "\033[?1049l\033[?25h" 2>/dev/null; "$1"; printf "\033[?1049l\033[?25h" 2>/dev/null; printf "\n\033[2mPress any key to return to brew-launcher...\033[0m"; read -k 1 -s 2>/dev/null; exec "$2"' -- "$command_path" "$SCRIPT_PATH"
 }
 
 # ------------------------------------------------------------
@@ -3845,10 +3867,16 @@ launch_in_tmux() {
     # zsh's own (q) flag — the same tool already used to build the
     # details pane's --preview command — rather than interpolated raw,
     # so either one containing spaces still arrives as one argument.
-    # The printf between the two exits alternate-screen mode and shows
-    # the cursor, and the read pauses for a keypress before the
-    # relaunch — see launch_in_current_terminal for why both matter.
-    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; printf \"\n\033[2mPress any key to return to brew-launcher...\033[0m\"; read -k 1 -s 2>/dev/null; exec \"\$2\"' -- ${(q)command_path} ${(q)SCRIPT_PATH}"
+    # The printfs around the command exit alternate-screen mode and
+    # show the cursor, and the read pauses for a keypress before the
+    # relaunch — see launch_in_current_terminal for why all three
+    # matter. The *before* one is a no-op here specifically: a brand
+    # new tmux window never inherited the picker's own alternate-screen
+    # state to begin with (each window is its own independent grid),
+    # unlike reusing the current pane — kept anyway so all three launch
+    # paths stay identical and this doesn't quietly rot if that ever
+    # changes.
+    tmux new-window "exec zsh -c 'printf \"\033[?1049l\033[?25h\" 2>/dev/null; \"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; printf \"\n\033[2mPress any key to return to brew-launcher...\033[0m\"; read -k 1 -s 2>/dev/null; exec \"\$2\"' -- ${(q)command_path} ${(q)SCRIPT_PATH}"
 }
 
 # ------------------------------------------------------------
@@ -3887,9 +3915,13 @@ on run argv
         -- into it or leaving a bare shell behind. A one-shot CLI
         -- (eza, jq, bat, ...) prints and exits in under a second;
         -- exec-ing into it left the tab with no process to show for
-        -- it, so it looked broken. The printf before the relaunch
-        -- exits alternate-screen mode and shows the cursor again —
-        -- see launch_in_current_terminal for why.
+        -- it, so it looked broken. The printfs around the command
+        -- exit alternate-screen mode and show the cursor again — see
+        -- launch_in_current_terminal for why both matter (the
+        -- *before* one is a no-op here specifically, since a brand
+        -- new tab/window never inherited the picker's own alternate
+        -- screen, but kept for the same reason as launch_in_tmux:
+        -- so all three launch paths stay identical).
         --
         -- \\033, not \033: AppleScript has no numeric escape of its
         -- own (confirmed live — \033 alone is a genuine syntax error
@@ -3902,7 +3934,7 @@ on run argv
         -- the other two launch paths — see launch_in_current_terminal
         -- for why (a one-shot CLI's output was getting painted over
         -- before there was any chance to read it).
-        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; printf \"\\n\\033[2mPress any key to return to brew-launcher...\\033[0m\"; read -k 1 -s 2>/dev/null; exec \"$2\"' -- " & quoted form of commandPath & " " & quoted form of launcherPath) to newTerminal
+        input text ("exec zsh -c 'printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; \"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; printf \"\\n\\033[2mPress any key to return to brew-launcher...\\033[0m\"; read -k 1 -s 2>/dev/null; exec \"$2\"' -- " & quoted form of commandPath & " " & quoted form of launcherPath) to newTerminal
 
         send key "enter" to newTerminal
 
