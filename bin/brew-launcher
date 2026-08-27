@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.31.0"
+VERSION="0.32.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -258,6 +258,21 @@ Presets:
   resize. Editing a preset while its session is still running rebuilds
   it with the new pane count next launch, instead of reattaching to
   the stale one from before the edit.
+
+  How a preset actually shows up on screen depends on how you're
+  connected — a multi-pane preset earns its own window rather than
+  swallowing whatever's already open, whenever there's somewhere to
+  put one:
+    - Local Mac with Ghostty: opens a brand new Ghostty window (not a
+      tab) attached to the session. The launcher you ran it from
+      keeps running untouched.
+    - Over SSH (or no Ghostty), already inside a tmux session: your
+      client switches to the preset's session. Recoverable — prefix+s
+      switches back to whatever you were doing.
+    - Over SSH (or no Ghostty), not inside tmux: takes over the
+      current window, same as before — there's no other screen to put
+      it in. Says so first. Run brew-launcher itself inside a tmux
+      session to get the recoverable behavior above instead.
 
 Theme:
   BREW_LAUNCHER_THEME=catppuccin       Default
@@ -663,16 +678,103 @@ for dependency in brew fzf python3; do
 done
 
 # ------------------------------------------------------------
+# Shows a preset's tmux session to the user — the one place that
+# decides *how*, since a preset with several TUIs at once deserves its
+# own window rather than always replacing whatever's already on
+# screen. Reported live: launching a preset used to always exec away
+# outright, so the picker was gone, not just backgrounded — surprising
+# and avoidable whenever a real GUI is actually available to open a
+# genuinely separate window in instead.
+#
+# Three outcomes, tried in order:
+#
+#   1. A local Mac with Ghostty, not over SSH — opens a brand new
+#      Ghostty WINDOW (never a tab, unlike single-tool launches: a
+#      multi-pane preset earns its own window, not a corner of
+#      whatever's already open) attached to the session, and returns
+#      normally. Nothing here touches the calling process, so the
+#      picker keeps running exactly as it was.
+#
+#   2. Already inside tmux (true over SSH too, once brew-launcher
+#      itself is run inside a tmux session — see the README) —
+#      switch-client. This does exec and never returns, but it's
+#      recoverable: the picker's own session is still alive, just not
+#      what this client is currently looking at (prefix+s switches
+#      back to it).
+#
+#   3. Neither — exec attach-session, same as (2) but this time
+#      genuinely not recoverable: with no GUI to open a window in and
+#      no existing tmux session to switch within, taking over the only
+#      screen there is is the only way to show a multi-pane preset at
+#      all. Says so first, so it's never a silent surprise.
+#
+# SSH detection is the standard env-var trio every other SSH-aware
+# tool checks — good enough to tell "remote text session" from "local
+# GUI session" without a heavier dependency.
+# ------------------------------------------------------------
+
+preset_show_session() {
+
+    local session="$1"
+
+    if [[ -z "${SSH_TTY:-}${SSH_CONNECTION:-}${SSH_CLIENT:-}" ]] &&
+       [[ "$(uname -s)" == "Darwin" ]] &&
+       command -v osascript >/dev/null 2>&1 &&
+       [[ -d "/Applications/Ghostty.app" ]]; then
+
+        # Checked, not assumed: this can genuinely fail (confirmed
+        # live — Ghostty's own AppleScript bridge can refuse to hand
+        # back "focused terminal" for a window it just created, in a
+        # context without real window-server focus available). Success
+        # is treated as "handled, nothing more to do"; failure falls
+        # through to the tmux paths below instead of silently
+        # returning as if it had worked — a swallowed failure here
+        # would look exactly like the original "nothing happened" bug
+        # this whole thing exists to fix.
+        if osascript - "$session" <<'APPLESCRIPT' >/dev/null 2>&1
+on run argv
+    set sessionName to item 1 of argv
+    tell application "Ghostty"
+        activate
+        set newWindow to new window
+        set newTerminal to focused terminal of newWindow
+        input text ("exec tmux attach-session -t " & quoted form of sessionName) to newTerminal
+        send key "enter" to newTerminal
+    end tell
+end run
+APPLESCRIPT
+        then
+            return 0
+        fi
+
+        printf '\n'
+        printf 'Could not open a new Ghostty window — falling back.\n'
+        sleep 1
+    fi
+
+    if [[ -n "$TMUX" ]]; then
+        exec tmux switch-client -t "$session"
+    fi
+
+    printf '\n'
+    printf 'Not running inside tmux — this preset will take over this window.\n'
+    printf 'Run brew-launcher itself inside a tmux session to keep this recoverable next time.\n'
+    sleep 2
+
+    exec tmux attach-session -t "$session"
+}
+
+# ------------------------------------------------------------
 # Launch a preset by name — read its command list and start (or
 # reattach to) one tmux session with a pane per command.
 #
 # Shared by both ways to reach a preset: the top-level --preset <name>
 # CLI flag below, and the in-app F9 / Launch Preset action further
 # down — one implementation of "what launching a preset actually
-# does" instead of two. On success this always execs into tmux and
-# never returns. On failure it prints what went wrong, pauses so the
-# message is actually readable, and returns 1 rather than exiting
-# directly — the CLI entry point below turns that into a real exit
+# does" instead of two. Ends one of three ways, via preset_show_session()
+# above: a new window opened and a normal return (0), an exec that
+# never returns, or a real failure explained on screen and returned as
+# 1 — the CLI entry point below turns the latter into a real exit
 # itself; the in-app action instead falls back to the picker, the same
 # way a failed single-tool launch already does.
 # ------------------------------------------------------------
@@ -747,11 +849,8 @@ run_preset() {
         preset_stored_hash="${preset_stored_hash#BL_PRESET_HASH=}"
 
         if [[ "$preset_stored_hash" == "$preset_hash" ]]; then
-            if [[ -n "$TMUX" ]]; then
-                exec tmux switch-client -t "$preset_session"
-            else
-                exec tmux attach-session -t "$preset_session"
-            fi
+            preset_show_session "$preset_session"
+            return 0
         fi
 
         # Command list no longer matches (or this session predates the
@@ -877,28 +976,32 @@ run_preset() {
 
     # Printed and paused on now, rather than at the point each one was
     # found — see the comment above where these are collected. This is
-    # the last moment before the exec below hands the screen to tmux,
-    # so it's the only point a warning is actually readable.
+    # the last moment before preset_show_session() below hands off to
+    # tmux (or a whole separate window), so it's the only point a
+    # warning is actually readable either way.
     if (( ${#preset_warnings[@]} > 0 )); then
         printf '\n'
         printf '%s\n' "${preset_warnings[@]}"
         sleep 2
     fi
 
-    if [[ -n "$TMUX" ]]; then
-        exec tmux switch-client -t "$preset_session"
-    else
-        exec tmux attach-session -t "$preset_session"
-    fi
+    preset_show_session "$preset_session"
+    return 0
 }
 
 # ------------------------------------------------------------
 # --preset <name> — exit early, before any of the terminal/theme/
 # cache machinery below, since it needs none of it.
+#
+# Explicitly exits on both outcomes now, not just failure — since
+# preset_show_session() can open a new window and return normally
+# (success), falling through here would otherwise start the ordinary
+# interactive picker right after, which --preset was never asking for.
 # ------------------------------------------------------------
 
 if [[ "$PRESET_MODE" == true ]]; then
-    run_preset "$PRESET_NAME" || exit 1
+    run_preset "$PRESET_NAME"
+    exit $?
 fi
 
 # ------------------------------------------------------------
@@ -2512,7 +2615,8 @@ pick_help() {
     rows+=("  F5 / ⌥R   Refresh the cache without leaving")
     rows+=("            Both also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
-        rows+=("  F9 / ⌥P   Launch a preset (reattaches if it's already running)")
+        rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
+        rows+=("            otherwise reattaches if it's already running")
         rows+=("            Ctrl-D there deletes the highlighted preset instead")
     else
         rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
