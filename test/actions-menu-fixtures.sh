@@ -12,6 +12,21 @@
 # themselves call fzf, so driving them headlessly needs either a real
 # TTY or a drive-by refactor of working code purely to make it
 # testable, not attempted here.
+#
+# Extended later for a second live batch:
+#   - "the bottom menu is inconsistent — All view shows Fn and
+#     alternative keybinds, F2/F9 don't. I prefer a toggle switch that
+#     switches between Fn and the alternative keybinds."
+#   - "can we add a details pane to F4 that is always on by default,
+#     describing what the toggles mean etc."
+# The Alt Keybinds toggle is checked as source text, same reasoning as
+# the rest of this file — it's read by build_footer()/
+# build_picker_footer(), and running either means running
+# footer_actions()/picker_footer_action_text(), which trip the same
+# `${(l:...)}`-under-set -u quirk noted above. The Actions details
+# pane's own content (--internal-preview-action) IS run directly,
+# though — it's a plain CLI subcommand like --internal-preview-category,
+# no fzf involved.
 
 set -u
 
@@ -143,4 +158,61 @@ esc_block="$(grep -A3 'action" == "esc" \]\]; then' "$LAUNCHER" | head -4)"
 [[ "$esc_block" == *'DETAILS_PINNED'* ]] ||
     fail "the main list's Esc handler should check DETAILS_PINNED before auto-closing the details pane, got: $esc_block"
 
-printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Actions offers a Details toggle mirroring F3, and DETAILS_PINNED keeps Esc from undoing a Details choice made via Actions\n'
+# ------------------------------------------------------------
+# 5. Alt Keybinds: a persisted toggle (Actions -> Alt Keybinds) for
+#    whether the footer ever shows a ⌥ alias next to an F-key, wired
+#    into config parsing, the Actions row/dispatch, and both
+#    footer-building functions.
+# ------------------------------------------------------------
+
+[[ "$(grep -c 'CONFIG_ALT_KEYBINDS=""' "$LAUNCHER")" -ge 1 ]] ||
+    fail "CONFIG_ALT_KEYBINDS should be declared alongside the other CONFIG_* vars"
+[[ "$(grep -c 'ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="\$config_value"' "$LAUNCHER")" -ge 1 ]] ||
+    fail "the config-file parser should recognize an ALT_KEYBINDS line"
+
+[[ "$more_action_block" == *'toggle_alt_keybinds'* ]] ||
+    fail "pick_more_action should offer a toggle_alt_keybinds row"
+[[ "$more_action_block" == *"'Alt Keybinds'"* ]] ||
+    fail "pick_more_action's Alt Keybinds row should be labeled \"Alt Keybinds\""
+
+[[ "$open_menu_block" == *'toggle_alt_keybinds)'* ]] ||
+    fail "open_more_menu should dispatch toggle_alt_keybinds"
+[[ "$open_menu_block" == *'set_config_value ALT_KEYBINDS'* ]] ||
+    fail "open_more_menu's toggle_alt_keybinds case should persist via set_config_value"
+
+build_footer_block="$(sed -n '/^build_footer() {/,/^}/p' "$LAUNCHER")"
+[[ "$build_footer_block" == *'CONFIG_ALT_KEYBINDS" == off'* ]] ||
+    fail "build_footer should skip the ⌥-alias attempt when CONFIG_ALT_KEYBINDS is off"
+
+build_picker_footer_block="$(sed -n '/^build_picker_footer() {/,/^}/p' "$LAUNCHER")"
+[[ "$build_picker_footer_block" == *'CONFIG_ALT_KEYBINDS" == off'* ]] ||
+    fail "build_picker_footer should read the same CONFIG_ALT_KEYBINDS toggle as build_footer — see picker-footer-fixtures.sh for the behavior itself"
+
+# ------------------------------------------------------------
+# 6. Actions (F4) gets its own always-on F3 details pane, explaining
+#    what each row/toggle actually does — run directly, since
+#    --internal-preview-action is a plain CLI subcommand.
+# ------------------------------------------------------------
+
+[[ "$more_action_block" == *'--internal-preview-action'* ]] ||
+    fail "pick_more_action's fzf call should wire up a preview via --internal-preview-action"
+[[ "$more_action_block" != *"hidden')" ]] ||
+    fail "pick_more_action's preview window should not be conditionally hidden — it's always on by default"
+
+action_preview_output="$("$LAUNCHER" --internal-preview-action toggle_default_categories 2>&1)"
+[[ "$action_preview_output" == *'Default Categories'* ]] ||
+    fail "--internal-preview-action toggle_default_categories should explain the Default Categories setting, got: $action_preview_output"
+
+action_preview_output="$("$LAUNCHER" --internal-preview-action toggle_alt_keybinds 2>&1)"
+[[ "$action_preview_output" == *'Alt Keybinds'* ]] ||
+    fail "--internal-preview-action toggle_alt_keybinds should explain the Alt Keybinds setting, got: $action_preview_output"
+
+action_preview_output="$("$LAUNCHER" --internal-preview-action f6 2>&1)"
+[[ "$action_preview_output" == *'Hide'* ]] ||
+    fail "--internal-preview-action f6 should explain the Hide action, got: $action_preview_output"
+
+action_preview_output="$("$LAUNCHER" --internal-preview-action nonexistent-row-id 2>&1)"
+[[ -n "$action_preview_output" ]] ||
+    fail "--internal-preview-action should print something even for a row id it doesn't recognize, not go silent"
+
+printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Actions offers a Details toggle mirroring F3, DETAILS_PINNED keeps Esc from undoing a Details choice made via Actions, Alt Keybinds is wired end to end, and Actions has its own always-on details pane\n'

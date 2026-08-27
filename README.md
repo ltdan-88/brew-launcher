@@ -110,19 +110,24 @@ The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
 teaches you the key and then gets out of the way. Rows are grouped by what
 they need: entry-scoped actions (Hide, Favorite, Categorize) and Launch Preset
-first, then Theme and the three toggles below, then the two "build something
-new" actions, Create Preset and Create Shortcut, last.
+first, then Theme and the toggles below, then the two "build something new"
+actions, Create Preset and Create Shortcut, last. A details pane below the
+list — on by default, no toggle to remember — spells out what the
+highlighted row actually does, since a one-line label like "Default
+Categories" doesn't say much on its own.
 
 Several rows in Actions are on/off (or two-way) switches, not one-shot
 actions — Default Categories, Default Hidden, and Open to Categories (see
-[Bundled defaults](#bundled-defaults) below), plus Sort (Name/Size) and
-Details, which mirrors **F3** itself so its current state is visible from
-Actions too, for anyone who reaches for the menu before remembering the
-direct key. All of these flip with **Space** as well as Enter, and reopen
-the menu right after so you can flip more than one without leaving. Theme
-and Create Preset return to Actions once they're done too; only Create
-Shortcut exits back to wherever you opened Actions from, since it's the one
-action here that's actually finished when it's finished.
+[Bundled defaults](#bundled-defaults) below), Sort (Name/Size), Details,
+which mirrors **F3** itself so its current state is visible from Actions
+too, and Alt Keybinds, which controls whether the footer ever shows a key's
+**⌥** alias at all (on by default) — off keeps the footer to plain F-keys
+even on a terminal wide enough to fit the aliases. All of these flip with
+**Space** as well as Enter, and reopen the menu right after so you can flip
+more than one without leaving. Theme and Create Preset return to Actions
+once they're done too; only Create Shortcut exits back to wherever you
+opened Actions from, since it's the one action here that's actually
+finished when it's finished.
 
 **F4**, **F5**, and **F9** also work from inside the view picker (**F2**)
 itself, not just the main list — no row needs to be highlighted for either
@@ -406,6 +411,7 @@ reference below, from inside the launcher.
 | — | Toggle Open to Categories | Actions only |
 | — | Sort by name or size | Actions only |
 | — | Toggle the details pane (mirrors F3) | Actions only |
+| — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
 
@@ -438,9 +444,15 @@ The menu lists each action's key beside it, so it teaches its own shortcuts
 and works itself out of a job.
 
 The footer also adapts to the terminal, dropping the marker legend and then
-the Option aliases rather than letting fzf cut an item off mid-word. Create
-shortcut isn't offered on any platform besides macOS and Linux, since there's
-nowhere to put the result elsewhere.
+the Option aliases (unless Alt Keybinds is off, in which case they're never
+shown in the first place) rather than letting fzf cut an item off mid-word.
+The view picker (**F2**) and preset picker (**F9**) degrade the same way,
+down to wrapping their own footer across two lines if even the tightest
+single-line rendering doesn't fit — they used to have a fixed footer of
+their own that could overflow, and Alt Keybinds now applies there too, so
+neither picker disagrees with the main list about whether an alias shows.
+Create shortcut isn't offered on any platform besides macOS and Linux, since
+there's nowhere to put the result elsewhere.
 
 </details>
 
@@ -465,7 +477,7 @@ plain text if you'd rather edit them directly, one setting or command per
 line, `#` comments and blank lines ignored:
 
 ```
-~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, OPEN_TO_CATEGORIES= — see below
+~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, OPEN_TO_CATEGORIES=, SORT=, ALT_KEYBINDS= — see below
 ~/.config/brew-launcher/ignore               # hidden entries
 ~/.config/brew-launcher/shown                # bundled-hidden commands you F6'd back visible
 ~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8

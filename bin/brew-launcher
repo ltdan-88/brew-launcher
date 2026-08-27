@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.42.3"
+VERSION="0.43.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -110,6 +110,7 @@ CONFIG_DEFAULT_CATEGORIES=""
 CONFIG_DEFAULT_HIDDEN=""
 CONFIG_OPEN_TO_CATEGORIES=""
 CONFIG_SORT=""
+CONFIG_ALT_KEYBINDS=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
 
@@ -130,6 +131,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             DEFAULT_HIDDEN)      CONFIG_DEFAULT_HIDDEN="$config_value" ;;
             OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
             SORT)                CONFIG_SORT="$config_value" ;;
+            ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="$config_value" ;;
         esac
 
     done < "$CONFIG_FILE"
@@ -333,10 +335,17 @@ Theme:
   useful to open to. Esc from that first screen falls back to All,
   same as pressing it from F2 any other time.
 
-  All three of these toggles flip with Space as well as Enter, and
-  reopen the Actions menu afterward rather than exiting to the main
-  list — useful for touching more than one in the same visit. Every
-  other action in Actions still exits normally once it's done.
+  ALT_KEYBINDS=off (default on, toggled from Actions → Alt Keybinds)
+  stops the footer from ever showing a key's ⌥ alias (e.g. F2/⌥V),
+  even where there'd be room — on leaves that decision to whatever
+  fits the terminal width, same as before this toggle existed. The
+  F-keys themselves always work either way; this only changes what
+  the footer prints.
+
+  All of these toggles flip with Space as well as Enter, and reopen
+  the Actions menu afterward rather than exiting to the main list —
+  useful for touching more than one in the same visit. Every other
+  action in Actions still exits normally once it's done.
 
 Bundled defaults:
   A curated set of well-known formula -> category mappings, and a
@@ -373,7 +382,8 @@ Keyboard shortcuts:
             it does to the highlighted row, like a right-click menu
             would — its border label names that row too (e.g.
             "Actions on fastfetch"), so it's never ambiguous which
-            entry it's about to act on.
+            entry it's about to act on. Its own details pane, always
+            on, explains what each row/toggle actually does.
   F5 / ⌥R   Refresh the cache without leaving the launcher
   F9 / ⌥P   Launch a preset — see Presets below. Ctrl-R in that
             picker renames the highlighted preset, Ctrl-D deletes it.
@@ -391,10 +401,11 @@ Keyboard shortcuts:
   In the Actions menu only — Launch Preset (same as F9), switch color
   theme, Sort by name or size, toggle the details pane (same toggle as
   F3 itself, mirrored here so its state is visible before opening it),
-  the three toggles under "Bundled defaults" below, Create Preset,
-  Create a macOS or Linux shortcut, Backup. None of these need a
-  highlighted entry, so they're also offered when Actions is opened
-  from the view picker (Hide/Favorite/Categorize/Create Shortcut are
+  toggle Alt Keybinds (see above), Open to Categories, the two toggles
+  under "Bundled defaults" below, Create Preset, Create a macOS or
+  Linux shortcut, Backup. None of these need a highlighted entry, so
+  they're also offered when Actions is opened from the view picker
+  (Hide/Favorite/Categorize/Create Shortcut are
   not, since those act on a specific entry — and the view picker has
   no single row to name anyway). Esc from any of them returns to the
   Actions menu, not out to the main list.
@@ -864,6 +875,74 @@ if [[ "$1" == "--internal-preview-preset" ]]; then
             printf '  %s\n' "$preview_member"
         fi
     done
+
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# F4 Actions menu's own F3 details pane (internal use only).
+#
+# Raised live: "can we add a details pane to F4 that is always on by
+# default, describing what the toggles mean etc." Actions mixes plain
+# commands (Hide, Create Preset) with settings whose current state is
+# already shown in the row itself but whose *effect* isn't obvious
+# from a one-line label alone (Default Categories, Sort, Alt
+# Keybinds...). Same idiom as --internal-preview-category/-preset: a
+# plain CLI subcommand fed the highlighted row's id (field 1 of
+# pick_more_action()'s own rows), no fzf/interactivity of its own.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-preview-action" ]]; then
+
+    preview_action_id="$2"
+
+    case "$preview_action_id" in
+        f6)
+            printf 'Hide\n\nHide the highlighted entry from every view except Hidden.\nPress again from Hidden (or F6 there) to bring it back.\nNothing is uninstalled — this only changes what the picker\nshows.\n'
+            ;;
+        f7)
+            printf 'Favorite\n\nAdd or remove the highlighted entry from Favorites — a\ncategory like any other, just pinned first in the view\npicker. Marked with a + in every list.\n'
+            ;;
+        f8)
+            printf 'Categorize\n\nFile the highlighted entry into a category, typed or\npicked from existing ones. Picking a category it is\nalready in removes it instead — same key adds and removes.\nMarked with a # in every list.\n'
+            ;;
+        f9)
+            printf 'Launch Preset\n\nOpen the preset picker and launch one — every command in\nit starts together, one tmux pane each. Needs tmux.\n'
+            ;;
+        theme)
+            printf 'Theme\n\nSwitch the color theme used throughout the picker.\n'
+            ;;
+        toggle_default_categories)
+            printf 'Default Categories\n\nOn: uncategorized formulae are auto-filed into bundled\ncategories (Reading & Reference, System Info, and so on),\nso the view picker has useful groupings from the start.\nOff: only categories you have filed something into by hand\n(F8) exist — a blank slate. Either way, your own F8 choice\non any one entry always wins over the bundled default.\n'
+            ;;
+        toggle_default_hidden)
+            printf 'Default Hidden\n\nOn: a bundled list of minor/auxiliary commands (support\ntools bundled alongside something else, not meant to be\nlaunched on their own) starts hidden automatically. Off:\nnothing starts hidden unless you hide it yourself with F6.\nAn entry you have explicitly shown or hidden yourself\nalways overrides this.\n'
+            ;;
+        toggle_open_to_categories)
+            printf 'Open to Categories\n\nOn: brew-launcher opens straight to the view picker (F2)\ninstead of All. Off (default): starts on All, the familiar\nfull list. Worth turning on once you actually have\ncategories to jump between.\n'
+            ;;
+        toggle_sort)
+            printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used or Recently Added, which already have\ntheir own meaningful order.\n'
+            ;;
+        toggle_details)
+            printf 'Details\n\nShow or hide the F3 preview pane — on the main list, the\nview picker (F2), and the preset picker (F9) alike.\nToggling it here makes it a standing choice (it stays on\nuntil you turn it off again, here or with F3); pressing F3\ndirectly instead is just a quick peek, and Esc there closes\nit first before doing anything else.\n'
+            ;;
+        toggle_alt_keybinds)
+            printf 'Alt Keybinds\n\nOn: the footer also lists each action'"'"'s ⌥ (Option)\nalternative, e.g. F2/⌥V, wherever it fits. Off: the footer\nshows plain F-keys only. The F-keys and their direct presses\nalways work regardless of this setting — it only changes\nwhat the footer prints.\n'
+            ;;
+        create_preset)
+            printf 'Create Preset\n\nBuild a new preset: pick which entries belong in it and\nwhat order they launch in, then name it. Needs tmux.\n'
+            ;;
+        shortcut)
+            printf 'Create Shortcut\n\nCreate a double-clickable launcher for the highlighted\nentry (macOS: an Automator app; Linux: a .desktop file).\n'
+            ;;
+        backup)
+            printf 'Backup\n\nExport your categories, presets, favorites, hidden entries\nand settings to a single file, for safekeeping or moving to\nanother machine.\n'
+            ;;
+        *)
+            printf 'No description available.\n'
+            ;;
+    esac
 
     exit 0
 fi
@@ -3109,6 +3188,18 @@ rename_category() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
+    # head -n1, not tail -n1: with --print-query the typed text is
+    # always the FIRST line, followed by the matched row (if any) from
+    # the single-row list below it. That list only ever contains
+    # old_name itself, so almost any edit that keeps a prefix of it
+    # (e.g. "Weathers" -> "Weather") still fuzzy-matches it, and
+    # tail -n1 would grab that stale match instead of what was typed —
+    # silently discarding the rename entirely, since it then reads as
+    # "new name == old name". Raised live: renaming "Weathers" to
+    # "Weather" did nothing. tail -n1 made sense for toggle_category(),
+    # which offers a real list of choices and deliberately prefers an
+    # exact existing match over the raw query; there is no such list
+    # here, so the query is always what we want.
     new_name="$(
         printf '%s\n' "$old_name" |
         fzf \
@@ -3125,7 +3216,7 @@ rename_category() {
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --pointer='▌' \
             --color="$FZF_COLORS" |
-        tail -n1
+        head -n1
     )"
 
     rm -f "$FOOTER_CLICK_FILE"
@@ -3256,6 +3347,9 @@ pick_help() {
     rows+=("                    already have their own order")
     rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
     rows+=("                    state shows before you even open the pane")
+    rows+=("      Alt Keybinds  On (default): footer shows each ⌥ alias too")
+    rows+=("                    where it fits. Off: F-keys only. F-keys work")
+    rows+=("                    either way, this only changes the footer text")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("     Create Preset  Pick tools to save as a new preset")
         rows+=("                    Tab shows the launch order as a number;")
@@ -3269,10 +3363,10 @@ pick_help() {
     rows+=("            Backup  Brewfile + categories/presets/theme in one")
     rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
     rows+=("")
-    rows+=("The three toggles above flip with Space, not just Enter, and stay")
-    rows+=("on this menu afterward. Theme, Create Preset and Backup return to")
-    rows+=("this menu too once done — only Create Shortcut exits back to the")
-    rows+=("list.")
+    rows+=("The toggles above (Default Categories through Alt Keybinds) flip")
+    rows+=("with Space, not just Enter, and stay on this menu afterward. Theme,")
+    rows+=("Create Preset and Backup return to this menu too once done — only")
+    rows+=("Create Shortcut exits back to the list.")
     rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
@@ -3403,6 +3497,20 @@ pick_more_action() {
     [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
     rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
 
+    # Raised live: "the bottom menu is inconsistent — All view shows
+    # Fn and alternative keybinds, F2/F9 don't. I prefer a toggle
+    # switch that switches between Fn and the alternative keybinds."
+    # Before this, whether ⌥ aliases showed was decided automatically,
+    # purely by whether they happened to fit the terminal width — never
+    # a real user choice, and F2/F9's own footer never even tried. Now
+    # a persisted preference: On tries to show the ⌥ alias next to
+    # every F-key wherever there's room (main list, F2, F9 alike — see
+    # build_footer()/build_picker_footer()), Off never does. The F-keys
+    # themselves always work either way; this only changes the footer.
+    local alt_keybinds_state='On'
+    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && alt_keybinds_state='Off'
+    rows+=("toggle_alt_keybinds"$'\t'"$(printf '%-20s%s' 'Alt Keybinds' "$alt_keybinds_state")")
+
     # Same reasoning as Theme above — also setup-adjacent rather than
     # everyday, so it doesn't need a key of its own either. Grouped
     # with Create Shortcut below rather than up near Theme: both build
@@ -3432,6 +3540,13 @@ pick_more_action() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
+    # Details pane, always on by default — raised live: "can we add a
+    # details pane to F4 that is always on by default, describing what
+    # the toggles mean etc." Unlike DETAILS_VISIBLE elsewhere (a shared
+    # on/off the user controls, off by default), there's nothing here
+    # for a user to have deliberately hidden yet, and the whole point
+    # is explaining rows whose one-line label doesn't say what they
+    # actually do — so it just always shows, no toggle to remember.
     result="$(
         printf '%s\n' "${rows[@]}" |
         fzf \
@@ -3445,6 +3560,8 @@ pick_more_action() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
+            --preview "${(q)SCRIPT_PATH} --internal-preview-action {1}" \
+            --preview-window="down,35%,border-top,wrap" \
             --footer='  ↑ ↓  Navigate    Type  Search    Enter/Space  [Choose]    Esc  [Back]' \
             --bind 'space:accept' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -3545,6 +3662,13 @@ open_more_menu() {
                 # true (a standing "always on" choice) if Details just
                 # turned on this way, false if it just turned off.
                 DETAILS_PINNED="$DETAILS_VISIBLE"
+                continue
+                ;;
+            toggle_alt_keybinds)
+                new_value='off'
+                [[ "$CONFIG_ALT_KEYBINDS" == off ]] && new_value='on'
+                set_config_value ALT_KEYBINDS "$new_value"
+                CONFIG_ALT_KEYBINDS="$new_value"
                 continue
                 ;;
             theme)
@@ -3765,8 +3889,8 @@ pick_view() {
         build_picker_footer \
             '  ↑ ↓  Navigate    Type  Search    Enter  [View]    Esc  [Back]' \
             '  ↑ ↓  Navigate    Enter  [View]    Esc  [Back]' \
-            'F3  [Details]' 'F4  [Actions]' 'F5  [Refresh]' 'F9  [Presets]' \
-            'Ctrl-R  [Rename]' 'Ctrl-D  [Delete]'
+            $'F3\tD\t[Details]' $'F4\tM\t[Actions]' $'F5\tR\t[Refresh]' $'F9\tP\t[Presets]' \
+            $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
     )"
 
     result="$(
@@ -5581,7 +5705,8 @@ confirm_delete_preset() {
 # Rename a preset — same idiom as rename_category() above, since a
 # preset is exactly the same shape (a name that IS a filename, nothing
 # else to update). See that function for why --print-query is used as
-# the text-entry mechanism instead of something new.
+# the text-entry mechanism instead of something new, and — same fix,
+# same reason — why this reads head -n1, not tail -n1.
 rename_preset() {
 
     local old_name="$1"
@@ -5605,7 +5730,7 @@ rename_preset() {
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --pointer='▌' \
             --color="$FZF_COLORS" |
-        tail -n1
+        head -n1
     )"
 
     rm -f "$FOOTER_CLICK_FILE"
@@ -5670,7 +5795,7 @@ launch_preset() {
         build_picker_footer \
             '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
             '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
-            'F3  [Details]' 'Ctrl-R  [Rename]' 'Ctrl-D  [Delete]'
+            $'F3\tD\t[Details]' $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
     )"
 
     result="$(
@@ -5899,8 +6024,18 @@ build_footer() {
     # are: ⌥ aliases, gap between items. Fits at 100 columns and up on
     # the first attempt; see the comment above footer_actions() for
     # the three widths this actually degrades through.
+    #
+    # The "1 4" (⌥-alias) rung is only tried at all when Alt Keybinds
+    # (Actions -> Alt Keybinds) is on. Before that toggle existed,
+    # whether an alias showed was decided purely by whether it
+    # happened to fit — never a real choice, and never consistent with
+    # F2/F9's own footer (see build_picker_footer()) not offering
+    # aliases at all. Off skips straight to the F-key-only rungs.
+    local -a attempts=("1 4" "0 4" "0 2")
+    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && attempts=("0 4" "0 2")
+
     local line2 attempt
-    for attempt in "1 4" "0 4" "0 2"; do
+    for attempt in "${attempts[@]}"; do
         line2="$(footer_actions ${=attempt})"
         (( ${#line2} <= width )) && break
     done
@@ -5921,34 +6056,62 @@ build_footer() {
 #
 # $1 = the full nav line (navigate/search/launch/back, however much
 # of that the caller wants), $2 = a shorter fallback nav line, $3+ =
-# each already-built action string (e.g. "F3  [Details]"). Line 1
-# tries $1 first, falls back to $2 if too wide. Then the action
-# strings are joined onto one line with a 4-space gap, falling back to
-# a 2-space gap if that doesn't fit — the same rung footer_actions()
-# uses once its own ⌥-alias rung (not applicable here; neither picker
-# shows those) has already been skipped. F2 alone has 6 actions past
+# each action as a "FKEY<TAB>LETTER<TAB>[Label]" spec — LETTER empty
+# for a Ctrl-combo, which has no ⌥ alias (Ctrl-R, Ctrl-D). Line 1 tries
+# $1 first, falls back to $2 if too wide. The actions are then joined
+# onto one line, trying the ⌥-alias rung first — but only when Alt
+# Keybinds (Actions -> Alt Keybinds) is on, same toggle build_footer()
+# reads, added specifically so this picker footer and the main list's
+# stop disagreeing about whether aliases show at all. Then a 4-space
+# gap without aliases, then a 2-space gap. F2 alone has 6 actions past
 # nav, more than even a 2-space gap reliably fits below ~95 columns —
 # confirmed live rather than assumed — so a final rung splits the
-# actions across two lines (roughly half each) instead of handing fzf
-# something it can only truncate mid-word.
+# actions across two lines (roughly half each, aliases dropped —
+# there's even less room here than the rung that already dropped them)
+# instead of handing fzf something it can only truncate mid-word.
 # ------------------------------------------------------------
+
+# One action spec ("FKEY<TAB>LETTER<TAB>[Label]") rendered as text —
+# "$FKEY/⌥$LETTER  [Label]" when with_alt is on and LETTER isn't
+# empty, "$FKEY  [Label]" otherwise. Same shape as footer_key() above,
+# just unpacking a spec instead of taking already-separated arguments.
+picker_footer_action_text() {
+
+    local spec="$1" with_alt="$2"
+    local fkey="${spec%%$'\t'*}"
+    local rest="${spec#*$'\t'}"
+    local letter="${rest%%$'\t'*}"
+    local label="${rest#*$'\t'}"
+
+    if [[ -n "$letter" ]] && (( with_alt )); then
+        printf '%s/⌥%s  %s' "$fkey" "$letter" "$label"
+    else
+        printf '%s  %s' "$fkey" "$label"
+    fi
+}
 
 build_picker_footer() {
 
     local nav="$1" nav_short="$2"
     shift 2
-    local -a action_parts=("$@")
+    local -a specs=("$@")
 
     local width=$(( $(terminal_width) - 6 ))
 
     local line1="$nav"
     (( ${#line1} > width )) && line1="$nav_short"
 
-    local gap_str line2 attempt part
-    for attempt in 4 2; do
-        gap_str="${(l:$attempt:: :)}"
+    local -a attempts=("1 4" "0 4" "0 2")
+    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && attempts=("0 4" "0 2")
+
+    local gap_str line2 attempt with_alt gap part spec
+    for attempt in "${attempts[@]}"; do
+        with_alt="${attempt%% *}"
+        gap="${attempt##* }"
+        gap_str="${(l:$gap:: :)}"
         line2=""
-        for part in "${action_parts[@]}"; do
+        for spec in "${specs[@]}"; do
+            part="$(picker_footer_action_text "$spec" "$with_alt")"
             [[ -n "$line2" ]] && line2+="$gap_str"
             line2+="$part"
         done
@@ -5961,22 +6124,24 @@ build_picker_footer() {
     # enough given how similar each action string's length already is
     # (an F-key/Ctrl-combo, two spaces, a short bracketed word).
     local -a first_half second_half
-    local half_count=$(( (${#action_parts[@]} + 1) / 2 ))
-    first_half=("${action_parts[@]:0:$half_count}")
-    second_half=("${action_parts[@]:$half_count}")
+    local half_count=$(( (${#specs[@]} + 1) / 2 ))
+    first_half=("${specs[@]:0:$half_count}")
+    second_half=("${specs[@]:$half_count}")
 
     local line2a line2b
     gap_str="${(l:2:: :)}"
 
     line2a=""
-    for part in "${first_half[@]}"; do
+    for spec in "${first_half[@]}"; do
+        part="$(picker_footer_action_text "$spec" 0)"
         [[ -n "$line2a" ]] && line2a+="$gap_str"
         line2a+="$part"
     done
     line2a="  $line2a"
 
     line2b=""
-    for part in "${second_half[@]}"; do
+    for spec in "${second_half[@]}"; do
+        part="$(picker_footer_action_text "$spec" 0)"
         [[ -n "$line2b" ]] && line2b+="$gap_str"
         line2b+="$part"
     done
