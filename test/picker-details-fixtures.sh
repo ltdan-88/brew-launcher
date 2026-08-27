@@ -71,6 +71,36 @@ newsboat_line="$(echo "$output" | grep -n "newsboat" | cut -d: -f1)"
     fail "category preview should be alphabetical, not file order — got fastfetch at line $fastfetch_line, newsboat at $newsboat_line"
 
 # ------------------------------------------------------------
+# 1b. Hidden entries are excluded, matching the category's own count
+#     (compute_category_counts()). Raised live right after this
+#     preview shipped without this filter: a category's count said 3,
+#     the preview said 5 — a visible, confusing disagreement between
+#     two things that both claim to describe the same category.
+#     Covers both hiding mechanisms: an explicit F6 (IGNORE_FILE) and
+#     a bundled-hidden command (CACHE_FILE field 11) without a
+#     SHOWN_FILE override — tele stays visible either way once shown.
+# ------------------------------------------------------------
+
+mkdir -p "$XDG_CONFIG_HOME/brew-launcher"
+printf 'newsboat\n' > "$XDG_CONFIG_HOME/brew-launcher/ignore"
+printf 'tele\n' > "$XDG_CONFIG_HOME/brew-launcher/shown"
+
+cat >> "$CACHE_FILE" <<'EOF'
+tele	TUI Telegram client	tele	1.11.2	27.3MB		tele	/opt/homebrew/bin/tele	400	Morning	1
+EOF
+
+output="$("$LAUNCHER" --internal-preview-category Morning 2>&1)"
+
+echo "$output" | grep -q "fastfetch" ||
+    fail "hidden-filtering test: Morning should still list fastfetch, got: $output"
+echo "$output" | grep -q "newsboat" &&
+    fail "hidden-filtering test: Morning should drop newsboat (explicitly hidden via IGNORE_FILE), got: $output"
+echo "$output" | grep -q "tele" ||
+    fail "hidden-filtering test: Morning should keep tele (bundled-hidden but SHOWN_FILE overrides it), got: $output"
+
+rm -f "$XDG_CONFIG_HOME/brew-launcher/ignore" "$XDG_CONFIG_HOME/brew-launcher/shown"
+
+# ------------------------------------------------------------
 # 2. Built-in view: explains there's nothing to preview, doesn't error.
 # ------------------------------------------------------------
 

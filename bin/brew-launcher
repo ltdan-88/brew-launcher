@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.42.0"
+VERSION="0.42.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -690,6 +690,50 @@ if [[ "$1" == "--internal-preview-category" ]]; then
 
     preview_category_file="$CATEGORIES_DIR/$preview_view_name"
 
+    # Hidden-status check, inlined rather than calling
+    # load_hidden_commands() — that (and the two loaders it calls in
+    # turn) isn't defined yet this early. Same combining rule it uses:
+    # explicitly hidden (IGNORE_FILE) OR bundled-hidden (CACHE_FILE
+    # field 11) without an explicit F6 override (SHOWN_FILE). Raised
+    # live after this preview shipped without it: the category's own
+    # count (compute_category_counts(), which does exclude hidden
+    # entries) and this preview visibly disagreed on how many tools a
+    # category actually held — confirmed live against a real category
+    # with two hidden members, count said 3, preview said 5.
+    typeset -A preview_ignore_set preview_shown_set preview_bundled_hidden_set
+
+    if [[ -f "$IGNORE_FILE" ]]; then
+        while IFS= read -r preview_ignore_line; do
+            preview_ignore_line="${preview_ignore_line#"${preview_ignore_line%%[![:space:]]*}"}"
+            preview_ignore_line="${preview_ignore_line%"${preview_ignore_line##*[![:space:]]}"}"
+            [[ -z "$preview_ignore_line" ]] && continue
+            [[ "$preview_ignore_line" == \#* ]] && continue
+            preview_ignore_set[$preview_ignore_line]=1
+        done < "$IGNORE_FILE"
+    fi
+
+    if [[ -f "$SHOWN_FILE" ]]; then
+        while IFS= read -r preview_shown_line; do
+            [[ -n "$preview_shown_line" ]] && preview_shown_set[$preview_shown_line]=1
+        done < "$SHOWN_FILE"
+    fi
+
+    # Field 11 (default_hidden) via awk, not a zsh `read` loop with
+    # placeholder variables for the fields in between — see the field
+    # 10 comment further down for why that combination silently
+    # misreads a cache row.
+    if [[ -f "$CACHE_FILE" ]]; then
+        while IFS= read -r preview_bh_command; do
+            [[ -n "$preview_bh_command" ]] && preview_bundled_hidden_set[$preview_bh_command]=1
+        done < <(awk -F'\t' '$11 == "1" { print $1 }' "$CACHE_FILE")
+    fi
+
+    preview_is_hidden() {
+        [[ -n "${preview_ignore_set[$1]-}" ]] && return 0
+        [[ -n "${preview_bundled_hidden_set[$1]-}" && -z "${preview_shown_set[$1]-}" ]] && return 0
+        return 1
+    }
+
     typeset -A preview_category_seen
     preview_category_commands=()
 
@@ -701,20 +745,11 @@ if [[ "$1" == "--internal-preview-category" ]]; then
             [[ "$preview_member" == \#* ]] && continue
             [[ -n "${preview_category_seen[$preview_member]-}" ]] && continue
             preview_category_seen[$preview_member]=1
+            preview_is_hidden "$preview_member" && continue
             preview_category_commands+=("$preview_member")
         done < "$preview_category_file"
     fi
 
-    # Deliberately doesn't filter out hidden commands the way the real
-    # picker's own count does (compute_category_counts()) — that needs
-    # load_hidden_commands() plus the two loaders it calls in turn,
-    # none defined yet this early, and duplicating three functions'
-    # worth of logic here to stay in sync forever felt like a worse
-    # trade than an occasional preview slightly wider than what F2
-    # actually lists. Matches the spirit of what was actually asked
-    # for here anyway: "I still want to see the tools, regardless of
-    # who has categorized them."
-    #
     # Reads field 10 via awk, not a zsh `read` loop with placeholder
     # variables for the fields in between — confirmed live that
     # `IFS=$'\t' read` collapses a genuinely empty field (field 6,
@@ -727,8 +762,9 @@ if [[ "$1" == "--internal-preview-category" ]]; then
         while IFS= read -r preview_bundled_command; do
             [[ -z "$preview_bundled_command" ]] && continue
             [[ -n "${preview_category_seen[$preview_bundled_command]-}" ]] && continue
-            grep -Fqx -- "$preview_bundled_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
             preview_category_seen[$preview_bundled_command]=1
+            preview_is_hidden "$preview_bundled_command" && continue
+            grep -Fqx -- "$preview_bundled_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
             preview_category_commands+=("$preview_bundled_command")
         done < <(awk -F'\t' -v cat="$preview_view_name" '$10 == cat { print $1 }' "$CACHE_FILE")
     fi
@@ -2824,14 +2860,13 @@ CURRENT_VIEW="All"
 # check this before deciding what "back" means.
 DETAILS_VISIBLE=false
 
-# Same idea as DETAILS_VISIBLE above, but for the F2/F9 pickers' own
-# F3 preview (what's inside the highlighted category/preset) — kept
-# separate rather than sharing DETAILS_VISIBLE itself, so turning one
-# on doesn't also silently turn the main list's own details pane on
-# the next time you're back there, or vice versa. Shared between F2
-# and F9 themselves, since both are "peek at what's inside" screens of
-# the same kind.
-PICKER_DETAILS_VISIBLE=false
+# F2/F9's own F3 preview (what's inside the highlighted category/
+# preset) shares this exact flag rather than tracking its own — first
+# shipped as a separate PICKER_DETAILS_VISIBLE precisely so turning
+# one on wouldn't silently turn the other on too, but raised live
+# right after: "when it is on, it should always be on, on every
+# screen where a details pane is available." One flag, one on/off
+# state, everywhere F3 (or Actions -> Details) can toggle it.
 
 typeset -A category_members
 
@@ -3314,10 +3349,11 @@ pick_more_action() {
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
 
     # Raised live: "implement a toggle for details pane (F3) in F4
-    # Actions." F3 already toggles this directly on the main list —
-    # this is the same flag, just also reachable (and its current
-    # state visible) from here, for anyone who reaches for Actions
-    # before remembering F3 exists.
+    # Actions." Same DETAILS_VISIBLE flag F3 itself toggles — on
+    # every screen with an F3 details/preview pane (main list, F2, F9
+    # alike, see DETAILS_VISIBLE's own comment) — just also reachable
+    # (and its current state visible) from here, for anyone who
+    # reaches for Actions before remembering F3 exists.
     local details_state='Off'
     [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
     rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
@@ -3681,7 +3717,7 @@ pick_view() {
             --delimiter=$'\t' \
             --with-nth=2 \
             --preview "${(q)SCRIPT_PATH} --internal-preview-category {1}" \
-            --preview-window="down,35%,border-top,wrap$([[ "$PICKER_DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
+            --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
             --footer='  ↑ ↓  Navigate    Type  Search    Enter  [View]    F3  [Details]    F4  [Actions]    F5  [Refresh]    F9  [Presets]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Back]' \
             --expect=enter,ctrl-d,ctrl-r,f3,f4,f5,f9 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -3759,7 +3795,7 @@ pick_view() {
     # uses one on the main list: so Esc could eventually learn to close
     # this first too, the way it already does there.
     if [[ "$pick_action" == "f3" ]]; then
-        [[ "$PICKER_DETAILS_VISIBLE" == true ]] && PICKER_DETAILS_VISIBLE=false || PICKER_DETAILS_VISIBLE=true
+        [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
         pick_view
         return $?
     fi
@@ -5570,7 +5606,7 @@ launch_preset() {
             --prompt=' 󰣇  ' \
             --pointer='▌' \
             --preview "${(q)SCRIPT_PATH} --internal-preview-preset {1}" \
-            --preview-window="down,35%,border-top,wrap$([[ "$PICKER_DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
+            --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
             --footer='  ↑ ↓  Navigate    Enter  [Launch]    F3  [Details]    Ctrl-R  [Rename]    Ctrl-D  [Delete]    Esc  [Cancel]' \
             --expect=enter,ctrl-d,ctrl-r,f3 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -5606,7 +5642,7 @@ launch_preset() {
     [[ -z "$preset_name" ]] && return 1
 
     if [[ "$pick_action" == "f3" ]]; then
-        [[ "$PICKER_DETAILS_VISIBLE" == true ]] && PICKER_DETAILS_VISIBLE=false || PICKER_DETAILS_VISIBLE=true
+        [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
         launch_preset
         return $?
     fi
