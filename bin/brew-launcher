@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.39.0"
+VERSION="0.40.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -109,6 +109,7 @@ CONFIG_THEME=""
 CONFIG_DEFAULT_CATEGORIES=""
 CONFIG_DEFAULT_HIDDEN=""
 CONFIG_OPEN_TO_CATEGORIES=""
+CONFIG_SORT=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
 
@@ -128,6 +129,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             DEFAULT_CATEGORIES)  CONFIG_DEFAULT_CATEGORIES="$config_value" ;;
             DEFAULT_HIDDEN)      CONFIG_DEFAULT_HIDDEN="$config_value" ;;
             OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
+            SORT)                CONFIG_SORT="$config_value" ;;
         esac
 
     done < "$CONFIG_FILE"
@@ -385,9 +387,10 @@ Keyboard shortcuts:
             viewing a category, otherwise prompts for which one)
 
   In the Actions menu only — Launch Preset (same as F9), switch color
-  theme, the three toggles under "Bundled defaults" below, Create
-  Preset, Create a macOS or Linux shortcut, Backup. None of these need
-  a highlighted entry, so they're also offered when Actions is opened
+  theme, Sort by name or size, the three toggles under "Bundled
+  defaults" below, Create Preset, Create a macOS or Linux shortcut,
+  Backup. None of these need a highlighted entry, so they're also
+  offered when Actions is opened
   from the view picker (Hide/Favorite/Categorize/Create Shortcut are
   not, since those act on a specific entry — and the view picker has
   no single row to name anyway). Esc from any of them returns to the
@@ -1370,6 +1373,15 @@ fi
 # ------------------------------------------------------------
 
 THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
+
+# Resolved the same way as THEME_NAME above, minus an env var — this
+# is a plain Actions-menu toggle (see the three under "Bundled
+# defaults"), not something with enough variety to justify its own
+# BREW_LAUNCHER_* knob. "name" (the cache's own alphabetical order,
+# free) or "size" (raw bytes, largest first — see size_sort_key()).
+# Doesn't touch Most Used or Recently Added, which already have their
+# own meaningful order regardless of this setting.
+SORT_ORDER="${CONFIG_SORT:-name}"
 
 case "$THEME_NAME" in
     catppuccin)
@@ -2624,6 +2636,41 @@ load_launch_counts
 # script parses.
 typeset -A install_times
 
+# Same idea as install_times above, for SORT_ORDER=size — the display
+# string as-is (e.g. "1.7MB"), not yet converted to bytes; that
+# conversion only needs to happen for whatever survived the current
+# view's filter, so it's done once per sort rather than for every
+# installed formula on every build_entries() call.
+typeset -A entry_sizes
+
+# Parses a human-formatted size string (e.g. "1.7MB", "410.8KB", the
+# same text `brew info --sizes` reports and the SIZE column already
+# shows) into a whole number of bytes, for SORT_ORDER=size's sort key.
+# Unrecognized input (a missing size, or a unit outside KB/MB/GB/TB)
+# sorts as 0 rather than erroring the whole list out — worse position,
+# not a crash.
+size_sort_key() {
+
+    local size_text="$1"
+    local number multiplier
+
+    case "$size_text" in
+        *TB) number="${size_text%TB}"; multiplier=$((1024*1024*1024*1024)) ;;
+        *GB) number="${size_text%GB}"; multiplier=$((1024*1024*1024)) ;;
+        *MB) number="${size_text%MB}"; multiplier=$((1024*1024)) ;;
+        *KB) number="${size_text%KB}"; multiplier=1024 ;;
+        *B)  number="${size_text%B}";  multiplier=1 ;;
+        *)   number="$size_text";      multiplier=1 ;;
+    esac
+
+    if [[ ! "$number" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        printf '0'
+        return
+    fi
+
+    printf '%.0f' "$(( number * multiplier ))"
+}
+
 # ------------------------------------------------------------
 # Categories
 #
@@ -3007,6 +3054,9 @@ pick_help() {
     rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
     rows+=("Open to Categories  Start on the view picker instead of All")
+    rows+=("               Sort  Name (alphabetical, default) or Size (largest")
+    rows+=("                    first) — not Most Used/Recently Added, which")
+    rows+=("                    already have their own order")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("     Create Preset  Pick tools to save as a new preset")
         rows+=("                    Tab shows the launch order as a number;")
@@ -3135,6 +3185,15 @@ pick_more_action() {
     [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
     rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
 
+    # A two-way toggle rather than an on/off one, unlike the three
+    # above — "Name" is just what every view already shows for free
+    # (the cache is written alphabetically), "Size" reorders it
+    # largest-first. Doesn't affect Most Used or Recently Added, which
+    # already have their own meaningful order.
+    local sort_state='Name'
+    [[ "$SORT_ORDER" == size ]] && sort_state='Size'
+    rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
+
     # Same reasoning as Theme above — also setup-adjacent rather than
     # everyday, so it doesn't need a key of its own either. Grouped
     # with Create Shortcut below rather than up near Theme: both build
@@ -3246,6 +3305,21 @@ open_more_menu() {
                 [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
                 set_config_value OPEN_TO_CATEGORIES "$new_value"
                 CONFIG_OPEN_TO_CATEGORIES="$new_value"
+                continue
+                ;;
+            toggle_sort)
+                new_value='name'
+                [[ "$SORT_ORDER" == name ]] && new_value='size'
+                set_config_value SORT "$new_value"
+                SORT_ORDER="$new_value"
+
+                # Rebuilt here rather than left for whatever the next
+                # incidental trigger happens to be (F5, switching view,
+                # F6/F7/F8) — the whole point of toggling this is to
+                # see the reordered list right away, so leaving the
+                # stale order on screen until something else refreshes
+                # it would look exactly like the toggle did nothing.
+                build_entries
                 continue
                 ;;
             theme)
@@ -3898,6 +3972,7 @@ build_entries() {
         # needs it as a lookup once the loop below has moved past this
         # row, and it's cheap enough not to bother gating.
         install_times[$command]="$install_time"
+        entry_sizes[$command]="$size"
 
         # View filter. "Hidden" is the only view that shows hidden
         # entries, and it shows nothing else — which is what lets it
@@ -3969,16 +4044,26 @@ build_entries() {
     # alphabetical order (which is what the read loop above naturally
     # produces, since CACHE_FILE is written sorted by name). Sorted
     # here rather than by changing what CACHE_FILE itself contains —
-    # every other view still wants alphabetical order, so the rank
-    # only matters for these two, applied after the fact and only to
-    # whatever already survived the filter above.
+    # every other view still wants alphabetical order by default, so
+    # the rank only matters for these two, applied after the fact and
+    # only to whatever already survived the filter above.
+    #
+    # SORT_ORDER=size (Actions → Sort) rides the same mechanism: raised
+    # live as "would an option for sorting by name or size make sense?"
+    # — name is just the alphabetical order already there for free, so
+    # the only real work is size, largest first, same as Most Used/
+    # Recently Added's own "biggest number first" convention. Doesn't
+    # apply to Most Used/Recently Added themselves — those already
+    # have a more meaningful order of their own that Sort shouldn't
+    # override.
     #
     # The sort key is zero-padded to a fixed width and placed ahead of
     # a real tab-delimited entry, sorted as one string, then stripped
     # back off — sidesteps any doubt about exactly how zsh's numeric
     # sort flag treats a key embedded partway through a longer string,
     # since a zero-padded prefix sorts correctly as plain text too.
-    if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" ]]; then
+    if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" \
+          || "$SORT_ORDER" == "size" ]]; then
 
         sort_prep=()
 
@@ -3988,8 +4073,10 @@ build_entries() {
 
             if [[ "$CURRENT_VIEW" == "Most Used" ]]; then
                 sort_key="${launch_counts[$sort_cmd]:-0}"
-            else
+            elif [[ "$CURRENT_VIEW" == "Recently Added" ]]; then
                 sort_key="${install_times[$sort_cmd]:-0}"
+            else
+                sort_key="$(size_sort_key "${entry_sizes[$sort_cmd]:-0}")"
             fi
 
             sort_prep+=("$(printf '%020d' "$sort_key")"$'\t'"$sort_entry")
@@ -4007,7 +4094,13 @@ build_entries() {
         sort_index=0
 
         for sort_entry in "${sort_prep[@]}"; do
-            (( sort_index >= COMPUTED_VIEW_LIMIT )) && break
+            # Only the two computed views cap themselves — sorting an
+            # ordinary view by size still shows everything it normally
+            # would, just reordered, not trimmed to the same 15-item
+            # limit that keeps Most Used/Recently Added short on purpose.
+            if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" ]]; then
+                (( sort_index >= COMPUTED_VIEW_LIMIT )) && break
+            fi
             entries+=("${sort_entry#*$'\t'}")
             (( sort_index++ ))
         done

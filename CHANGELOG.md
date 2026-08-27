@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.40.0] — 2026-08-27
+
+### Added
+
+- **Sort by name or size.** "Would an option for sorting by name or
+  size make sense?" — the fourth of a batch of ideas, held back from
+  the other three to ship on its own once it needed real parsing work.
+  **F4 → Actions → Sort** toggles between `Name` (the cache's own
+  alphabetical order, already free on every view) and `Size` (largest
+  first — handy for "what's actually taking up space" without leaving
+  for `ncdu`). Sizes are stored as display text (`"1.7MB"`, not a raw
+  byte count), so the real work is `size_sort_key()`, parsing that
+  back into a comparable number of bytes; `build_entries()` reuses the
+  exact zero-padded sort-key mechanism Most Used/Recently Added
+  already use, which Sort deliberately leaves alone — both already
+  have a more meaningful order of their own. Persisted the same way
+  as the other Actions toggles (`SORT=` in the config file); rebuilds
+  the visible list immediately on toggle rather than waiting for the
+  next incidental refresh, so the reorder is never mistaken for
+  nothing having happened.
+
 ## [0.39.0] — 2026-08-27
 
 ### Added
