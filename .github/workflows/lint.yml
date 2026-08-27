@@ -264,7 +264,7 @@ jobs:
       # CLI subcommand, driven directly against a fixture cache
       # (containing the real @@PRESETS@@ marker) and a fixture
       # PRESETS_DIR.
-      - name: "Which presets is this in?" test
+      - name: Command-in-which-presets test
         run: zsh test/preset-in-details-fixtures.sh
 
   backup-fixtures:
