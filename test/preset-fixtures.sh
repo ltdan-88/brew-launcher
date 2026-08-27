@@ -236,12 +236,58 @@ EOF
 
 # Not inside tmux: should warn before taking over, then attempt
 # attach-session (fails here for the environment reason above, not a
-# bug in the choice itself).
-notmux_output="$(SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-notmux </dev/null 2>&1)"
+# bug in the choice itself). Run with an explicit timeout, not just
+# captured — this is the exact invocation shape that hung for real
+# once preset_show_session() learned to relaunch the launcher on a
+# clean detach: chaining that relaunch with a bare `;` meant a failed
+# attach-session (no real terminal here, same as this test) still ran
+# straight into a brand new fzf session against the same broken stdin,
+# hanging instead of failing fast. && instead of ; fixed it — this
+# guards against that exact regression coming back, not just the
+# warning text.
+notmux_output=""
+notmux_timed_out_flag="$TEST_HOME/notmux-timed-out"
+rm -f "$notmux_timed_out_flag"
+
+SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-notmux </dev/null >"$TEST_HOME/notmux-output.txt" 2>&1 &
+notmux_pid=$!
+
+# The watcher records "still alive at 10s" (touches the flag file)
+# BEFORE killing anything, not after — checking for surviving children
+# post-kill doesn't work, since a killed parent's children are
+# reparented (to PID 1) the instant it dies, no longer matching
+# `pgrep -P $notmux_pid` at all by the time anything looks. Caught
+# live: an earlier version of this test checked for children after the
+# kill and reported PASS even with the bug deliberately reintroduced,
+# because the real hang (an orphaned fzf, reparented once its actual
+# parent — itself a live-relaunched instance of the launcher, not
+# $notmux_pid directly — got killed) was already invisible to a
+# parent-based check by the time it ran.
+(
+    sleep 10
+    if kill -0 "$notmux_pid" 2>/dev/null; then
+        touch "$notmux_timed_out_flag"
+        pkill -9 -P "$notmux_pid" 2>/dev/null
+        kill -9 "$notmux_pid" 2>/dev/null
+    fi
+) &
+watcher_pid=$!
+
+wait "$notmux_pid" 2>/dev/null
+kill "$watcher_pid" 2>/dev/null
+wait "$watcher_pid" 2>/dev/null
+
+notmux_timed_out=false
+[[ -f "$notmux_timed_out_flag" ]] && notmux_timed_out=true
+
+notmux_output="$(<"$TEST_HOME/notmux-output.txt")"
+
+[[ "$notmux_timed_out" == false ]] ||
+    fail "launching a preset outside tmux with no real terminal should fail fast, not hang"
 
 [[ "$notmux_output" == *"Not running inside tmux"* ]] ||
     fail "launching a preset outside tmux should warn before taking over the window, got: $notmux_output"
 
 tmux kill-session -t "$NOTMUX_SESSION" 2>/dev/null
 
-printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there, launching a preset outside tmux warns before taking over the window\n'
+printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there, launching a preset outside tmux warns before taking over the window and fails fast rather than hanging when there is no real terminal to relaunch into\n'
