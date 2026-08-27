@@ -177,6 +177,76 @@ else
 fi
 
 # ------------------------------------------------------------
+# 1c. A one-shot CLI's output must survive being run while the picker's
+#     own alternate-screen mode is still active — the real bug behind
+#     "fastfetch still quickly exits" even after the pause above
+#     landed. fzf's own `--height=100%` still opens a genuine
+#     alternate screen (confirmed live with a bare fzf under
+#     pipe-pane: `--no-clear` only skips its erase-on-exit, it doesn't
+#     avoid the alternate screen). A one-shot CLI that never touches
+#     screen modes itself just inherits that, and the *after* printf
+#     that exits alternate-screen mode — added for a different reason,
+#     recovering a TUI that crashed mid-alternate-screen — was
+#     switching straight back out of it once the command finished,
+#     taking output with it that had nowhere else to go. Confirmed
+#     live with a real tmux pane and pipe-pane capturing the raw byte
+#     stream: fastfetch's output was genuinely being written in full,
+#     just onto a buffer that exact printf then hid before there was
+#     any chance to see it — the press-any-key prompt above was
+#     working exactly as designed, but by the time it appeared the
+#     output was already gone.
+#
+# Reproduced here the same way: a real tmux pane, alternate-screen
+# mode turned on directly (standing in for the picker having done it)
+# before launch_in_current_terminal ever runs, then capture-pane
+# checked for the command's marker output once it's done — before any
+# key is sent, so this is checking the same instant the bug showed up
+# in, not after a redraw might have papered over it.
+# ------------------------------------------------------------
+
+if command -v tmux >/dev/null 2>&1; then
+    MARKER_FILE_4="$TEST_HOME/marker4"
+    cat > "$FAKE_LAUNCHER" <<EOF
+#!/bin/zsh
+printf 'RELAUNCHED\n' > "$MARKER_FILE_4"
+EOF
+    rm -f "$MARKER_FILE_4"
+
+    ALT_SCREEN_COMMAND="$TEST_HOME/alt-screen-command"
+    cat > "$ALT_SCREEN_COMMAND" <<'EOF'
+#!/bin/zsh
+printf 'ONE_SHOT_OUTPUT_MARKER\n'
+EOF
+    chmod +x "$ALT_SCREEN_COMMAND"
+
+    TMUX_SCRIPT_2="$TEST_HOME/tmux-script-2.zsh"
+    cat > "$TMUX_SCRIPT_2" <<EOF
+printf '\033[?1049h'
+FOOTER_CLICK_FILE="$TEST_HOME/footer-click-4"
+SCRIPT_PATH="$FAKE_LAUNCHER"
+source <(sed -n '/^launch_in_current_terminal() {/,/^}/p' "$LAUNCHER")
+launch_in_current_terminal "$ALT_SCREEN_COMMAND"
+EOF
+
+    TMUX_SESSION_2="brew-launcher-relaunch-test-altscreen-$$"
+    tmux kill-session -t "$TMUX_SESSION_2" 2>/dev/null
+
+    tmux new-session -d -s "$TMUX_SESSION_2" -x 80 -y 24 "zsh '$TMUX_SCRIPT_2'"
+    sleep 1.5
+
+    pane_content="$(tmux capture-pane -t "$TMUX_SESSION_2" -p -S -100)"
+    tmux send-keys -t "$TMUX_SESSION_2" x
+    sleep 1
+
+    tmux kill-session -t "$TMUX_SESSION_2" 2>/dev/null
+
+    [[ "$pane_content" == *"ONE_SHOT_OUTPUT_MARKER"* ]] ||
+        fail "a one-shot command's output should survive being run while the picker's alternate-screen mode is still active, not get switched away from before the press-any-key pause; got: $pane_content"
+else
+    printf 'SKIP: tmux not found, skipping the alternate-screen survival check\n' >&2
+fi
+
+# ------------------------------------------------------------
 # 2. launch_in_tmux() and launch_in_ghostty(): can't run these end to
 #    end without a real tmux session / Ghostty.app, so this asserts
 #    directly on the source text instead — both should still exec into
@@ -191,6 +261,8 @@ tmux_line="$(sed -n '/^launch_in_tmux() {/,/^}/p' "$LAUNCHER")"
     fail "launch_in_tmux should pass SCRIPT_PATH as the second quoted argument"
 [[ "$tmux_line" == *'read -k 1 -s'* ]] ||
     fail "launch_in_tmux should pause on a keypress before the relaunch, same as launch_in_current_terminal"
+[[ "$(grep -o '1049l' <<<"$tmux_line" | wc -l | tr -d ' ')" == "2" ]] ||
+    fail "launch_in_tmux should exit alternate-screen mode both before and after the command runs, not just after"
 
 ghostty_block="$(sed -n '/^launch_in_ghostty() {/,/^}/p' "$LAUNCHER")"
 [[ "$ghostty_block" == *'exec \"$2\"'* ]] ||
@@ -199,5 +271,7 @@ ghostty_block="$(sed -n '/^launch_in_ghostty() {/,/^}/p' "$LAUNCHER")"
     fail "launch_in_ghostty should pass SCRIPT_PATH through as launcherPath"
 [[ "$ghostty_block" == *'read -k 1 -s'* ]] ||
     fail "launch_in_ghostty should pause on a keypress before the relaunch, same as launch_in_current_terminal"
+[[ "$(grep -o '1049l' <<<"$ghostty_block" | wc -l | tr -d ' ')" == "2" ]] ||
+    fail "launch_in_ghostty should exit alternate-screen mode both before and after the command runs, not just after"
 
 printf 'PASS: quitting a launched tool relaunches the launcher (after a press-any-key pause) instead of dropping to a plain shell, in all three launch paths\n'

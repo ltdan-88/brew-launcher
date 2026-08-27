@@ -5,6 +5,45 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.37.0] — 2026-08-27
+
+### Fixed
+
+- **The 0.36.0 press-any-key pause didn't actually fix `fastfetch`.**
+  Reported live, right after that fix shipped: "fastfetch still
+  quickly exits. However now I see the prompt to hit any key to
+  return to the launcher." The pause itself was working — the output
+  was gone by the time it appeared. Root cause: fzf's own picker UI
+  runs inside the alternate screen too (confirmed live — `--height=100%`
+  still opens with a genuine `?1049h`; `--no-clear` only skips fzf's
+  own erase-on-exit, it doesn't mean staying off the alternate
+  screen). A one-shot CLI that never touches screen modes itself just
+  inherits whatever's already active and ends up drawing onto that
+  same alternate buffer — which the *after*-command printf (added
+  earlier to recover a TUI that crashed mid-alternate-screen) then
+  switched away from the instant the command finished, discarding
+  output that had nowhere else to go. Confirmed with a real tmux pane
+  and `pipe-pane` capturing the raw byte stream: fastfetch's output
+  was genuinely being written in full, just onto a buffer that exact
+  printf then hid.
+- Fixed by also exiting alternate-screen mode *before* the command
+  runs, not only after, in all three launch paths (current terminal,
+  tmux, Ghostty). A plain one-shot CLI now lands on the real,
+  persistent screen from the start; a TUI is still free to enter its
+  own alternate screen fresh when it starts, and the existing *after*
+  printf still recovers that if it crashes without exiting cleanly.
+  Only `launch_in_current_terminal` was actually exposed to this (it
+  reuses the picker's own pane) — `launch_in_tmux` and
+  `launch_in_ghostty` always open a brand new window/tab that never
+  inherited the picker's alternate screen in the first place, so the
+  same printf there is a no-op kept for consistency across all three.
+- `test/relaunch-fixtures.sh` now reproduces this directly: a real
+  tmux pane with alternate-screen mode turned on before
+  `launch_in_current_terminal` runs, checked for the command's output
+  surviving before any key is sent. Verified this test actually
+  catches the bug — reverted the *before* printf, confirmed it failed,
+  restored it, confirmed it passed again.
+
 ## [0.36.0] — 2026-08-27
 
 ### Fixed
