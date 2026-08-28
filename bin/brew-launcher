@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.45.0"
+VERSION="0.45.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -454,7 +454,9 @@ Views:
   category holds — it's the one action here you can't undo.
 
   Esc goes up one level at a time: the details pane (if open) -> a
-  filtered view -> the view picker -> All -> quit.
+  filtered view -> the view picker -> All -> a Quit/Cancel confirm
+  (Esc there means Cancel too, so a second stray Esc doesn't compound
+  the first).
 
 Categories:
   F7/⌥F toggles Favorites for the selected entry, instantly. F8/⌥C is
@@ -3409,7 +3411,8 @@ pick_help() {
     rows+=("Good to know")
     rows+=("  A just-installed tool can take up to 60s to appear;")
     rows+=("  F5 shows it immediately")
-    rows+=("  Esc goes back one level at a time rather than quitting")
+    rows+=("  Esc goes back one level at a time rather than quitting —")
+    rows+=("  on All, with nowhere further back to go, it asks first")
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -5371,6 +5374,51 @@ confirm_relaunch() {
 }
 
 # ------------------------------------------------------------
+# Confirm before Esc actually quits the launcher (from "All", with no
+# pinned details pane in the way — see the main loop's own Esc
+# handler for exactly when this is reached).
+#
+# Raised live: "I often accidentally exit the brew-launcher with ESC.
+# Can you make a prompt similar to after when you quit a TUI?" Esc is
+# the single most-pressed key for "go back one level" everywhere else
+# in the app (closing the details pane, backing out of a category, out
+# of Actions/Settings...), so on "All" — the one screen with nowhere
+# further back to go — it's an easy habitual overshoot. Cancel is
+# listed first (the safe, do-nothing default) and Esc here also means
+# Cancel, same convention as confirm_delete_category()/
+# confirm_relaunch() above — a second stray Esc lands you back on the
+# list, not out of the app.
+# ------------------------------------------------------------
+
+confirm_quit() {
+
+    local answer
+
+    answer="$(
+        printf '%s\n' "Cancel" "Quit brew-launcher" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Quit?')" \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            `# "Enter chooses" is deliberately not bracketed/clickable:` \
+            `# Enter acts on the highlighted row, so a clickable` \
+            `# [Confirm] would quit whenever Cancel was highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == "Quit brew-launcher" ]]
+}
+
+# ------------------------------------------------------------
 # Toggle an entry's Favorites membership
 #
 # Favorites is an ordinary category file (see load_category_names),
@@ -5700,7 +5748,7 @@ pick_multiple_entries() {
 bulk_hide() {
 
     local -a selected=()
-    local line command
+    local line command raw_selection
     local border_label='Hide multiple' action_verb='Hide' unhiding=false
 
     if [[ "$CURRENT_VIEW" == "Hidden" ]]; then
@@ -5709,7 +5757,15 @@ bulk_hide() {
         unhiding=true
     fi
 
-    selected=("${(@f)$(pick_multiple_entries "$border_label" "$action_verb")}")
+    # Esc gives an empty string here — guarded before splitting, since
+    # "${(@f)$(...)}" on an empty string yields a one-element array
+    # (one empty string), not a zero-element one, in zsh. Skipping this
+    # check let bulk_categorize() below fall through to its
+    # pick_category_name() prompt even after Esc; raised live as
+    # "when you cancel/exit bulk categorize, it opens the 'new or
+    # existing' prompt, instead of cancelling/exiting."
+    raw_selection="$(pick_multiple_entries "$border_label" "$action_verb")"
+    [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
 
     (( ${#selected[@]} == 0 )) && return 1
 
@@ -5744,7 +5800,7 @@ bulk_hide() {
 bulk_favorite() {
 
     local -a selected=()
-    local line command
+    local line command raw_selection
     local border_label='Favorite multiple' action_verb='Favorite' unfavoriting=false
 
     if [[ "$CURRENT_VIEW" == "Favorites" ]]; then
@@ -5753,7 +5809,9 @@ bulk_favorite() {
         unfavoriting=true
     fi
 
-    selected=("${(@f)$(pick_multiple_entries "$border_label" "$action_verb")}")
+    # See bulk_hide()'s own comment on why this is split in two steps.
+    raw_selection="$(pick_multiple_entries "$border_label" "$action_verb")"
+    [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
 
     (( ${#selected[@]} == 0 )) && return 1
 
@@ -5794,9 +5852,11 @@ bulk_favorite() {
 bulk_categorize() {
 
     local -a selected=()
-    local line command category_name
+    local line command category_name raw_selection
 
-    selected=("${(@f)$(pick_multiple_entries 'Categorize multiple' 'Categorize')}")
+    # See bulk_hide()'s own comment on why this is split in two steps.
+    raw_selection="$(pick_multiple_entries 'Categorize multiple' 'Categorize')"
+    [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
 
     (( ${#selected[@]} == 0 )) && return 1
 
@@ -6895,7 +6955,12 @@ while true; do
             continue
         fi
 
-        break
+        if confirm_quit; then
+            break
+        fi
+
+        restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+        continue
     fi
 
     # --------------------------------------------------------
