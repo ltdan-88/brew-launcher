@@ -434,7 +434,7 @@ reference below, from inside the launcher.
 | **F2** / **⌥V** | Switch view (All · Favorites · categories · Hidden) | footer |
 | **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
-| **Esc** | Go back one level, or quit | footer |
+| **Esc** | Go back one level; on `All`, asks Quit or Cancel first | footer |
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker; its own details pane is always on, previewing what's in the highlighted preset | footer |

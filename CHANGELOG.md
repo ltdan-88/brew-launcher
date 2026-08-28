@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.1] — 2026-08-28
+
+### Fixed
+
+- **"When you cancel/exit bulk categorize, it opens the 'new or
+  existing' prompt, instead of cancelling/exiting."** Root cause: a
+  genuine zsh quirk — `selected=("${(@f)$(cmd)}")` where `cmd` prints
+  nothing (Esc pressed) produces a one-element array holding a single
+  empty string, not a zero-element one, so the "was anything actually
+  selected?" check was never true after Esc. bulk_hide()/
+  bulk_favorite() happened to silently no-op anyway (their per-line
+  loop skips the one empty line), but bulk_categorize() fell all the
+  way through to prompting for a category name regardless. Fixed by
+  capturing the raw fzf output first and only splitting it into an
+  array when it's actually non-empty.
+
+### Added
+
+- **A Quit/Cancel confirm before Esc actually exits.** "I often
+  accidentally exit the brew-launcher with ESC. Can you make a prompt
+  similar to after when you quit a TUI?" Esc on `All` (the one screen
+  with nowhere further back to go) now opens a confirm — Cancel listed
+  first, and Esc there means Cancel too, so a second stray Esc lands
+  back on the list rather than compounding the first one.
+
 ## [0.45.0] — 2026-08-28
 
 ### Added

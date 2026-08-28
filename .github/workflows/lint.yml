@@ -173,6 +173,17 @@ name: CI
 #       pick_multiple_entries()/bulk_hide()/bulk_favorite()/
 #       bulk_categorize() themselves call fzf, so they're checked as
 #       source text, same reasoning as rename-fixtures.sh.
+#
+#   21. bulk-cancel-and-quit-confirm-fixtures — two live reports fixed
+#       together: bulk_categorize() falling through to its category
+#       prompt after Esc instead of cancelling (a zsh quirk —
+#       `${(@f)$(cmd)}` on empty output is a one-element array, not a
+#       zero-element one), and a Quit/Cancel confirm before Esc on
+#       "All" actually exits (previously immediate, easy to hit by
+#       accident). bulk_hide()/bulk_favorite()/bulk_categorize() are
+#       driven for real by stubbing pick_multiple_entries(), same
+#       technique relaunch-fixtures.sh uses; confirm_quit() itself
+#       calls fzf, checked as source text.
 
 on:
   push:
@@ -459,6 +470,22 @@ jobs:
       # as source text, same reasoning as rename-fixtures.sh.
       - name: Bulk Hide/Favorite/Categorize test
         run: zsh test/bulk-actions-fixtures.sh
+
+  bulk-cancel-and-quit-confirm-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — bulk_hide()/bulk_favorite()/
+      # bulk_categorize() are driven for real by stubbing
+      # pick_multiple_entries() (their one fzf call) to simulate Esc
+      # (prints nothing) or a single accepted row, same technique
+      # relaunch-fixtures.sh uses to drive a function past its one
+      # fzf/exec call. confirm_quit() itself calls fzf, so it's checked
+      # as source text, same reasoning as rename-fixtures.sh.
+      - name: Bulk-action Esc / quit-confirm test
+        run: zsh test/bulk-cancel-and-quit-confirm-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
