@@ -27,6 +27,19 @@
 # pick_multiple_entries()/bulk_hide()/bulk_favorite()/bulk_categorize()
 # themselves all call fzf, so they're checked as source-text
 # assertions instead, same reasoning as rename-fixtures.sh.
+#
+# Extended for a second live report: "in the view picker, when you
+# select hide/favorite/categorize multiple, it shows 0 entries...
+# I would prefer if menu entries like hide/favorite/categorize
+# multiple only show up when usable. Also the create preset should
+# only show what is actually listed in the current menu... this means
+# that create preset should also disappear from view picker." All four
+# rows (the three bulk ones plus Create Preset) moved inside the
+# has_entry-gated block — has_entry is false only when Actions is
+# opened from the view picker (F2), the one place $entries doesn't
+# mean a real, currently-displayed tool list. Create Preset itself
+# also stopped forcing CURRENT_VIEW to "All" — it now builds from
+# whatever's actually on screen, same as the bulk actions.
 
 set -u
 
@@ -190,10 +203,15 @@ bulk_favorite_block="$(sed -n '/^bulk_favorite() {/,/^}/p' "$LAUNCHER")"
     fail "bulk_favorite should remove via toggle_favorite while viewing Favorites (every marked entry is already a member there)"
 
 # ------------------------------------------------------------
-# 10. Wiring: all three bulk rows are offered regardless of has_entry
-#     (same as Create Preset — none of them act on a single highlighted
-#     row), grouped right under their single-entry counterpart, and
-#     open_more_menu dispatches each to the right function.
+# 10. Wiring: all three bulk rows (plus Create Preset) are gated on
+#     has_entry, grouped right under their single-entry counterpart,
+#     and open_more_menu dispatches each to the right function. Raised
+#     live: "in the view picker, when you select hide/favorite/
+#     categorize multiple, it shows 0 entries... I would prefer if
+#     menu entries like hide/favorite/categorize multiple only show up
+#     when usable." Every has_entry=false call site is the view picker
+#     (F2), which has no $entries of its own — see
+#     pick_more_action()'s own comment.
 # ------------------------------------------------------------
 
 more_action_block="$(sed -n '/^pick_more_action() {/,/^}/p' "$LAUNCHER")"
@@ -206,11 +224,30 @@ for row_id in bulk_hide bulk_favorite bulk_categorize; do
         fail "open_more_menu should dispatch $row_id"
 done
 
-# Not gated on has_entry — checked by confirming the row-producing
-# lines sit outside the "if has_entry" block guarding f6/f7/f8, same
-# positional-check idiom actions-menu-fixtures.sh already uses.
+# Gated on has_entry, same as f6/f7/f8 — checked by confirming the
+# row-producing lines sit INSIDE the "if has_entry" block, same
+# positional-check idiom actions-menu-fixtures.sh already uses. Raised
+# live: "in the view picker, when you select hide/favorite/categorize
+# multiple, it shows 0 entries... I would prefer if menu entries like
+# hide/favorite/categorize multiple only show up when usable." Every
+# has_entry=false call site is the view picker (F2), which has no
+# $entries of its own to act on — see pick_more_action()'s own comment.
 has_entry_block="$(printf '%s\n' "$more_action_block" | sed -n '/if \[\[ "\$has_entry" == true \]\]; then/,/^    fi$/p')"
-[[ "$has_entry_block" != *'bulk_hide'* ]] ||
-    fail "bulk_hide's row should not be inside the has_entry-gated block — it doesn't need a highlighted entry"
+for row_id in bulk_hide bulk_favorite bulk_categorize create_preset; do
+    [[ "$has_entry_block" == *"rows+=(\"$row_id\""* ]] ||
+        fail "$row_id's row should be inside the has_entry-gated block — it needs \$entries to mean something, which the view picker doesn't have"
+done
 
-printf 'PASS: add_to_favorites()/add_to_category() ensure membership without ever removing (including the bundled-default/excluded edge cases), pick_category_name() is shared between toggle_category() and bulk_categorize() for a single per-batch prompt, pick_multiple_entries() is a plain fzf --multi picker, and all three bulk actions are wired into Actions regardless of has_entry\n'
+# ------------------------------------------------------------
+# 11. create_preset() no longer forces CURRENT_VIEW to "All" — it
+#     builds from whatever's already on screen, same as the bulk
+#     actions. Checked as source text: no assignment to CURRENT_VIEW
+#     anywhere in the function body at all anymore.
+# ------------------------------------------------------------
+
+create_preset_block="$(sed -n '/^create_preset() {/,/^}/p' "$LAUNCHER")"
+[[ -n "$create_preset_block" ]] || fail "create_preset() not found"
+[[ "$create_preset_block" != *'CURRENT_VIEW='* ]] ||
+    fail "create_preset should no longer assign CURRENT_VIEW at all — it should build from whatever's already on screen, not force a switch to All"
+
+printf 'PASS: add_to_favorites()/add_to_category() ensure membership without ever removing (including the bundled-default/excluded edge cases), pick_category_name() is shared between toggle_category() and bulk_categorize() for a single per-batch prompt, pick_multiple_entries() is a plain fzf --multi picker, all three bulk actions (plus Create Preset) are gated on has_entry — hidden from the view picker, which has no real entries to act on — and Create Preset builds from whatever view is actually on screen instead of forcing All\n'

@@ -24,7 +24,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.45.1"
+VERSION="0.45.2"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -412,14 +412,15 @@ Keyboard shortcuts:
   entry is already a member, so it removes them instantly instead,
   same as F8's own instant per-entry toggle in that same context.
 
-  In the Actions menu only — Create Preset, Create a macOS or Linux
-  shortcut, Settings (see below), Backup. All but Create Shortcut need
-  no highlighted entry, so they're also offered when Actions is opened
-  from the view picker — same as the three Multiple actions above
-  (Hide/Favorite/Categorize/Create Shortcut are not offered there,
-  since those act on a specific entry — and the view picker has no
-  single row to name anyway). Esc from any of them returns to the
-  Actions menu, not out to the main list.
+  In the Actions menu only — Create Preset (from whatever view is
+  currently on screen, not always the full list), Create a macOS or
+  Linux shortcut, Settings (see below), Backup. Hide/Favorite/
+  Categorize, their three Multiple counterparts, Create Preset, and
+  Create Shortcut are all NOT offered when Actions is opened from the
+  view picker (F2) — each of them needs an actual list of tools to act
+  on, which a list of categories isn't. Only Settings and Backup show
+  up there. Esc from any of them returns to the Actions menu, not out
+  to the main list.
 
   Actions → Settings holds everything that's a standing preference
   rather than a one-off action: switch color theme, the two toggles
@@ -3456,60 +3457,57 @@ pick_more_action() {
     local -a rows=()
     local result chosen clicked_word more_label='Actions'
 
+    # has_entry is false only when Actions is opened from the view
+    # picker (F2) — see this param's own comment. Everything in this
+    # block needs $entries to actually mean something (a real,
+    # currently-displayed list of tools), which the view picker has no
+    # equivalent of — it lists categories, not tools. Raised live: "in
+    # the view picker, when you select hide/favorite/categorize
+    # multiple, it shows 0 entries. This seems inconsistent. I would
+    # prefer if menu entries like hide/favorite/categorize multiple
+    # only show up when usable." Create Preset moved in here too, for
+    # the same reason — see its own comment for why it no longer forces
+    # CURRENT_VIEW to "All" regardless of context.
     if [[ "$has_entry" == true ]]; then
         rows+=("f6"$'\t'"$(printf '%-20s%s' "$hide_label" 'F6 / ⌥H')")
         rows+=("f7"$'\t'"$(printf '%-20s%s' 'Favorite' 'F7 / ⌥F')")
         rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
-    fi
 
-    # Bulk counterparts of the three above — raised live: "I like the
-    # behavior of how we create presets (adding TUIs with tab). Would
-    # it be feasible to implement this behavior for Hide, Favorite, and
-    # Categorize as well?" Each opens its own mark-then-act picker (see
-    # pick_multiple_entries()) rather than acting on the highlighted
-    # row, so — like Create Preset — none of these need has_entry and
-    # are offered from the view picker too. Grouped right under their
-    # single-entry counterpart rather than off with Create Preset/
-    # Create Shortcut below, since they're the same action, just
-    # batched. Relabel to their inverse while viewing Hidden/Favorites,
-    # same idea as F6's own hide_label — every entry on screen there is
-    # already hidden/favorited, so acting on a marked batch removes
-    # rather than adds. Categorize doesn't relabel: F8's own single-key
-    # row doesn't either, even though it's instant-remove in the exact
-    # same situation.
-    local bulk_hide_label='Hide Multiple'
-    [[ "$CURRENT_VIEW" == "Hidden" ]] && bulk_hide_label='Unhide Multiple'
-    rows+=("bulk_hide"$'\t'"$(printf '%-20s%s' "$bulk_hide_label" '')")
+        # Bulk counterparts of the three above — raised live: "I like
+        # the behavior of how we create presets (adding TUIs with
+        # tab). Would it be feasible to implement this behavior for
+        # Hide, Favorite, and Categorize as well?" Each opens its own
+        # mark-then-act picker (see pick_multiple_entries()) over
+        # $entries rather than acting on the highlighted row directly.
+        # Grouped right under their single-entry counterpart rather
+        # than off with Create Preset/Create Shortcut below, since
+        # they're the same action, just batched. Relabel to their
+        # inverse while viewing Hidden/Favorites, same idea as F6's
+        # own hide_label — every entry on screen there is already
+        # hidden/favorited, so acting on a marked batch removes rather
+        # than adds. Categorize doesn't relabel: F8's own single-key
+        # row doesn't either, even though it's instant-remove in the
+        # exact same situation.
+        local bulk_hide_label='Hide Multiple'
+        [[ "$CURRENT_VIEW" == "Hidden" ]] && bulk_hide_label='Unhide Multiple'
+        rows+=("bulk_hide"$'\t'"$(printf '%-20s%s' "$bulk_hide_label" '')")
 
-    local bulk_favorite_label='Favorite Multiple'
-    [[ "$CURRENT_VIEW" == "Favorites" ]] && bulk_favorite_label='Unfavorite Multiple'
-    rows+=("bulk_favorite"$'\t'"$(printf '%-20s%s' "$bulk_favorite_label" '')")
+        local bulk_favorite_label='Favorite Multiple'
+        [[ "$CURRENT_VIEW" == "Favorites" ]] && bulk_favorite_label='Unfavorite Multiple'
+        rows+=("bulk_favorite"$'\t'"$(printf '%-20s%s' "$bulk_favorite_label" '')")
 
-    rows+=("bulk_categorize"$'\t'"$(printf '%-20s%s' 'Categorize Multiple' '')")
+        rows+=("bulk_categorize"$'\t'"$(printf '%-20s%s' 'Categorize Multiple' '')")
 
-    # Launch Preset used to have a row here too, but F9 already runs it
-    # directly and is always in the footer on every screen this menu is
-    # reachable from — a second, Actions-only path to the exact same
-    # thing was pure redundancy. Raised live: "I think that launch
-    # preset should be removed from this menu, since it is redundant
-    # having F9 always shown." Removed outright, not just deprioritized.
-    local create_preset_hint=''
-    [[ "$TMUX_AVAILABLE" == false ]] && create_preset_hint='needs tmux'
+        local create_preset_hint=''
+        [[ "$TMUX_AVAILABLE" == false ]] && create_preset_hint='needs tmux'
+        rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
 
-    # Create Preset/Create Shortcut moved up here, right after
-    # Categorize — raised live: "I would move Create Preset and Create
-    # Shortcut up under Categorize." Both build something new (a
-    # preset, a shortcut file) rather than adjust a setting, which puts
-    # them closer in spirit to Hide/Favorite/Categorize above than to
-    # the settings cluster below. Create Preset doesn't need a
-    # highlighted row (it opens its own picker), so it's offered
-    # regardless of has_entry; Create Shortcut does (a shortcut is made
-    # *for* the highlighted row) and is macOS/Linux-only, so it isn't
-    # offered elsewhere rather than being offered and apologising.
-    rows+=("create_preset"$'\t'"$(printf '%-20s%s' 'Create Preset' "$create_preset_hint")")
-    if [[ "$has_entry" == true ]] &&
-       [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
-        rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
+        # Create Shortcut is entry-scoped too (a shortcut is made *for*
+        # the highlighted row) and macOS/Linux-only, so it isn't
+        # offered elsewhere rather than being offered and apologising.
+        if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
+            rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
+        fi
     fi
 
     # Everything settings-related now lives one level down, in its own
@@ -5904,7 +5902,6 @@ create_preset() {
         return 1
     fi
 
-    local saved_view="$CURRENT_VIEW"
     local -a selected_commands=()
     local fzf_result line
     local preset_name preset_file existing_count overwrite_answer
@@ -5912,23 +5909,29 @@ create_preset() {
     local -a result_lines=()
     local pick_valid=false
 
-    # 1. Pick tools from the full "All" list, regardless of whatever
-    #    view was on screen when this was opened — a preset should be
-    #    able to draw from the whole toolset. Hidden entries stay
-    #    excluded, same precedent already set for categorizing (a
-    #    narrow niche not worth the extra plumbing).
+    # 1. Pick tools from whatever's currently on screen ($entries,
+    #    i.e. whatever CURRENT_VIEW already is) — raised live: "create
+    #    preset should only show what is actually listed in the
+    #    current menu (e.g. all, categories, favorites etc.)." Used to
+    #    always force CURRENT_VIEW to "All" regardless of context; that
+    #    made it the one Actions row whose own picker didn't match what
+    #    you were actually looking at, and — since Actions has no
+    #    concept of "current entries" when opened from the view picker
+    #    (F2) — meant Create Preset was offered there too, over
+    #    whatever entries happened to be left over from before. Now
+    #    consistent with the bulk_* actions below, and this row is
+    #    gated on has_entry (see pick_more_action()) for the same
+    #    reason those are: nothing to build from means it shouldn't be
+    #    offered at all.
     #
     #    Not fzf's own --multi: that has no concept of order, only
     #    "is this marked", so the number a preset's tools launch in
-    #    would always just be the All list's own (alphabetical-ish)
+    #    would always just be the current view's own (alphabetical-ish)
     #    order regardless of what order you pressed Tab in. Instead,
     #    --internal-preset-tab keeps a small ordered list on the side
     #    every Tab press updates, and shows it back as a number badge
     #    in place of fzf's native marker — see that handler above for
     #    the mechanics.
-    CURRENT_VIEW="All"
-    build_entries
-
     export PRESET_ORDER_BASE_FILE="$CACHE_DIR/preset-order-base.$$"
     export PRESET_ORDER_LIST_FILE="$CACHE_DIR/preset-order-list.$$"
     export PRESET_ORDER_STATE_FILE="$CACHE_DIR/preset-order-state.$$"
@@ -5972,8 +5975,6 @@ create_preset() {
 
         if [[ -z "$fzf_result" ]]; then
             rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
-            CURRENT_VIEW="$saved_view"
-            build_entries
             return 1
         fi
 
@@ -5981,8 +5982,6 @@ create_preset() {
 
         if [[ "${result_lines[1]}" != "enter" ]]; then
             rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
-            CURRENT_VIEW="$saved_view"
-            build_entries
             return 1
         fi
 
@@ -6011,8 +6010,6 @@ create_preset() {
     done
 
     rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
-    CURRENT_VIEW="$saved_view"
-    build_entries
 
     # 2. Name it — type a new name, or pick an existing preset to
     #    replace. Same type-or-pick convention toggle_category() above

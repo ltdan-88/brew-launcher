@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.45.2] — 2026-08-28
+
+### Fixed
+
+- **"In the view picker, when you select hide/favorite/categorize
+  multiple, it shows 0 entries. This means this feature is basically
+  unusable in this menu."** Hide Multiple/Favorite Multiple/
+  Categorize Multiple/Create Preset all pick tools from `$entries` —
+  whatever's currently on screen — but the view picker (F2) has no
+  such list of its own (it lists categories, not tools), so those rows
+  had nothing real to draw from there. "I would prefer if menu entries
+  like hide/favorite/categorize multiple only show up when usable."
+  All four rows now only appear in Actions when it's opened with an
+  actual highlighted entry (i.e. not from the view picker) — Settings
+  and Backup are the only rows left there, since neither needs one.
+
+### Changed
+
+- **Create Preset now builds from whatever view is actually on
+  screen**, not always the full `All` list. "The create preset should
+  only show what is actually listed in the current menu (e.g. all,
+  categories, favorites etc.)." Browsing a category and pressing
+  Create Preset now offers only that category's own tools, matching
+  how the bulk actions already worked.
+
 ## [0.45.1] — 2026-08-28
 
 ### Fixed

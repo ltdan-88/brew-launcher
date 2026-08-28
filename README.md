@@ -141,6 +141,17 @@ already viewing a real category, in which case every marked entry is
 necessarily already a member, so it removes them instantly instead, same as
 **F8**'s own instant per-entry toggle in that same context.
 
+All three, plus Create Preset, only appear when there's an actual list of
+tools to work from — none of them are offered in Actions when it's opened
+from the view picker (**F2**) itself, since a list of categories isn't a
+list of tools to hide/favorite/categorize/bundle into a preset. Raised
+live: "in the view picker, when you select hide/favorite/categorize
+multiple, it shows 0 entries... I would prefer if menu entries like
+hide/favorite/categorize multiple only show up when usable." Create Preset
+used to force the full `All` list regardless of context (masking this same
+inconsistency for itself); it now draws from whatever's actually on screen,
+same as the three above.
+
 Raised live: "it seems Actions menu mixes up actual Actions and System
 Settings, how do we solve this (e.g. create a separate Settings menu)?" —
 Actions used to also hold every standing preference (Theme, Default
@@ -167,10 +178,12 @@ Settings once it's done, same as Create Preset returns to Actions.
 
 **F4**, **F5**, and **F9** also work from inside the view picker (**F2**)
 itself, not just the main list — no row needs to be highlighted for either
-of the first two, so Actions opens there with just the entry-independent
-actions (no Hide/Favorite/Categorize/Create Shortcut) and its border label
-just says "Actions," with no row to name. Esc backs out to the view picker,
-not all the way to `All`.
+of the first two, so Actions opens there with just **Settings** and
+**Backup** (nothing else needs a highlighted row, but Hide/Favorite/
+Categorize/their bulk versions/Create Preset/Create Shortcut all need an
+actual list of tools to work from, which the view picker doesn't have) and
+its border label just says "Actions," with no row to name. Esc backs out to
+the view picker, not all the way to `All`.
 
 ### One place to switch views
 
@@ -332,12 +345,16 @@ over it before you get the chance.
 A preset is a named group of tools that all open together, one per tmux pane —
 your morning setup in one shot instead of launching each tool by hand.
 
-**F4 → Create Preset** picks the tools: **Tab** marks one and shows a number
-badge for the order it'll launch in (top to bottom, left to right in the
-tmux layout), Tab again on a marked tool unmarks it and renumbers the rest
-down, and **Enter** saves them in that exact order — not the alphabetical
-order they're listed in. Enter with nothing marked shows an error rather
-than quietly saving a one-tool "preset." **F9** lists your presets and
+**F4 → Create Preset** picks the tools, from whatever view is currently on
+screen (`All`, a category, Favorites — the same list you were already
+looking at, not always the full toolset): **Tab** marks one and shows a
+number badge for the order it'll launch in (top to bottom, left to right in
+the tmux layout), Tab again on a marked tool unmarks it and renumbers the
+rest down, and **Enter** saves them in that exact order — not the
+alphabetical order they're listed in. Enter with nothing marked shows an
+error rather than quietly saving a one-tool "preset." Only offered when
+there's an actual list to build from, so it isn't in Actions when opened
+from the view picker (**F2**) itself. **F9** lists your presets and
 launches the one you pick — in its own window when there's somewhere to put
 one, otherwise reattaching to it if it's already running rather than opening
 a second copy (see [Configuration](#configuration) for exactly which). Its
