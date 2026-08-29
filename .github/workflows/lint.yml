@@ -184,6 +184,18 @@ name: CI
 #       driven for real by stubbing pick_multiple_entries(), same
 #       technique relaunch-fixtures.sh uses; confirm_quit() itself
 #       calls fzf, checked as source text.
+#
+#   22. diagnose-fixtures — --diagnose (Requirements/config/cache
+#       health check, run as its own process): exits 0 with only
+#       [warn] lines against a totally fresh install, reports the real
+#       cache format version/entry count/category+preset counts
+#       against a populated one, treats a stale cache format as a
+#       [warn] rather than a [FAIL], and — the one behavior a real-
+#       machine smoke test can't exercise, since the runner always has
+#       every dependency — correctly reports [FAIL] plus a nonzero
+#       exit for a genuinely missing required dependency, simulated
+#       via a restricted PATH rather than touching the real
+#       environment.
 
 on:
   push:
@@ -486,6 +498,18 @@ jobs:
       # as source text, same reasoning as rename-fixtures.sh.
       - name: Bulk-action Esc / quit-confirm test
         run: zsh test/bulk-cancel-and-quit-confirm-fixtures.sh
+
+  diagnose-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: --diagnose test
+        run: zsh test/diagnose-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

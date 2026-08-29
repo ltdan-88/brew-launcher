@@ -12,6 +12,7 @@
 #   brew-launcher --refresh
 #   brew-launcher --list
 #   brew-launcher --preset <name>
+#   brew-launcher --diagnose
 #   brew-launcher --version
 #   brew-launcher --help
 # ============================================================
@@ -24,7 +25,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.45.2"
+VERSION="0.46.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -215,6 +216,87 @@ PREVIEW_PRESET_MARKER="@@PRESETS@@"
 STATE_TTL=60
 
 # ------------------------------------------------------------
+# The standard env-var trio every other SSH-aware tool checks — good
+# enough to tell "remote text session" from "local GUI session"
+# without a heavier dependency. Shared by preset_show_session(),
+# the "auto" terminal-backend detection, and --diagnose, all further
+# down, so all three stay in agreement about what counts as SSH
+# rather than drifting apart. Defined up here (rather than next to its
+# first use) specifically so --diagnose can call it: zsh doesn't
+# hoist function definitions, so anything called from the early
+# --diagnose dispatch below must already be defined by this point —
+# see the F5/pick_view() startup crash in the roadmap history for why
+# this ordering constraint is taken seriously here.
+# ------------------------------------------------------------
+
+is_ssh_session() {
+    [[ -n "${SSH_TTY:-}${SSH_CONNECTION:-}${SSH_CLIENT:-}" ]]
+}
+
+# A plain function (rather than inlined at its call sites) specifically
+# so it can be sourced and tested directly with real env vars, the same
+# way test/*.sh already does for other pure decision logic in this
+# file — this exact choice has now caused two live-reported hangs
+# (Ghostty reached for over SSH, no display to put a window in), so it
+# earns a real regression test rather than only living inline.
+#
+# SSH is checked first, ahead of Ghostty — a Mac reachable over SSH
+# still has Ghostty.app sitting in /Applications, so that check alone
+# can't tell "GUI available" from "GUI unreachable from here."
+#
+# Picking "tmux" for the SSH+already-in-tmux case is *not* the thing
+# the comment on the real tmux-selection check (further down) warns
+# against — that's about never choosing tmux just because it happens
+# to be installed, an incidental machine fact. $TMUX being set means
+# the opposite: the user already, deliberately, ran `tmux` themselves
+# before this launcher. Detecting a session someone is already sitting
+# in isn't starting one on their behalf, and it's a strictly better
+# default than a GUI window it can't actually open — the "reattach"
+# fallback presets already rely on, now the default over SSH for
+# single tools too.
+resolve_auto_terminal() {
+
+    if is_ssh_session; then
+        if [[ -n "$TMUX" ]]; then
+            printf 'tmux'
+        else
+            printf 'current'
+        fi
+    elif [[ "$(uname -s)" == "Darwin" ]] &&
+       command -v osascript >/dev/null 2>&1 &&
+       [[ -d "/Applications/Ghostty.app" ]]; then
+        printf 'ghostty'
+    else
+        printf 'current'
+    fi
+}
+
+# ------------------------------------------------------------
+# Portable file mtime, as a Unix timestamp.
+#
+# `stat -f %m` and `stat -c %Y` were tried in one line with `||`
+# between them (BSD/macOS stat, then GNU/Linux stat), on the
+# assumption that whichever flag the platform doesn't support would
+# simply fail and fall through. That assumption was wrong: GNU stat's
+# `-f` is a real, different flag ("filesystem status" instead of
+# "format string"), so it doesn't error on Linux — it silently prints
+# something else, which then reached an `(( ))` arithmetic context as
+# non-numeric garbage and crashed with "bad math expression". Caught
+# by the first real CI run on a Linux runner. Branching on `uname -s`
+# explicitly, matching how the rest of the script already tells macOS
+# and Linux apart, is correct where "try both and hope one errors"
+# wasn't.
+# ------------------------------------------------------------
+
+file_mtime() {
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        stat -f %m "$1" 2>/dev/null
+    else
+        stat -c %Y "$1" 2>/dev/null
+    fi
+}
+
+# ------------------------------------------------------------
 # Help / version
 # ------------------------------------------------------------
 
@@ -234,6 +316,7 @@ Usage:
   brew-launcher --refresh    Rebuild the application cache
   brew-launcher --list       Print entries as tab-separated plain text
   brew-launcher --preset X   Launch preset X's commands together in tmux
+  brew-launcher --diagnose   Check dependencies, config and cache health
   brew-launcher --version    Show version
   brew-launcher --help       Show this help
 
@@ -529,6 +612,158 @@ Behavior:
     ready, instead of the picker painting over it immediately.
 EOF
     exit 0
+fi
+
+# ------------------------------------------------------------
+# --diagnose
+#
+# Deliberately placed here, alongside --help/--version, rather than
+# down with --refresh/--list/--preset below: those all go through the
+# hard "brew/fzf/python3 required" exit further down, but a diagnostic
+# command's whole purpose is to still run and explain *what's* missing
+# when one of those isn't installed. It also needs to run before that
+# block for the same reason --help does — it shouldn't require a
+# working Homebrew/fzf install just to report that one is missing.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--diagnose" ]]; then
+
+    diagnose_issues=0
+
+    diagnose_ok()   { printf '  [ok]   %s\n' "$1"; }
+    diagnose_warn() { printf '  [warn] %s\n' "$1"; }
+    diagnose_fail() { printf '  [FAIL] %s\n' "$1"; diagnose_issues=$((diagnose_issues + 1)); }
+
+    echo "brew-launcher $VERSION — diagnostics"
+
+    echo
+    echo "System"
+    diagnose_ok "$(uname -s) $(uname -r)"
+    diagnose_ok "zsh $ZSH_VERSION"
+
+    echo
+    echo "Required"
+    for dependency in brew fzf python3; do
+        if command -v "$dependency" >/dev/null 2>&1; then
+            diagnose_ok "$dependency — $(command -v "$dependency")"
+        else
+            diagnose_fail "$dependency — not found (brew-launcher cannot start without this)"
+        fi
+    done
+
+    echo
+    echo "Optional"
+    if command -v tmux >/dev/null 2>&1; then
+        diagnose_ok "tmux — $(command -v tmux) (tmux terminal backend and Presets available)"
+    else
+        diagnose_warn "tmux — not found ('brew install tmux' enables the tmux terminal backend and Presets)"
+    fi
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        if [[ -d "/Applications/Ghostty.app" ]]; then
+            diagnose_ok "Ghostty.app — found"
+        else
+            diagnose_warn "Ghostty.app — not found ('auto' terminal backend falls back to 'current')"
+        fi
+        if command -v osascript >/dev/null 2>&1; then
+            diagnose_ok "osascript — $(command -v osascript)"
+        else
+            diagnose_warn "osascript — not found (Ghostty terminal backend unavailable)"
+        fi
+    fi
+
+    echo
+    echo "Terminal backend"
+    if is_ssh_session; then
+        diagnose_ok "SSH session detected"
+    else
+        diagnose_ok "local session (not over SSH)"
+    fi
+    [[ -n "$TMUX" ]] && diagnose_ok "already inside a tmux session"
+
+    diagnose_terminal="${BREW_LAUNCHER_TERMINAL:-${CONFIG_TERMINAL:-auto}}"
+    case "$diagnose_terminal" in
+        auto|current|ghostty|tmux) ;;
+        *) diagnose_fail "configured terminal '$diagnose_terminal' is not one of auto/current/ghostty/tmux" ;;
+    esac
+    if [[ "$diagnose_terminal" == "auto" ]]; then
+        diagnose_ok "resolves to: $(resolve_auto_terminal) (via auto)"
+    else
+        diagnose_ok "resolves to: $diagnose_terminal"
+    fi
+
+    echo
+    echo "Config — $CONFIG_DIR"
+    if [[ ! -d "$CONFIG_DIR" ]]; then
+        diagnose_warn "not created yet (created on first use)"
+    elif [[ ! -w "$CONFIG_DIR" ]]; then
+        diagnose_fail "not writable"
+    else
+        diagnose_ok "writable"
+        if [[ -f "$CONFIG_FILE" ]]; then
+            diagnose_ok "config file present"
+        else
+            diagnose_ok "no config file yet (using defaults)"
+        fi
+        diagnose_categories="$(find "$CATEGORIES_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+        diagnose_presets="$(find "$PRESETS_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+        diagnose_ok "$diagnose_categories categories, $diagnose_presets presets"
+    fi
+
+    echo
+    echo "Cache — $CACHE_DIR"
+    if [[ ! -d "$CACHE_DIR" ]]; then
+        diagnose_warn "not created yet — run brew-launcher once to build it"
+    elif [[ ! -w "$CACHE_DIR" ]]; then
+        diagnose_fail "not writable"
+    else
+        diagnose_ok "writable"
+
+        if [[ -f "$STATE_FILE" ]]; then
+            diagnose_cached_format="$(sed -n '1p' "$STATE_FILE")"
+            if [[ "$diagnose_cached_format" == "$CACHE_FORMAT_VERSION" ]]; then
+                diagnose_ok "cache format v$diagnose_cached_format (current)"
+            else
+                diagnose_warn "cache format v$diagnose_cached_format, expected v$CACHE_FORMAT_VERSION — will rebuild on next launch"
+            fi
+
+            diagnose_state_mtime="$(file_mtime "$STATE_FILE")"
+            if [[ -n "$diagnose_state_mtime" ]]; then
+                diagnose_age=$(( $(date +%s) - diagnose_state_mtime ))
+                if (( diagnose_age < STATE_TTL )); then
+                    diagnose_ok "verified against Homebrew ${diagnose_age}s ago (within the ${STATE_TTL}s TTL)"
+                else
+                    diagnose_ok "verified against Homebrew ${diagnose_age}s ago — past the ${STATE_TTL}s TTL, will re-check on next launch"
+                fi
+            fi
+        else
+            diagnose_warn "no cache yet — run brew-launcher once to build it"
+        fi
+
+        if [[ -f "$CACHE_FILE" ]]; then
+            diagnose_ok "$(wc -l < "$CACHE_FILE" | tr -d ' ') cached entries"
+        fi
+    fi
+
+    if [[ -f "$BACKUP_FILE" ]]; then
+        echo
+        echo "Backup"
+        diagnose_backup_mtime="$(file_mtime "$BACKUP_FILE")"
+        if [[ -n "$diagnose_backup_mtime" ]]; then
+            diagnose_ok "$BACKUP_FILE ($(( ( $(date +%s) - diagnose_backup_mtime ) / 86400 ))d old)"
+        else
+            diagnose_ok "$BACKUP_FILE"
+        fi
+    fi
+
+    echo
+    if (( diagnose_issues > 0 )); then
+        echo "$diagnose_issues problem(s) found."
+        exit 1
+    else
+        echo "No problems found."
+        exit 0
+    fi
 fi
 
 # ------------------------------------------------------------
@@ -1089,18 +1324,6 @@ for dependency in brew fzf python3; do
 done
 
 # ------------------------------------------------------------
-# The standard env-var trio every other SSH-aware tool checks — good
-# enough to tell "remote text session" from "local GUI session"
-# without a heavier dependency. Shared by preset_show_session() below
-# and the "auto" terminal-backend detection further down, so both stay
-# in agreement about what counts as SSH rather than drifting apart.
-# ------------------------------------------------------------
-
-is_ssh_session() {
-    [[ -n "${SSH_TTY:-}${SSH_CONNECTION:-}${SSH_CLIENT:-}" ]]
-}
-
-# ------------------------------------------------------------
 # Shows a preset's tmux session to the user — the one place that
 # decides *how*, since a preset with several TUIs at once deserves its
 # own window rather than always replacing whatever's already on
@@ -1470,44 +1693,11 @@ case "$TERMINAL" in
         ;;
 esac
 
-# A plain function (rather than inlined below) specifically so it can
-# be sourced and tested directly with real env vars, the same way
-# test/*.sh already does for other pure decision logic in this file —
-# this exact choice has now caused two live-reported hangs (Ghostty
-# reached for over SSH, no display to put a window in), so it earns
-# a real regression test rather than only living inline.
-#
-# SSH is checked first, ahead of Ghostty — a Mac reachable over SSH
-# still has Ghostty.app sitting in /Applications, so that check alone
-# can't tell "GUI available" from "GUI unreachable from here."
-#
-# Picking "tmux" for the SSH+already-in-tmux case is *not* the thing
-# the comment below (on the real tmux-selection check) warns against —
-# that's about never choosing tmux just because it happens to be
-# installed, an incidental machine fact. $TMUX being set means the
-# opposite: the user already, deliberately, ran `tmux` themselves
-# before this launcher. Detecting a session someone is already sitting
-# in isn't starting one on their behalf, and it's a strictly better
-# default than a GUI window it can't actually open — the "reattach"
-# fallback presets already rely on, now the default over SSH for
-# single tools too.
-resolve_auto_terminal() {
-
-    if is_ssh_session; then
-        if [[ -n "$TMUX" ]]; then
-            printf 'tmux'
-        else
-            printf 'current'
-        fi
-    elif [[ "$(uname -s)" == "Darwin" ]] &&
-       command -v osascript >/dev/null 2>&1 &&
-       [[ -d "/Applications/Ghostty.app" ]]; then
-        printf 'ghostty'
-    else
-        printf 'current'
-    fi
-}
-
+# is_ssh_session() and resolve_auto_terminal() are defined up near the
+# top of the file (before Help/version), not here next to their call
+# site — --diagnose needs to call resolve_auto_terminal() from a
+# dispatch block that runs well before this point, and zsh has no
+# function hoisting.
 [[ "$TERMINAL" == "auto" ]] && TERMINAL="$(resolve_auto_terminal)"
 
 if [[ "$TERMINAL" == "ghostty" ]] &&
@@ -1812,30 +2002,10 @@ esac
 
 mkdir -p "$CACHE_DIR"
 
-# ------------------------------------------------------------
-# Portable file mtime, as a Unix timestamp.
-#
-# `stat -f %m` and `stat -c %Y` were tried in one line with `||`
-# between them (BSD/macOS stat, then GNU/Linux stat), on the
-# assumption that whichever flag the platform doesn't support would
-# simply fail and fall through. That assumption was wrong: GNU stat's
-# `-f` is a real, different flag ("filesystem status" instead of
-# "format string"), so it doesn't error on Linux — it silently prints
-# something else, which then reached an `(( ))` arithmetic context as
-# non-numeric garbage and crashed with "bad math expression". Caught
-# by the first real CI run on a Linux runner. Branching on `uname -s`
-# explicitly, matching how the rest of the script already tells macOS
-# and Linux apart, is correct where "try both and hope one errors"
-# wasn't.
-# ------------------------------------------------------------
-
-file_mtime() {
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        stat -f %m "$1" 2>/dev/null
-    else
-        stat -c %Y "$1" 2>/dev/null
-    fi
-}
+# file_mtime() is defined up near the top of the file (before
+# Help/version), not here next to its original use — --diagnose needs
+# it too, from a dispatch block that runs well before this point, and
+# zsh has no function hoisting.
 
 # ------------------------------------------------------------
 # Homebrew state

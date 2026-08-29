@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.46.0] — 2026-08-29
+
+### Added
+
+- **`brew-launcher --diagnose`**, a new CLI command for checking the
+  install: required/optional dependencies (with resolved paths),
+  which terminal backend `auto` actually resolves to on this machine,
+  and whether the config/cache directories exist, are writable, and
+  are in the expected shape (cache format version, freshness against
+  the TTL, entry/category/preset counts). Handled before the normal
+  "brew/fzf/python3 required" startup check, like `--help`, so it
+  still runs — and explains what's missing — when one of those isn't
+  installed. Exits non-zero only if a real problem was found.
+- **[SECURITY.md](SECURITY.md)**, a security policy: scope, how to
+  report a vulnerability (GitHub private security advisories
+  preferred), and a short list of hardening choices already in the
+  script (inert config parsing, `mktemp`+traps for temp files,
+  path-traversal validation on category/preset names, resolved-path
+  caching for launched executables).
+
 ## [0.45.2] — 2026-08-28
 
 ### Fixed
