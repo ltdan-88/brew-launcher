@@ -51,7 +51,8 @@ That's it — nothing to configure. Type to search, **Enter** to launch, **Esc**
 **Requirements:** macOS or Linux · [Homebrew](https://brew.sh/) · python3 (already on most systems).
 [fzf](https://github.com/junegunn/fzf) is installed automatically as a dependency.
 Optional: [tmux](https://github.com/tmux/tmux), only if you use the tmux terminal
-backend or Presets — see [Configuration](#configuration).
+backend or Presets — see [Configuration](#configuration). Full platform/backend
+matrix, including what's macOS-only vs. Linux-only: [COMPATIBILITY.md](COMPATIBILITY.md).
 
 ## What you get
 
@@ -798,7 +799,9 @@ Found a vulnerability? See [SECURITY.md](SECURITY.md) for how to report it.
 ## Contributing
 
 Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Release history
-is in [CHANGELOG.md](CHANGELOG.md).
+is in [CHANGELOG.md](CHANGELOG.md). Scripting against brew-launcher, or curious
+what's safe to rely on vs. internal implementation detail? See
+[EXTENDING.md](EXTENDING.md).
 
 ## License
 

@@ -63,7 +63,10 @@ apps (already in `/Applications` and reachable via Spotlight), and heuristics
 that try to guess which binaries are "real" beyond the existing suffix filter.
 
 If you're planning something substantial, open an issue first so we can talk
-about fit before you spend time on it.
+about fit before you spend time on it. See [EXTENDING.md](EXTENDING.md) for
+what's a stable interface (config/category/preset files, `--list`, CLI
+flags) vs. internal implementation detail (the cache file, `--internal-*`
+flags) — useful context before proposing a change to either.
 
 ## Style
 
