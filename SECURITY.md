@@ -55,3 +55,7 @@ Context for anyone auditing the script — not a claim that it's bug-free:
 - The cache stores each command's resolved executable path (captured during
   a cache rebuild) rather than doing a fresh, independently-triggerable
   `PATH` lookup at launch time.
+- A formula's description — free text a tap maintainer controls, not
+  constrained by Homebrew's own name-safety rules — has embedded tabs and
+  newlines collapsed to spaces before being written into the cache's
+  tab-separated format, so it can't shift or split a row.

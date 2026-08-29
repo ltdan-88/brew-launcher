@@ -196,6 +196,27 @@ name: CI
 #       exit for a genuinely missing required dependency, simulated
 #       via a restricted PATH rather than touching the real
 #       environment.
+#
+#   23. security-fixtures — properties SECURITY.md claims, each with a
+#       real regression guard rather than just a source-text check
+#       where execution is possible: the cache-writer's python3
+#       heredoc is extracted and run directly (a fake `brew` on PATH
+#       stands in for the one real `brew leaves` call it makes) against
+#       a crafted formula description containing an embedded tab and
+#       newline, confirming it can't shift or split a cache row (caught
+#       a real gap this way — descriptions are tap-maintainer free
+#       text, not constrained by Homebrew's own name-safety rules, and
+#       weren't sanitized before this); a config file with shell-
+#       metacharacter values is confirmed never executed (a canary file
+#       the payload would create if it were) and a malformed value is
+#       cleanly rejected via the real --list path; every mktemp call in
+#       the script is checked for a randomized template; and the four
+#       places a typed name becomes a filename (pick_category_name,
+#       create_preset, rename_category, rename_preset) are checked for
+#       their "/" and leading "." guard, plus a source-text check that
+#       Enter still prefers the cache's resolved path over a fresh PATH
+#       lookup (inline in the main loop, not its own function — same
+#       "no drive-by refactor" reasoning as rename-fixtures.sh).
 
 on:
   push:
@@ -510,6 +531,21 @@ jobs:
 
       - name: --diagnose test
         run: zsh test/diagnose-fixtures.sh
+
+  security-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No brew or tmux needed — the one real `brew leaves` call the
+      # extracted cache-writer makes is stubbed with a fake `brew` on
+      # PATH. fzf is needed for the --list config-injection check.
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: Security regression test
+        run: zsh test/security-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
