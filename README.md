@@ -526,6 +526,7 @@ there's nowhere to put the result elsewhere.
 brew-launcher --refresh          # rebuild the application cache
 brew-launcher --list             # tab-separated plain text, for scripting
 brew-launcher --preset devops    # launch a preset directly, no picker
+brew-launcher --diagnose         # check dependencies, config and cache health
 brew-launcher --help
 ```
 
@@ -751,6 +752,13 @@ It opens `brew-launcher` in a new Ghostty tab.
 
 ## Troubleshooting
 
+**Not sure what's wrong.** Run `brew-launcher --diagnose` first — it checks
+dependencies (required and optional), which terminal backend `auto` actually
+resolves to on your machine, and whether the config/cache directories exist,
+are writable, and are in the shape the launcher expects. It works even if a
+dependency is missing, so it's the right first step whether the launcher
+won't start at all or something just looks off.
+
 **A tool I installed isn't listed.** Only formulae installed *on purpose* appear
 — if it came in as a dependency it's filtered out. Run `brew-launcher --refresh`
 if you installed it very recently.
@@ -782,6 +790,10 @@ touched yourself. Press **F8** to file it somewhere else (or **F6** to
 unhide it) and your choice sticks from then on, or turn the whole mechanism
 off from **F4 → Actions → Settings → Default Categories** / **Default
 Hidden**.
+
+## Security
+
+Found a vulnerability? See [SECURITY.md](SECURITY.md) for how to report it.
 
 ## Contributing
 
