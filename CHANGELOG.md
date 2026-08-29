@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.48.0] — 2026-08-29
+
+### Changed
+
+- **The cache-writer moved out of `bin/brew-launcher` into a real
+  standalone file, `lib/brew-launcher/cache_writer.py`.** It used to
+  be a ~600-line python3 heredoc embedded inside `rebuild_cache()` —
+  now it's an ordinary Python file with real syntax highlighting,
+  `py_compile` in CI, and no ordering entanglement with the zsh code
+  around it. No behavior change: same eight positional arguments, same
+  output. `bin/brew-launcher` itself is ~600 lines smaller as a
+  result. Homebrew installs now also ship `lib/brew-launcher/`
+  alongside `bin/brew-launcher`; the tap formula's `install` block was
+  updated separately to match, defensively (works against both old and
+  new release tarball layouts).
+- This was a scoped-down alternative to a full module split of the
+  ~7,300-line script, considered and declined for now — no concrete
+  pain point justified the risk of restructuring the file's top-level
+  dispatch order, which is where two real past bugs (v0.4.2, v0.27.0)
+  have lived. The cache-writer was the one piece that was both large
+  (~8% of the file) and already fully self-contained, so it came out
+  on its own with none of that risk.
+
 ## [0.47.0] — 2026-08-29
 
 ### Security

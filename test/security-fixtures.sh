@@ -26,6 +26,7 @@ set -u
 
 SCRIPT_DIR="${0:A:h}"
 LAUNCHER="$SCRIPT_DIR/../bin/brew-launcher"
+CACHE_WRITER_PY="$SCRIPT_DIR/../lib/brew-launcher/cache_writer.py"
 
 fail() {
     printf 'FAIL: %s\n' "$1" >&2
@@ -43,23 +44,16 @@ trap 'rm -rf "$TEST_HOME"' EXIT
 # 1. Cache-writer sanitizes tab/newline in a formula description.
 # ==============================================================
 
-# Extracted the same way the rest of this file's static checks read
-# bin/brew-launcher's own text: the cache-writer is a python3 heredoc
-# inside rebuild_cache(), fully self-contained (argv in, one output
-# file out) apart from one `brew leaves` call, which is stubbed below
-# with a fake `brew` on PATH rather than needing a real install — the
-# same "fake stand-in" technique relaunch-fixtures.sh already uses.
-PY_START="$(grep -n "^        \"\$PREVIEW_PRESET_MARKER\" <<'PY'\$" "$LAUNCHER" | head -1 | cut -d: -f1)"
-PY_END="$(awk 'NR>'"$PY_START"' && /^PY$/ { print NR; exit }' "$LAUNCHER")"
-
-[[ -n "$PY_START" && -n "$PY_END" ]] ||
-    fail "could not locate the cache-writer python3 heredoc in $LAUNCHER"
-
-CACHE_WRITER_PY="$TEST_HOME/cache_writer.py"
-sed -n "$((PY_START + 1)),$((PY_END - 1))p" "$LAUNCHER" > "$CACHE_WRITER_PY"
+# A real standalone file (lib/brew-launcher/cache_writer.py), not an
+# extracted heredoc — invoked directly, fully self-contained (argv in,
+# one output file out) apart from one `brew leaves` call, which is
+# stubbed below with a fake `brew` on PATH rather than needing a real
+# install — the same "fake stand-in" technique relaunch-fixtures.sh
+# already uses.
+[[ -f "$CACHE_WRITER_PY" ]] || fail "cache writer not found: $CACHE_WRITER_PY"
 
 python3 -m py_compile "$CACHE_WRITER_PY" ||
-    fail "extracted cache-writer script has a syntax error"
+    fail "cache-writer script has a syntax error"
 
 FAKE_BIN="$TEST_HOME/fake-bin"
 mkdir -p "$FAKE_BIN"

@@ -2,18 +2,19 @@
 #
 # Duplicate command-name handling test.
 #
-# The dedup logic lives inline inside the big Python block embedded in
-# rebuild_cache() (it needs real `brew info --json` output to reach
-# naturally), so it can't be sourced as a standalone function the way
-# load_category_names() or hide_entry() can. Instead the exact block
-# is extracted from the real file with sed and spliced after a
-# fixture `entries` list, so this still tests the real code — not a
-# hand-copied reimplementation that could quietly drift out of sync.
+# The dedup logic lives inline inside lib/brew-launcher/cache_writer.py
+# (it needs real `brew info --json` output to reach naturally), so it
+# can't be sourced as a standalone function the way load_category_names()
+# or hide_entry() can. Instead the exact block is extracted from that
+# file with sed and spliced after a fixture `entries` list, so this
+# still tests the real code — not a hand-copied reimplementation that
+# could quietly drift out of sync.
 
 set -u
 
 SCRIPT_DIR="${0:A:h}"
 LAUNCHER="$SCRIPT_DIR/../bin/brew-launcher"
+CACHE_WRITER_PY="$SCRIPT_DIR/../lib/brew-launcher/cache_writer.py"
 
 fail() {
     printf 'FAIL: %s\n' "$1" >&2
@@ -21,6 +22,7 @@ fail() {
 }
 
 [[ -x "$LAUNCHER" ]] || fail "launcher not found or not executable: $LAUNCHER"
+[[ -f "$CACHE_WRITER_PY" ]] || fail "cache writer not found: $CACHE_WRITER_PY"
 
 command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 not available"; exit 0; }
 
@@ -29,11 +31,11 @@ trap 'rm -rf "$TEST_HOME"' EXIT
 
 DEDUP_BLOCK="$TEST_HOME/dedup_block.py"
 
-sed -n '/^seen = set()$/,/^# Write cache\.$/p' "$LAUNCHER" |
+sed -n '/^seen = set()$/,/^# Write cache\.$/p' "$CACHE_WRITER_PY" |
     sed '$d;$d' \
     > "$DEDUP_BLOCK"
 
-[[ -s "$DEDUP_BLOCK" ]] || fail "could not extract the dedup block from $LAUNCHER — its markers may have changed"
+[[ -s "$DEDUP_BLOCK" ]] || fail "could not extract the dedup block from $CACHE_WRITER_PY — its markers may have changed"
 
 TEST_SCRIPT="$TEST_HOME/test.py"
 
