@@ -93,6 +93,12 @@ including a patch release — they're implementation detail, not interface.
   and preview-pane binds can re-invoke this script as a subprocess. Their
   arguments, output format, and existence at all are not a public API and
   carry no compatibility guarantee.
+- **`lib/brew-launcher/cache_writer.py`** — the script that actually
+  builds the cache from Homebrew's JSON output, invoked internally by
+  `rebuild_cache()`. Its argument order, and everything about how it
+  reads/writes the cache file, is implementation detail — the cache
+  file itself is already covered above, and this is just what produces
+  it.
 - **Everything else under the cache directory** — `state`, `outdated`,
   `previews/`, `homebrew-usage`, `footer-click.<pid>` — all internal,
   disposable, and safe to delete by hand at any time (the launcher rebuilds

@@ -6,7 +6,11 @@ name: CI
 #      doesn't support zsh (only sh/bash/dash/ksh), and forcing it to
 #      treat this script as bash produces false positives on legitimate
 #      zsh-only syntax (e.g. ${(@f)var} flag expansion, multi-line array
-#      literals). zsh -n gives real signal for the language in use.
+#      literals). zsh -n gives real signal for the language in use. Also
+#      runs `python3 -m py_compile` on lib/brew-launcher/cache_writer.py
+#      — it used to be a heredoc inside bin/brew-launcher itself (so
+#      zsh -n covered it, opaquely, as inert heredoc text) and is now a
+#      real standalone file that needs its own syntax gate.
 #
 #   2. cache round-trip test — behavior. Syntax checking alone could not
 #      catch the v0.4.0 bug where the cache was written without a
@@ -233,6 +237,9 @@ jobs:
 
       - name: zsh -n bin/brew-launcher
         run: zsh -n bin/brew-launcher
+
+      - name: python3 -m py_compile lib/brew-launcher/cache_writer.py
+        run: python3 -m py_compile lib/brew-launcher/cache_writer.py
 
   cache-roundtrip:
     runs-on: macos-latest
