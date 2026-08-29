@@ -25,7 +25,7 @@ setopt null_glob
 # path — needed since Homebrew installs this via a symlink chain).
 SCRIPT_PATH="${0:A}"
 
-VERSION="0.46.0"
+VERSION="0.47.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -2505,6 +2505,18 @@ for formula in formulae:
         formula.get("desc", "")
         or "Homebrew CLI application"
     )
+
+    # A formula's description is free text a tap maintainer controls,
+    # not something Homebrew's own naming rules constrain the way
+    # formula/command names are — a tab or newline embedded in it
+    # would otherwise land straight in a tab-separated cache row and
+    # either shift every field after it (a tab) or terminate the row
+    # early and start a bogus new one out of whatever text follows (a
+    # newline), corrupting entries that have nothing to do with this
+    # formula. Collapsed to a space rather than stripped outright, so
+    # a description that legitimately used a tab for spacing still
+    # reads sensibly.
+    description = description.replace("\t", " ").replace("\n", " ")
 
     # --------------------------------------------------------
     # Installed version.

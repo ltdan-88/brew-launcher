@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.47.0] — 2026-08-29
+
+### Security
+
+- **A formula description containing an embedded tab or newline could
+  corrupt the cache's tab-separated row format.** A formula's
+  description is free text a tap maintainer controls, not constrained
+  by Homebrew's own name-safety rules — an embedded tab would shift
+  every field after it one column over, and an embedded newline would
+  end that row early and start a bogus new one out of whatever text
+  followed. Found while writing a security regression test, not from a
+  live report. Fixed by collapsing embedded tabs/newlines in the
+  description to spaces during cache rebuild.
+
+### Added
+
+- **`test/security-fixtures.sh`**, a new regression suite for
+  properties [SECURITY.md](SECURITY.md) claims: the cache-format fix
+  above, confirmation that a config file with shell-metacharacter
+  values is never executed (only ever parsed as plain KEY=value data)
+  and that a malformed value is cleanly rejected, that every `mktemp`
+  call in the script uses a randomized template, that all four places
+  a typed name becomes a filename reject path traversal, and that
+  launching still prefers the cache's resolved executable path over a
+  fresh `PATH` lookup.
+
 ## [0.46.0] — 2026-08-29
 
 ### Added
