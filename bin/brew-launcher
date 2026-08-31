@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.54.0"
+VERSION="0.54.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -644,7 +644,11 @@ Run With Args:
   blank and Enter here just runs it plain (there's nothing stored to
   clear the way there is in Launch Flags). Esc cancels without
   launching. Still counted toward Most Used and Recently Launched,
-  same as any other launch.
+  same as any other launch. F3 / ⌥D from that prompt shows the tool's
+  own --help output, on demand only — not automatically, since some
+  installed tools (games, animations) may not recognize --help and
+  would otherwise launch straight into their own full-screen mode. A
+  tool like that is killed after a second instead of left running.
 
 Update All:
   Actions → Update All runs 'brew upgrade' for everything outdated, in
@@ -1288,7 +1292,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Launch Flags\n\nExtra arguments to always pass when launching the\nhighlighted entry. Applies everywhere it launches from,\nincluding presets it'"'"'s part of. Blank clears it.\n'
             ;;
         run_with_args)
-            printf 'Run With Args\n\nLaunch the highlighted entry right now with extra\narguments, just this once — nothing is saved. Prefilled\nwith its Launch Flags, if any, as a starting point. Blank\nruns it plain, same as Enter.\n'
+            printf 'Run With Args\n\nLaunch the highlighted entry right now with extra\narguments, just this once — nothing is saved. Prefilled\nwith its Launch Flags, if any, as a starting point. Blank\nruns it plain, same as Enter. F3 / ⌥D there previews its\nown --help, on demand.\n'
             ;;
         backup)
             printf 'Backup\n\nExport your categories, presets, favorites, hidden entries\nand settings to a single file, for safekeeping or moving to\nanother machine.\n'
@@ -1297,6 +1301,53 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'No description available.\n'
             ;;
     esac
+
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# Run With Args' own usage preview (internal use only)
+#
+# Invoked by run_with_args()'s F3/⌥D bind, on demand only — never
+# automatically when the prompt opens. Raised live: "would it be
+# feasible to show what arguments are available?" The honest risk is
+# this install list is full of games and animations (cmatrix,
+# asciiquarium, moon-buggy...) that may not recognize --help at all
+# and would launch straight into their own full-screen mode instead of
+# printing usage and exiting — automatic would mean every one of those
+# flashes on screen the moment the prompt opened. On-demand means nothing
+# runs unless asked, and a short, portable kill-if-it-doesn't-exit
+# safety net (no `timeout`/`gtimeout` on stock macOS, so this is done
+# by hand with a background watcher) keeps a hit like that brief.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-preview-usage" ]]; then
+
+    usage_path="$2"
+
+    if [[ -z "$usage_path" || ! -x "$usage_path" ]]; then
+        printf 'No usage information available.\n'
+        exit 0
+    fi
+
+    mkdir -p "$CACHE_DIR"
+    usage_output_file="$(mktemp "$CACHE_DIR/usage-preview.XXXXXX")"
+    "$usage_path" --help > "$usage_output_file" 2>&1 &
+    usage_pid=$!
+
+    ( sleep 1; kill -9 "$usage_pid" ) 2>/dev/null &
+    watcher_pid=$!
+
+    wait "$usage_pid" 2>/dev/null
+    kill "$watcher_pid" 2>/dev/null
+    wait "$watcher_pid" 2>/dev/null
+
+    if [[ -s "$usage_output_file" ]]; then
+        cat "$usage_output_file"
+    else
+        printf 'No usage information available.\n'
+    fi
+    rm -f "$usage_output_file"
 
     exit 0
 fi
@@ -3209,7 +3260,8 @@ pick_help() {
     rows+=("      Launch Flags  Extra arguments to always pass this entry —")
     rows+=("                    applies to presets it's in too. Blank clears")
     rows+=("     Run With Args  Launch this entry now with extra arguments,")
-    rows+=("                    just once. Prefilled with its Launch Flags")
+    rows+=("                    just once. Prefilled with its Launch Flags.")
+    rows+=("                    F3 / ⌥D there previews its own --help, on demand")
     rows+=("        Update All  brew upgrade for everything outdated, in a")
     rows+=("                    real terminal. Asks first; shows the count")
     rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
@@ -5555,9 +5607,12 @@ run_with_args() {
             --border-label="$(screen_border_label "Run $command with...")" \
             --border-label-pos=2 \
             --prompt=' Args: ' \
-            --header="Extra arguments for this one launch of $command. Blank runs it plain." \
+            --header="Extra arguments for this one launch of $command. Blank runs it plain. F3 / ⌥D previews its own --help." \
             --footer='  Type  Args    Enter  [Run]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --preview "${(q)SCRIPT_PATH} --internal-preview-usage ${(q)resolved_path}" \
+            --preview-window='hidden,70%,border-rounded' \
+            --bind 'f3,alt-d:toggle-preview' \
             --pointer='▌' \
             --color="$FZF_COLORS"
     )"

@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.1] — 2026-08-31
+
+### Added
+
+- **Run With Args now previews the tool's own `--help` output.** Raised
+  live: "would it be feasible to show what arguments are available?"
+  `F3` / `⌥D` from the Run With Args prompt shows it in a preview
+  pane — on demand only, never automatically: this install list is
+  full of games and animations (`cmatrix`, `asciiquarium`,
+  `moon-buggy`...) that may not recognize `--help` at all and would
+  otherwise launch straight into their own full-screen mode the
+  moment the prompt opened. A tool like that is killed after a second
+  (by hand — no `timeout`/`gtimeout` on stock macOS) rather than left
+  running, and just shows "No usage information available" instead.
+
 ## [0.54.0] — 2026-08-31
 
 ### Added
