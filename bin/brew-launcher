@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.49.0"
+VERSION="0.50.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -121,6 +121,7 @@ CONFIG_DEFAULT_HIDDEN=""
 CONFIG_OPEN_TO_CATEGORIES=""
 CONFIG_SORT=""
 CONFIG_ALT_KEYBINDS=""
+CONFIG_DETAILS_POSITION=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
 
@@ -142,6 +143,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
             SORT)                CONFIG_SORT="$config_value" ;;
             ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="$config_value" ;;
+            DETAILS_POSITION)    CONFIG_DETAILS_POSITION="$config_value" ;;
         esac
 
     done < "$CONFIG_FILE"
@@ -435,6 +437,11 @@ Theme:
   existed. The F-keys themselves always work either way; this only
   changes what the footer prints.
 
+  DETAILS_POSITION=top (default bottom, toggled from Actions →
+  Settings → Details Position) opens the details/preview pane above
+  the list instead of below it. Applies everywhere one shows up — the
+  main list, F2, F9, and Actions/Settings' own always-on panes.
+
   All of these toggles (and Sort, and the details-pane toggle) flip
   with Space as well as Enter, and reopen the Settings screen
   afterward rather than exiting to the main list — useful for
@@ -477,14 +484,16 @@ Keyboard shortcuts:
             "Actions on fastfetch"), so it's never ambiguous which
             entry it's about to act on. Its own details pane, always
             on, explains what each row actually does.
-  F5 / ⌥R   Refresh the cache without leaving the launcher
   F9 / ⌥P   Launch a preset — see Presets below. Its own details pane,
             always on like F4's, previews what's actually in the
             highlighted preset. Ctrl-R renames it, Ctrl-D deletes it.
 
-  F4, F5 and F9 also work from inside the view picker (F2) itself, not
-  just the main list — no entry needs to be highlighted for either of
-  the first two.
+  F4 and F9 also work from inside the view picker (F2) itself, not
+  just the main list — no entry needs to be highlighted for F4.
+
+  Not in the footer, but always available directly (also in Actions):
+  F5 / ⌥R   Refresh the cache without leaving the launcher — works
+            from inside the view picker (F2) too
 
   In the Actions menu, and always available directly:
   F6 / ⌥H   Hide or unhide selected entry
@@ -809,7 +818,6 @@ if [[ "$1" == "--internal-footer-click" ]]; then
         '[Views]'|Views|F2/⌥V|F2| \
         '[Details]'|Details|F3/⌥D|F3| \
         '[Presets]'|Presets|F9/⌥P|F9| \
-        '[Refresh]'|Refresh|F5/⌥R|F5| \
         '[Favorite]'|Favorite|F7/⌥F|F7| \
         '[Categorize]'|Categorize|F8/⌥C|F8| \
         '[Actions]'|Actions|F4/⌥M|F4| \
@@ -1198,8 +1206,14 @@ if [[ "$1" == "--internal-preview-action" ]]; then
         toggle_details)
             printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice (it stays on until you turn it off again, here or\nwith F3); pressing F3 directly instead is just a quick\npeek, and Esc there closes it first before doing anything\nelse. The preset picker (F9) has its own details pane that'"'"'s\nalways on, no toggle needed.\n'
             ;;
+        toggle_details_position)
+            printf 'Details Position\n\nBottom (default): the details/preview pane opens below the\nlist. Top: it opens above instead. Applies everywhere one\nshows up — the main list, F2, F9, and Actions/Settings'"'"'\nown always-on panes — not just wherever you toggle it from.\n'
+            ;;
         toggle_alt_keybinds)
             printf 'Alt Keybinds\n\nOn: the footer also lists each action'"'"'s ⌥ (Option)\nalternative, e.g. F2/⌥V, wherever it fits. Off: the footer\nshows plain F-keys only. The F-keys and their direct presses\nalways work regardless of this setting — it only changes\nwhat the footer prints.\n'
+            ;;
+        refresh)
+            printf 'Refresh\n\nRebuild the cache without leaving the launcher — the same\nthing F5 / ⌥R already do directly, everywhere they work\n(including the view picker). This row exists so the action\nstays discoverable without permanently spending a footer\nslot on it.\n'
             ;;
         create_preset)
             printf 'Create Preset\n\nBuild a new preset: pick which entries belong in it and\nwhat order they launch in, then name it. Needs tmux.\n'
@@ -1798,6 +1812,13 @@ THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
 # Doesn't touch Most Used or Recently Added, which already have their
 # own meaningful order regardless of this setting.
 SORT_ORDER="${CONFIG_SORT:-name}"
+
+# Same idea as SORT_ORDER above — "bottom" (the pane sits below the
+# list, fzf's "down" position) is the long-standing default; "top"
+# flips it above. Raised live: "Toggle for details pane on the top or
+# bottom." Read by details_preview_window() below, wherever a screen
+# builds its own --preview-window value.
+DETAILS_POSITION="${CONFIG_DETAILS_POSITION:-bottom}"
 
 case "$THEME_NAME" in
     catppuccin)
@@ -2952,8 +2973,7 @@ pick_help() {
     rows+=("            deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
-    rows+=("  F5 / ⌥R   Refresh the cache without leaving")
-    rows+=("            F4, F5 and F9 also work from inside the view picker (F2)")
+    rows+=("            F4 and F9 also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
         rows+=("            otherwise reattaches if it's already running")
@@ -2965,6 +2985,7 @@ pick_help() {
     fi
     rows+=("")
     rows+=("Second tier — F4, or press directly at any time")
+    rows+=("  F5 / ⌥R   Refresh the cache — also works from the view picker (F2)")
     rows+=("  F6 / ⌥H   Hide or unhide the selected entry")
     rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
     rows+=("  F8 / ⌥C   Categorize the selected entry")
@@ -3004,6 +3025,9 @@ pick_help() {
     rows+=("                    already have their own order")
     rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
     rows+=("                    state shows before you even open the pane")
+    rows+=("  Details Position  Bottom (default, below the list) or Top —")
+    rows+=("                    applies to every details/preview pane, not")
+    rows+=("                    just this one")
     rows+=("      Alt Keybinds  On (default): footer shows each ⌥ alias too")
     rows+=("                    where it fits. Off: F-keys only. F-keys work")
     rows+=("                    either way, this only changes the footer text")
@@ -3047,6 +3071,32 @@ pick_help() {
     rm -f "$FOOTER_CLICK_FILE"
 
     return 0
+}
+
+# Builds the --preview-window value shared by every screen with a
+# details/preview pane, honoring DETAILS_POSITION (top = fzf's "up",
+# bottom/default = "down") — raised live: "Toggle for details pane on
+# the top or bottom." The single border stays on the side facing the
+# list either way (border-top when the pane is below it, border-bottom
+# when it's above), so the divider is always between the two panes
+# rather than at the outer screen edge. $1, when passed, is the same
+# DETAILS_VISIBLE-style flag the main list and F2 already condition
+# their preview on; omitted (or true) for the three screens whose pane
+# is always on (Actions, Settings, F9) and has no such toggle.
+details_preview_window() {
+
+    local visible="${1:-true}"
+    local pos='down' border='border-top'
+
+    if [[ "$DETAILS_POSITION" == top ]]; then
+        pos='up'
+        border='border-bottom'
+    fi
+
+    local out="${pos},35%,${border},wrap"
+    [[ "$visible" == false ]] && out+=",hidden"
+
+    printf '%s' "$out"
 }
 
 pick_more_action() {
@@ -3122,6 +3172,18 @@ pick_more_action() {
         fi
     fi
 
+    # Refresh, not gated on has_entry — rebuilding the cache doesn't
+    # depend on there being a highlighted row or even a real list on
+    # screen, so it works the same from here and from the view picker.
+    # Moved out of the main footer itself — raised live: "Remove
+    # refresh from main menu and place it into actions?" F5/⌥R still
+    # work as a direct keypress everywhere they always did (same as
+    # F6/F7/F8, which are also listed here despite having their own
+    # key); this row exists so the action stays discoverable without
+    # permanently spending a footer slot on something reached for only
+    # occasionally.
+    rows+=("refresh"$'\t'"$(printf '%-20s%s' 'Refresh' 'F5 / ⌥R')")
+
     # Everything settings-related now lives one level down, in its own
     # screen — raised live: "it seems Actions menu mixes up actual
     # Actions and System Settings, how do we solve this (e.g. create a
@@ -3131,7 +3193,7 @@ pick_more_action() {
     # pick_settings_action()/open_settings_menu(). No F-key of its own
     # — every F1-F9 is already spoken for, and settings as a whole are
     # reached for far less often than Hide/Favorite/Categorize above.
-    rows+=("settings"$'\t'"$(printf '%-20s%s' 'Settings' '(7)')")
+    rows+=("settings"$'\t'"$(printf '%-20s%s' 'Settings' '(8)')")
 
     # Last, not part of anything above — this isn't "organize a row" or
     # "adjust a setting," it's "export everything," which reads more
@@ -3164,7 +3226,7 @@ pick_more_action() {
             --delimiter=$'\t' \
             --with-nth=2 \
             --preview "${(q)SCRIPT_PATH} --internal-preview-action {1}" \
-            --preview-window="down,35%,border-top,wrap" \
+            --preview-window="$(details_preview_window)" \
             --footer='  ↑ ↓  Navigate    Type  Search    Enter/Space  [Choose]    Esc  [Back]' \
             --bind 'space:accept' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -3221,6 +3283,10 @@ open_more_menu() {
                 ;;
             bulk_categorize)
                 bulk_categorize
+                continue
+                ;;
+            refresh)
+                refresh_cache_and_state
                 continue
                 ;;
             settings)
@@ -3313,6 +3379,16 @@ pick_settings_action() {
     [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
     rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
 
+    # Raised live: "Toggle for details pane on the top or bottom."
+    # Persisted (unlike Details above, which is a per-session peek) —
+    # where the pane sits is a standing layout preference, same as
+    # Sort or Alt Keybinds. Read by details_preview_window(), which
+    # every screen with a details/preview pane builds its
+    # --preview-window value through.
+    local details_position_state='Bottom'
+    [[ "$DETAILS_POSITION" == top ]] && details_position_state='Top'
+    rows+=("toggle_details_position"$'\t'"$(printf '%-20s%s' 'Details Position' "$details_position_state")")
+
     # Raised live: "the bottom menu is inconsistent — All view shows
     # Fn and alternative keybinds, F2/F9 don't. I prefer a toggle
     # switch that switches between Fn and the alternative keybinds."
@@ -3347,7 +3423,7 @@ pick_settings_action() {
             --delimiter=$'\t' \
             --with-nth=2 \
             --preview "${(q)SCRIPT_PATH} --internal-preview-action {1}" \
-            --preview-window="down,35%,border-top,wrap" \
+            --preview-window="$(details_preview_window)" \
             --footer='  ↑ ↓  Navigate    Type  Search    Enter/Space  [Choose]    Esc  [Back]' \
             --bind 'space:accept' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -3428,6 +3504,13 @@ open_settings_menu() {
                 # true (a standing "always on" choice) if Details just
                 # turned on this way, false if it just turned off.
                 DETAILS_PINNED="$DETAILS_VISIBLE"
+                continue
+                ;;
+            toggle_details_position)
+                new_value='bottom'
+                [[ "$DETAILS_POSITION" == bottom ]] && new_value='top'
+                set_config_value DETAILS_POSITION "$new_value"
+                DETAILS_POSITION="$new_value"
                 continue
                 ;;
             toggle_alt_keybinds)
@@ -3673,7 +3756,7 @@ pick_view() {
         build_picker_footer \
             '  ↑ ↓  Navigate    Type  Search    Enter  [View]    Esc  [Back]' \
             '  ↑ ↓  Navigate    Enter  [View]    Esc  [Back]' \
-            $'F3\tD\t[Details]' $'F4\tM\t[Actions]' $'F5\tR\t[Refresh]' $'F9\tP\t[Presets]' \
+            $'F3\tD\t[Details]' $'F4\tM\t[Actions]' $'F9\tP\t[Presets]' \
             $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
     )"
 
@@ -3691,7 +3774,7 @@ pick_view() {
             --delimiter=$'\t' \
             --with-nth=2 \
             --preview "${(q)SCRIPT_PATH} --internal-preview-category {1}" \
-            --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')" \
+            --preview-window="$(details_preview_window "$DETAILS_VISIBLE")" \
             --footer="$view_footer" \
             --expect=enter,ctrl-d,ctrl-r,f3,f4,f5,f9 \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -3721,7 +3804,6 @@ pick_view() {
             '[Presets]'|Presets|F9/⌥P|F9) pick_action="f9" ;;
             '[View]'|View) pick_action="enter" ;;
             '[Actions]'|Actions|F4/⌥M|F4) pick_action="f4" ;;
-            '[Refresh]'|Refresh|F5/⌥R|F5) pick_action="f5" ;;
         esac
     fi
 
@@ -5898,7 +5980,7 @@ launch_preset() {
             --prompt=' 󰣇  ' \
             --pointer='▌' \
             --preview "${(q)SCRIPT_PATH} --internal-preview-preset {1}" \
-            --preview-window="down,35%,border-top,wrap" \
+            --preview-window="$(details_preview_window)" \
             --footer="$preset_footer" \
             --expect=enter,ctrl-d,ctrl-r \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
@@ -6051,7 +6133,12 @@ footer_actions() {
     parts+=("$(footer_key F2 V $with_alt)  [Views]")
     parts+=("$(footer_key F3 D $with_alt)  [Details]")
     parts+=("$(footer_key F4 M $with_alt)  [Actions]")
-    parts+=("$(footer_key F5 R $with_alt)  [Refresh]")
+
+    # Refresh dropped from here — raised live: "Remove refresh from
+    # main menu and place it into actions?" It's now Actions -> Refresh
+    # (see pick_more_action()); F5/⌥R still work as a direct keypress
+    # exactly as before, this only stops spending a permanent footer
+    # slot on something reached for far less often than the four above.
 
     # Always shown, even without tmux — unlike Create Shortcut on an
     # unsupported platform, this isn't a dead end: pressing it without
@@ -6267,7 +6354,7 @@ run_fzf() {
         # DETAILS_VISIBLE), which costs a redraw but lets Esc check
         # state before deciding what "back" means.
         --preview "${(q)SCRIPT_PATH} --internal-preview {1} {3}"
-        --preview-window="down,35%,border-top,wrap$([[ "$DETAILS_VISIBLE" == false ]] && printf ',hidden')"
+        --preview-window="$(details_preview_window "$DETAILS_VISIBLE")"
         --bind='shift-up:preview-up'
         --bind='shift-down:preview-down'
     )
@@ -6421,10 +6508,7 @@ while true; do
     # --------------------------------------------------------
     # A footer click reports as a plain "enter" above (see
     # run_fzf/--internal-footer-click) — override $action to match
-    # whichever key that word stands in for. "Category" means
-    # different things on different footer lines (the Esc hint on
-    # line 1 vs. F5's own label on line 2), so the clicked line
-    # number breaks the tie.
+    # whichever key that word stands in for.
     # --------------------------------------------------------
 
     if [[ -f "$FOOTER_CLICK_FILE" ]]; then
@@ -6441,7 +6525,6 @@ while true; do
             '[Views]'|Views|F2/⌥V|F2) action="f2" ;;
             '[Details]'|Details|F3/⌥D|F3) action="f3" ;;
             '[Presets]'|Presets|F9/⌥P|F9) action="f9" ;;
-            '[Refresh]'|Refresh|F5/⌥R|F5) action="f5" ;;
             '[Favorite]'|Favorite|F7/⌥F|F7) action="f7" ;;
             '[Categorize]'|Categorize|F8/⌥C|F8) action="f8" ;;
             '[Actions]'|Actions|F4/⌥M|F4) action="f4" ;;

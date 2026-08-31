@@ -96,10 +96,10 @@ above; brew-launcher is just another installed formula to it. Run
 
 <p align="center"><img src="assets/more.gif" alt="Opening the Actions menu with F4 and favoriting an entry from it"></p>
 
-The footer shows what browsing needs — **Views**, **Details**, **Refresh** —
-plus **Presets**, since running one is worth a key of its own, and **Help**
-last (lowest priority, first dropped on a narrow terminal — most people
-already know F1 means help, but not everyone does). Organizing —
+The footer shows what browsing needs — **Views**, **Details** — plus
+**Actions**, **Presets**, since running one is worth a key of its own, and
+**Help** last (lowest priority, first dropped on a narrow terminal — most
+people already know F1 means help, but not everyone does). Organizing —
 hide, favorite, categorize — and setup — create a preset, create a
 shortcut, back up — live behind **F4 / ⌥M**, labeled **Actions** rather than
 something vaguer, since it's a right-click-menu equivalent: whatever's
@@ -109,7 +109,12 @@ Favorite and Categorize still have a direct key too; the setup actions are
 Actions-only, since they're one-time rather than everyday. Launch Preset
 isn't offered here at all — **F9** already runs it directly and sits in the
 footer on every screen Actions is reachable from, so a second, Actions-only
-path to the exact same thing would just be redundant.
+path to the exact same thing would just be redundant. **Refresh** (**F5**)
+used to sit in the footer too — raised live: "Remove refresh from main menu
+and place it into actions?" It's an Actions row now, right before Settings;
+**F5** / **⌥R** still work as a direct keypress everywhere they always did,
+same as Hide/Favorite/Categorize's own keys, this just stopped spending a
+permanent footer slot on something reached for far less often than the rest.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
@@ -167,10 +172,12 @@ Every row in Settings is an on/off (or two-way) switch — Default
 Categories, Default Hidden, and Open to Categories (see [Bundled
 defaults](#bundled-defaults) below), Sort (Name/Size), Details, which
 mirrors **F3** itself so its current state is visible without opening the
-pane, and Alt Keybinds, which controls whether the footer ever shows a
-key's **⌥** alias at all (on by default) — off keeps the footer to plain
-F-keys even on a terminal wide enough to fit the aliases — plus Theme,
-which opens its own picker rather than flipping in place. All of the
+pane, Details Position (Bottom/Top — see [The full details, without
+leaving](#the-full-details-without-leaving)), and Alt Keybinds, which
+controls whether the footer ever shows a key's **⌥** alias at all (on by
+default) — off keeps the footer to plain F-keys even on a terminal wide
+enough to fit the aliases — plus Theme, which opens its own picker rather
+than flipping in place. All of the
 toggles flip with **Space** as well as Enter, and reopen Settings right
 after so you can touch more than one without leaving. Settings has its own
 always-on details pane too, explaining each one. Esc from Settings goes
@@ -179,8 +186,8 @@ Settings once it's done, same as Create Preset returns to Actions.
 
 **F4**, **F5**, and **F9** also work from inside the view picker (**F2**)
 itself, not just the main list — no row needs to be highlighted for either
-of the first two, so Actions opens there with just **Settings** and
-**Backup** (nothing else needs a highlighted row, but Hide/Favorite/
+of the first two, so Actions opens there with just **Refresh**, **Settings**,
+and **Backup** (none of them need a highlighted row, but Hide/Favorite/
 Categorize/their bulk versions/Create Preset/Create Shortcut all need an
 actual list of tools to work from, which the view picker doesn't have) and
 its border label just says "Actions," with no row to name. Esc backs out to
@@ -315,6 +322,11 @@ specifically for a pane opened with **F3** itself, though — turn it on from
 not a peek:
 Esc leaves it alone and skips straight to whatever it would otherwise do, so
 turning Details on there doesn't get quietly undone by the very next Esc.
+
+**F4 → Actions → Settings → Details Position** switches which side of the
+screen it opens on — `Bottom` (the default, below the list) or `Top` (above
+it). Applies everywhere a details/preview pane shows up (the main list, F2,
+F9, and Actions/Settings' own always-on panes), not just this one.
 
 
 
@@ -455,10 +467,10 @@ reference below, from inside the launcher.
 | **Shift-Up/Down** | Scroll the details pane | footer |
 | **Esc** | Go back one level; on `All`, asks Quit or Cancel first | footer |
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
-| **F5** / **⌥R** | Refresh the cache — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker; its own details pane is always on, previewing what's in the highlighted preset | footer |
 | **Ctrl-R** | Rename the highlighted preset — in the F9 picker | picker |
 | **Ctrl-D** | Delete the highlighted preset — in the F9 picker | picker |
+| **F5** / **⌥R** | Refresh the cache — also works from the view picker; not in the footer, but always available directly | Actions |
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | Actions |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | Actions |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | Actions |
@@ -478,6 +490,7 @@ reference below, from inside the launcher.
 | — | Toggle Open to Categories | Settings only |
 | — | Sort by name or size | Settings only |
 | — | Toggle the details pane (mirrors F3) | Settings only |
+| — | Toggle where the details pane opens — top or bottom | Settings only |
 | — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Settings only |
 
 Each Option alias matches its label — **⌥H**ide, **⌥V**iews, **⌥P**resets,
@@ -490,10 +503,9 @@ of the box.
 <summary>Why the keys are split this way</summary>
 
 **F1** is deliberately unassigned — it means *help* nearly everywhere, and the
-launcher may want it later. The footer keys sit on **F2**–**F5** plus **F9**
+launcher may want it later. The footer keys sit on **F2**–**F4** plus **F9**
 because those are the ones you press constantly, and they're the easiest to
-reach on a laptop that needs **Fn**. **F5** is Refresh, matching the
-convention it has in every browser and file manager.
+reach on a laptop that needs **Fn**.
 
 The split is by what you're doing, not by how often. Finding, browsing, and
 running something together with launching a preset are what you open the
@@ -506,7 +518,12 @@ reverse: unlike making a shortcut (once per tool, rarely repeated), running a
 preset is something you'd reach for over and over, so it earned a footer key
 of its own — and, once that key existed everywhere Actions is reachable
 from, a matching Actions row would've just been the same action twice, so it
-isn't offered there at all.
+isn't offered there at all. **F5** (Refresh) used to sit in the footer too,
+matching the convention it has in every browser and file manager, but it's
+reached for far less often than the others — raised live: "Remove refresh
+from main menu and place it into actions?" It moved to Actions (still
+pressable directly at any time, same as F6/F7/F8), freeing a permanent
+footer slot for something used only occasionally.
 
 The menu lists each action's key beside it, so it teaches its own shortcuts
 and works itself out of a job.
