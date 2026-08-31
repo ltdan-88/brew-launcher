@@ -5,6 +5,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.54.0] — 2026-08-31
+
+### Added
+
+- **Recently Launched view.** A new computed view, alongside `Most
+  Used` and `Recently Added` in the F2 picker — ranks by *when* you
+  last launched a tool rather than how many times, so something
+  you've only run once, moments ago, outranks something you run
+  constantly but haven't opened in weeks. Same 15-tool cap as the
+  other two computed views, and the same "can't be renamed or
+  deleted" treatment. Raised live, from a summary of 1980s-launcher
+  ideas: "Display the last few launched applications."
+- **Run With Args.** `F4 → Actions → Run With Args` on a highlighted
+  entry launches it right now with extra arguments, just this once —
+  a one-off, forgotten immediately after, distinct from the standing
+  [Launch Flags](README.md#custom-launch-flags) setting. Prefilled
+  with the current Launch Flags value, if any, as a convenient
+  starting point, but leaving it blank and pressing Enter just runs
+  the tool plain — there's nothing stored to clear the way there is
+  in Launch Flags. Esc cancels without launching. A run started this
+  way still counts toward `Most Used` and `Recently Launched`, like
+  any other launch. Also raised live, from the same 1980s-launcher
+  ideas summary: "Launch with Arguments... optionally prompt for
+  arguments [before launching]."
+
 ## [0.53.1] — 2026-08-31
 
 ### Fixed

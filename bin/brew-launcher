@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.53.1"
+VERSION="0.54.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -186,11 +186,13 @@ LAUNCH_HISTORY_FILE="$CONFIG_DIR/launch-history"
 # split would misparse as part of the key.
 LAUNCH_FLAGS_FILE="$CONFIG_DIR/launch-flags"
 
-# How many entries the computed views (Most Used, Recently Added) cap
-# themselves to. Both stay meaningful — "your actual most-used tools",
-# "what's actually new" — only if they stay short; uncapped, "Recently
-# Added" on a long-lived install would just become "everything, sorted
-# by date", and "Most Used" the same "everything, sorted by count".
+# How many entries the computed views (Most Used, Recently Launched,
+# Recently Added) cap themselves to. All three stay meaningful —
+# "your actual most-used tools", "what did I just run", "what's
+# actually new" — only if they stay short; uncapped, "Recently Added"
+# on a long-lived install would just become "everything, sorted by
+# date", and the other two the same "everything, sorted by count/
+# recency".
 COMPUTED_VIEW_LIMIT=15
 
 # Outdated-formula snapshot. Refreshed independently of the full cache
@@ -499,7 +501,7 @@ Keyboard shortcuts:
 
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
-            Recently Added, Hidden)
+            Recently Launched, Recently Added, Hidden)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
             categories, presets it's part of, dependencies, caveats).
             Shift-Up/Down scrolls it.
@@ -568,8 +570,9 @@ Views:
   works here, same as the main list. F3 in the picker previews what's
   actually in the highlighted category — every command it holds, with
   its description, including ones only there via the bundled defaults
-  — built-in views (All, Hidden, Most Used, Recently Added) say
-  there's nothing stored to preview instead. Ctrl-R in the picker
+  — built-in views (All, Hidden, Most Used, Recently Launched,
+  Recently Added) say there's nothing stored to preview instead.
+  Ctrl-R in the picker
   renames the
   highlighted category (just a file rename —
   a category's name is its filename in
@@ -633,6 +636,15 @@ Launch Flags:
   applies wherever that command actually launches — the main list's
   own Enter, and any preset it's a member of — from one setting, not
   two.
+
+Run With Args:
+  F4 → Actions → Run With Args on a highlighted entry launches it right
+  now with extra arguments, just this once — nothing is saved.
+  Prefilled with its Launch Flags, if any, as a starting point, but
+  blank and Enter here just runs it plain (there's nothing stored to
+  clear the way there is in Launch Flags). Esc cancels without
+  launching. Still counted toward Most Used and Recently Launched,
+  same as any other launch.
 
 Update All:
   Actions → Update All runs 'brew upgrade' for everything outdated, in
@@ -1013,7 +1025,8 @@ if [[ "$1" == "--internal-preview-category" ]]; then
     preview_view_name="$2"
 
     if [[ "$preview_view_name" == "All" || "$preview_view_name" == "Hidden" \
-          || "$preview_view_name" == "Most Used" || "$preview_view_name" == "Recently Added" ]]; then
+          || "$preview_view_name" == "Most Used" || "$preview_view_name" == "Recently Added" \
+          || "$preview_view_name" == "Recently Launched" ]]; then
         print -r -- "  Not a stored category — nothing to preview."
         exit 0
     fi
@@ -1245,7 +1258,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Open to Categories\n\nOn: brew-launcher opens straight to the view picker (F2)\ninstead of All. Off (default): starts on All, the familiar\nfull list. Worth turning on once you actually have\ncategories to jump between.\n'
             ;;
         toggle_sort)
-            printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used or Recently Added, which already have\ntheir own meaningful order.\n'
+            printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used, Recently Launched, or Recently Added, which\nalready have their own meaningful order.\n'
             ;;
         toggle_compact_view)
             printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
@@ -1273,6 +1286,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             ;;
         launch_flags)
             printf 'Launch Flags\n\nExtra arguments to always pass when launching the\nhighlighted entry. Applies everywhere it launches from,\nincluding presets it'"'"'s part of. Blank clears it.\n'
+            ;;
+        run_with_args)
+            printf 'Run With Args\n\nLaunch the highlighted entry right now with extra\narguments, just this once — nothing is saved. Prefilled\nwith its Launch Flags, if any, as a starting point. Blank\nruns it plain, same as Enter.\n'
             ;;
         backup)
             printf 'Backup\n\nExport your categories, presets, favorites, hidden entries\nand settings to a single file, for safekeeping or moving to\nanother machine.\n'
@@ -1951,8 +1967,8 @@ THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
 # defaults"), not something with enough variety to justify its own
 # BREW_LAUNCHER_* knob. "name" (the cache's own alphabetical order,
 # free) or "size" (raw bytes, largest first — see size_sort_key()).
-# Doesn't touch Most Used or Recently Added, which already have their
-# own meaningful order regardless of this setting.
+# Doesn't touch Most Used, Recently Launched, or Recently Added, which
+# already have their own meaningful order regardless of this setting.
 SORT_ORDER="${CONFIG_SORT:-name}"
 
 # Same idea as SORT_ORDER above — "bottom" (the pane sits below the
@@ -2675,9 +2691,33 @@ load_hidden_commands
 # which stays cheap at any realistic size for a personal tool.
 typeset -A launch_counts
 
+# Recency of last launch, for the Recently Launched view — a different
+# question from launch_counts' own tally (something launched once
+# yesterday and something launched 50 times last year rank oppositely
+# on the two). LAUNCH_HISTORY_FILE has no timestamp column, but being
+# strictly append-only means it doesn't need one: each command's LAST
+# line number in the file already says exactly how recent it is
+# relative to every other command's own last line. Assigned in the
+# same read pass as launch_counts below rather than a second file
+# read — line_number is a plain incrementing counter, not the real
+# line number of any specific row (blank lines are skipped without
+# advancing it), which is all a relative ordering needs.
+#
+# LAST_LAUNCHED_COUNTER carries that same counter forward past this
+# initial load, in memory, for any launch that happens later in this
+# same process — see run_with_args() and the main loop's own
+# Enter-launch, the two places that increment it further. A file
+# reread after every single launch would give the exact same
+# ordering; incrementing in memory is just cheaper and matches how
+# launch_counts itself only mutates in memory afterward too.
+typeset -A last_launched_order
+LAST_LAUNCHED_COUNTER=0
+
 load_launch_counts() {
 
     launch_counts=()
+    last_launched_order=()
+    LAST_LAUNCHED_COUNTER=0
 
     [[ -f "$LAUNCH_HISTORY_FILE" ]] || return
 
@@ -2686,6 +2726,8 @@ load_launch_counts() {
     while IFS= read -r logged_command; do
         [[ -z "$logged_command" ]] && continue
         (( launch_counts[$logged_command]++ ))
+        (( LAST_LAUNCHED_COUNTER++ ))
+        last_launched_order[$logged_command]=$LAST_LAUNCHED_COUNTER
     done < "$LAUNCH_HISTORY_FILE"
 }
 
@@ -2818,7 +2860,8 @@ load_category_names() {
             # exist — skip it rather than listing a duplicate row that the
             # built-in view would shadow anyway.
             if [[ "$name" == "All" || "$name" == "Hidden" \
-                  || "$name" == "Most Used" || "$name" == "Recently Added" ]]; then
+                  || "$name" == "Most Used" || "$name" == "Recently Added" \
+                  || "$name" == "Recently Launched" ]]; then
                 continue
             fi
 
@@ -3037,7 +3080,8 @@ rename_category() {
     fi
 
     if [[ "$new_name" == "All" || "$new_name" == "Hidden" || "$new_name" == "Favorites" \
-          || "$new_name" == "Most Used" || "$new_name" == "Recently Added" ]]; then
+          || "$new_name" == "Most Used" || "$new_name" == "Recently Added" \
+          || "$new_name" == "Recently Launched" ]]; then
         printf '\n'
         printf '"%s" is a built-in view name.\n' "$new_name"
         printf 'Pick a different name.\n'
@@ -3119,9 +3163,9 @@ pick_help() {
     rows+=("")
     rows+=("First tier — always on screen")
     rows+=("  F2 / ⌥V   Switch view (All, Favorites, categories, Most Used,")
-    rows+=("            Recently Added, Hidden) — F3 there previews what's in")
-    rows+=("            the highlighted category, Ctrl-R renames it, Ctrl-D")
-    rows+=("            deletes it")
+    rows+=("            Recently Launched, Recently Added, Hidden) — F3 there")
+    rows+=("            previews what's in the highlighted category, Ctrl-R")
+    rows+=("            renames it, Ctrl-D deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
     rows+=("            F4 and F9 also work from inside the view picker (F2)")
@@ -3164,6 +3208,8 @@ pick_help() {
     fi
     rows+=("      Launch Flags  Extra arguments to always pass this entry —")
     rows+=("                    applies to presets it's in too. Blank clears")
+    rows+=("     Run With Args  Launch this entry now with extra arguments,")
+    rows+=("                    just once. Prefilled with its Launch Flags")
     rows+=("        Update All  brew upgrade for everything outdated, in a")
     rows+=("                    real terminal. Asks first; shows the count")
     rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
@@ -3179,8 +3225,8 @@ pick_help() {
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
     rows+=("Open to Categories  Start on the view picker instead of All")
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
-    rows+=("                    first) — not Most Used/Recently Added, which")
-    rows+=("                    already have their own order")
+    rows+=("                    first) — not Most Used/Recently Launched/")
+    rows+=("                    Recently Added, which already have their own order")
     rows+=("       Compact View  Off (default): every column/marker shows.")
     rows+=("                    On: drops version/size and the +/#/* marks,")
     rows+=("                    leaving just name and description")
@@ -3340,6 +3386,12 @@ pick_more_action() {
         # flags, if any, so it's visible without opening the prompt.
         local launch_flags_hint="${launch_flags[$entry_name]-}"
         rows+=("launch_flags"$'\t'"$(printf '%-20s%s' 'Launch Flags' "$launch_flags_hint")")
+
+        # Raised live (from a summary of 1980s-launcher ideas): "Launch
+        # with Arguments... optionally prompt for arguments." A one-off
+        # sibling of Launch Flags right above it, not a variant — see
+        # run_with_args()'s own comment for why they're kept separate.
+        rows+=("run_with_args"$'\t'"$(printf '%-20s%s' 'Run With Args' '')")
     fi
 
     # Refresh, not gated on has_entry — rebuilding the cache doesn't
@@ -3554,8 +3606,8 @@ pick_settings_action() {
     # A two-way toggle rather than an on/off one, unlike the three
     # above — "Name" is just what every view already shows for free
     # (the cache is written alphabetically), "Size" reorders it
-    # largest-first. Doesn't affect Most Used or Recently Added, which
-    # already have their own meaningful order.
+    # largest-first. Doesn't affect Most Used, Recently Launched, or
+    # Recently Added, which already have their own meaningful order.
     local sort_state='Name'
     [[ "$SORT_ORDER" == size ]] && sort_state='Size'
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
@@ -3944,14 +3996,25 @@ pick_view() {
         fi
     done
 
-    # Most Used and Recently Added are computed, not saved category
-    # files — unmarked, like the other built-ins above. Their counts
-    # reflect what will actually appear (capped at
-    # COMPUTED_VIEW_LIMIT), not the true total, so the number here
-    # never promises more than the view itself will show.
+    # Most Used, Recently Launched, and Recently Added are all
+    # computed, not saved category files — unmarked, like the other
+    # built-ins above. Their counts reflect what will actually appear
+    # (capped at COMPUTED_VIEW_LIMIT), not the true total, so the
+    # number here never promises more than the view itself will show.
     count="${#launch_counts[@]}"
     (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
     choices+=("Most Used"$'\t'"Most Used ($count)")
+
+    # Same launch-history data as Most Used just above, ordered by
+    # recency instead of frequency — a different question ("what did I
+    # just run" vs "what do I run a lot"), raised live from a summary
+    # of 1980s-launcher ideas: "Display the last few launched
+    # applications." Grouped right next to Most Used since both come
+    # from the same underlying log; Recently Added (install date) is a
+    # third, unrelated axis.
+    count="${#last_launched_order[@]}"
+    (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
+    choices+=("Recently Launched"$'\t'"Recently Launched ($count)")
 
     # Same total-minus-hidden figure the "All" row above already
     # computed — recomputing it here would just repeat the same grep.
@@ -4090,7 +4153,8 @@ pick_view() {
         # and more honest to ask for one F8 first, which already turns
         # a bundled category into a real file the normal way.
         if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" \
-              || "$picked" == "Most Used" || "$picked" == "Recently Added" ]]; then
+              || "$picked" == "Most Used" || "$picked" == "Recently Added" \
+              || "$picked" == "Recently Launched" ]]; then
             printf '\n'
             printf '"%s" can'"'"'t be renamed.\n' "$picked"
             sleep 1
@@ -4120,7 +4184,7 @@ pick_view() {
         # "All" and "Hidden" aren't category files, "Favorites" is
         # protected because F6 owns it (deleting it out from under
         # that would leave F6 unable to get it back into this list),
-        # and "Most Used"/"Recently Added" are computed rather than a
+        # and "Most Used"/"Recently Added"/"Recently Launched" are computed rather than a
         # category file at all — there's nothing under CATEGORIES_DIR
         # for any of these to delete.
         #
@@ -4129,7 +4193,8 @@ pick_view() {
         # active before, which looks like the refused delete
         # "navigated" somewhere on its own.
         if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" \
-              || "$picked" == "Most Used" || "$picked" == "Recently Added" ]]; then
+              || "$picked" == "Most Used" || "$picked" == "Recently Added" \
+              || "$picked" == "Recently Launched" ]]; then
             printf '\n'
             printf '"%s" can'"'"'t be deleted.\n' "$picked"
             sleep 1
@@ -4447,11 +4512,12 @@ build_entries() {
 
         # View filter. "Hidden" is the only view that shows hidden
         # entries, and it shows nothing else — which is what lets it
-        # be an ordinary view instead of a separate screen. Most Used
-        # and Recently Added get their own branches rather than
-        # falling through to the category-file check below: neither
-        # is backed by a file under CATEGORIES_DIR, so category_members
-        # would just be empty for them and exclude everything.
+        # be an ordinary view instead of a separate screen. Most Used,
+        # Recently Launched, and Recently Added get their own branches
+        # rather than falling through to the category-file check
+        # below: none of them is backed by a file under
+        # CATEGORIES_DIR, so category_members would just be empty for
+        # them and exclude everything.
         if [[ "$CURRENT_VIEW" == "Hidden" ]]; then
 
             [[ -z "${hidden_commands[$command]-}" ]] && continue
@@ -4460,6 +4526,11 @@ build_entries() {
 
             [[ -n "${hidden_commands[$command]-}" ]] && continue
             [[ -z "${launch_counts[$command]-}" ]] && continue
+
+        elif [[ "$CURRENT_VIEW" == "Recently Launched" ]]; then
+
+            [[ -n "${hidden_commands[$command]-}" ]] && continue
+            [[ -z "${last_launched_order[$command]-}" ]] && continue
 
         elif [[ "$CURRENT_VIEW" == "Recently Added" ]]; then
 
@@ -4526,29 +4597,29 @@ build_entries() {
 
     done < "$CACHE_FILE"
 
-    # Most Used and Recently Added show their own ranking, not
-    # alphabetical order (which is what the read loop above naturally
-    # produces, since CACHE_FILE is written sorted by name). Sorted
-    # here rather than by changing what CACHE_FILE itself contains —
-    # every other view still wants alphabetical order by default, so
-    # the rank only matters for these two, applied after the fact and
-    # only to whatever already survived the filter above.
+    # Most Used, Recently Launched, and Recently Added each show their
+    # own ranking, not alphabetical order (which is what the read loop
+    # above naturally produces, since CACHE_FILE is written sorted by
+    # name). Sorted here rather than by changing what CACHE_FILE itself
+    # contains — every other view still wants alphabetical order by
+    # default, so the rank only matters for these three, applied after
+    # the fact and only to whatever already survived the filter above.
     #
     # SORT_ORDER=size (Actions → Sort) rides the same mechanism: raised
     # live as "would an option for sorting by name or size make sense?"
     # — name is just the alphabetical order already there for free, so
-    # the only real work is size, largest first, same as Most Used/
-    # Recently Added's own "biggest number first" convention. Doesn't
-    # apply to Most Used/Recently Added themselves — those already
-    # have a more meaningful order of their own that Sort shouldn't
-    # override.
+    # the only real work is size, largest first, same "biggest number
+    # first" convention the other three already use. Doesn't apply to
+    # any of them, though — each already has a more meaningful order of
+    # its own that Sort shouldn't override.
     #
     # The sort key is zero-padded to a fixed width and placed ahead of
     # a real tab-delimited entry, sorted as one string, then stripped
     # back off — sidesteps any doubt about exactly how zsh's numeric
     # sort flag treats a key embedded partway through a longer string,
     # since a zero-padded prefix sorts correctly as plain text too.
-    if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" \
+    if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Launched" \
+          || "$CURRENT_VIEW" == "Recently Added" \
           || "${SORT_ORDER:-name}" == "size" ]]; then
 
         sort_prep=()
@@ -4559,6 +4630,8 @@ build_entries() {
 
             if [[ "$CURRENT_VIEW" == "Most Used" ]]; then
                 sort_key="${launch_counts[$sort_cmd]:-0}"
+            elif [[ "$CURRENT_VIEW" == "Recently Launched" ]]; then
+                sort_key="${last_launched_order[$sort_cmd]:-0}"
             elif [[ "$CURRENT_VIEW" == "Recently Added" ]]; then
                 sort_key="${install_times[$sort_cmd]:-0}"
             else
@@ -4580,11 +4653,12 @@ build_entries() {
         sort_index=0
 
         for sort_entry in "${sort_prep[@]}"; do
-            # Only the two computed views cap themselves — sorting an
-            # ordinary view by size still shows everything it normally
-            # would, just reordered, not trimmed to the same 15-item
-            # limit that keeps Most Used/Recently Added short on purpose.
-            if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Added" ]]; then
+            # Only the launch-history-backed views cap themselves —
+            # sorting an ordinary view by size still shows everything
+            # it normally would, just reordered, not trimmed to the
+            # same 15-item limit that keeps these short on purpose.
+            if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Launched" \
+                  || "$CURRENT_VIEW" == "Recently Added" ]]; then
                 (( sort_index >= COMPUTED_VIEW_LIMIT )) && break
             fi
             entries+=("${sort_entry#*$'\t'}")
@@ -5432,6 +5506,120 @@ pick_launch_flags() {
 }
 
 # ------------------------------------------------------------
+# Run With Args — Actions -> Run With Args, for the highlighted entry.
+# Raised live (from a summary of 1980s-launcher ideas): "Launch with
+# Arguments... optionally prompt for arguments [before launching]."
+#
+# Deliberately separate from Launch Flags above, not a variant of it:
+# Launch Flags is a standing choice (always these flags, every time,
+# until changed); this is a one-off (these flags, just this once,
+# forgotten immediately after). Prefilled with the current Launch
+# Flags value, if any, as a convenient starting point — not because
+# the two are the same setting, just because starting from "what I'd
+# normally run" and adjusting it for one run is the common case.
+#
+# Same "distinguish Esc from a real empty answer" shape as
+# pick_launch_flags(), except here an empty answer is a completely
+# ordinary one (run it plain, same as Enter on the main list) rather
+# than a special "clear" action — there's nothing stored to clear.
+#
+# Builds its own throwaway wrapper when args were actually typed,
+# same self-deleting idiom as resolve_launch_path()/update_all(), then
+# dispatches through the same current-terminal/tmux/ghostty three-way
+# branch the main loop's own Enter already uses — duplicated here
+# rather than factored out, same call this project already made for
+# update_all()'s identical duplication: three small, independent
+# copies are lower-risk than reshaping the one Enter-handling block
+# every ordinary launch already goes through correctly today.
+# ------------------------------------------------------------
+
+run_with_args() {
+
+    local command="$1" resolved_path="$2"
+    local current="${launch_flags[$command]-}"
+    local fzf_result typed pick_action launch_path
+    local -a result_lines
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    fzf_result="$(
+        printf '%s\n' "$current" |
+        fzf \
+            --print-query \
+            --query="$current" \
+            --expect=enter,esc \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label "Run $command with...")" \
+            --border-label-pos=2 \
+            --prompt=' Args: ' \
+            --header="Extra arguments for this one launch of $command. Blank runs it plain." \
+            --footer='  Type  Args    Enter  [Run]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --pointer='▌' \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    result_lines=("${(@f)fzf_result}")
+    typed="${result_lines[1]}"
+    pick_action="${result_lines[2]}"
+
+    [[ "$pick_action" != "enter" ]] && return 1
+
+    typed="${typed//$'\t'/ }"
+
+    launch_path="$resolved_path"
+
+    if [[ -n "$typed" ]]; then
+
+        local wrapper
+        wrapper="$(mktemp "$CACHE_DIR/run-with-args.XXXXXX")" || return 1
+
+        cat > "$wrapper" <<EOF
+#!/bin/zsh
+${(q)resolved_path} $typed
+rm -f -- "\$0"
+EOF
+
+        chmod +x "$wrapper"
+        launch_path="$wrapper"
+    fi
+
+    mkdir -p "$CONFIG_DIR"
+    printf '%s\n' "$command" >> "$LAUNCH_HISTORY_FILE"
+    (( launch_counts[$command]++ ))
+    last_launched_order[$command]=$(( ++LAST_LAUNCHED_COUNTER ))
+
+    if [[ "$TERMINAL" == "current" ]]; then
+
+        launch_in_current_terminal "$launch_path"
+
+    elif [[ "$TERMINAL" == "ghostty" ]]; then
+
+        if ! launch_in_ghostty "$launch_path"; then
+            printf '\n'
+            printf 'Unable to launch: %s\n' "$command"
+            printf 'Make sure Ghostty is installed and macOS allows\n'
+            printf 'brew-launcher to control Ghostty.\n'
+            sleep 2
+        fi
+
+    elif [[ "$TERMINAL" == "tmux" ]]; then
+
+        if ! launch_in_tmux "$launch_path"; then
+            printf '\n'
+            printf 'Unable to launch: %s\n' "$command"
+            sleep 2
+        fi
+
+    fi
+}
+
+# ------------------------------------------------------------
 # Confirm relaunching to apply a config change that's already been
 # written — colors are resolved once at startup, so nothing on screen
 # updates until the process restarts. Not a destructive action (only
@@ -5788,7 +5976,8 @@ pick_category_name() {
     # were unreachable), and be undeletable, since Ctrl-D refuses
     # those names. Refuse to create the trap in the first place.
     if [[ "$category_name" == "All" || "$category_name" == "Hidden" \
-          || "$category_name" == "Most Used" || "$category_name" == "Recently Added" ]]; then
+          || "$category_name" == "Most Used" || "$category_name" == "Recently Added" \
+          || "$category_name" == "Recently Launched" ]]; then
         printf '\n'
         printf '"%s" is a built-in view name.\n' "$category_name"
         printf 'Pick a different category name.\n'
@@ -7471,6 +7660,33 @@ while true; do
     fi
 
     # --------------------------------------------------------
+    # Run With Args — same resolved-path lookup Enter itself uses
+    # further down (the cached path if it's still valid, a fresh PATH
+    # lookup otherwise), since this is about to launch the tool right
+    # now rather than just store a preference like Launch Flags above.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "run_with_args" ]]; then
+
+        if [[ -n "$resolved_path" && -x "$resolved_path" ]]; then
+            command_path="$resolved_path"
+        else
+            command_path="$(command -v "$command" 2>/dev/null)"
+        fi
+
+        if [[ -z "$command_path" ]]; then
+            printf '\n'
+            printf 'Unable to find command: %s\n' "$command"
+            sleep 1
+        else
+            run_with_args "$command" "$command_path"
+        fi
+
+        restore_position="$(find_entry_position "$command")"
+        continue
+    fi
+
+    # --------------------------------------------------------
     # F6 / ⌥F = toggle Favorites membership for selected entry.
     # --------------------------------------------------------
 
@@ -7567,6 +7783,7 @@ while true; do
     mkdir -p "$CONFIG_DIR"
     printf '%s\n' "$command" >> "$LAUNCH_HISTORY_FILE"
     (( launch_counts[$command]++ ))
+    last_launched_order[$command]=$(( ++LAST_LAUNCHED_COUNTER ))
 
     # Substitutes a flagged wrapper in place of the plain binary when
     # Launch Flags has one configured for this command — see

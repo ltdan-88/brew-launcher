@@ -79,8 +79,8 @@ Every list is alphabetical by default. **F4 → Actions → Settings → Sort**
 switches to size instead, largest first — handy for "what's actually taking
 up space" without leaving for `ncdu`. Only reorders; nothing is filtered or
 capped.
-Doesn't touch `Most Used` or `Recently Added`, which already have their own
-meaningful order.
+Doesn't touch `Most Used`, `Recently Launched`, or `Recently Added`, which
+already have their own meaningful order.
 
 **F4 → Actions → Settings → Compact View** drops the version and size columns
 entirely — raised live as "detailed vs clean view," then taken further:
@@ -207,19 +207,22 @@ the view picker, not all the way to `All`.
 
 **F2** opens the view picker: `All`, `Favorites`, then your own categories —
 each marked with `·` so they're easy to tell apart from the built-in views —
-followed by `Most Used`, `Recently Added`, and `Hidden` last. Group tools
-however you think about them — Games, Editors, Monitoring. Every row shows how
-many entries it holds, including `All` — which excludes `Hidden` the same way
-the real view does, so the two counts add up to your real total rather than
-`All` silently meaning something narrower than its name suggests. **Esc**
-steps back one level at a time (details pane → filtered view → picker →
-everything → quit) rather than dumping you out.
+followed by `Most Used`, `Recently Launched`, `Recently Added`, and `Hidden`
+last. Group tools however you think about them — Games, Editors, Monitoring.
+Every row shows how many entries it holds, including `All` — which excludes
+`Hidden` the same way the real view does, so the two counts add up to your
+real total rather than `All` silently meaning something narrower than its
+name suggests. **Esc** steps back one level at a time (details pane →
+filtered view → picker → everything → quit) rather than dumping you out.
 
-`Most Used` and `Recently Added` are computed, not something you set up —
-`Most Used` tracks what you actually launch, and `Recently Added` reads the
-install date Homebrew already records for every formula. Both cap themselves
-to the 15 most relevant tools, so they stay a short, useful list instead of
-turning into "everything, just re-sorted."
+`Most Used`, `Recently Launched`, and `Recently Added` are computed, not
+something you set up — `Most Used` tracks how often you've launched a tool,
+`Recently Launched` tracks *when* you last launched it (so something you've
+only run once, moments ago, outranks something you run constantly but
+haven't opened in weeks), and `Recently Added` reads the install date
+Homebrew already records for every formula. All three cap themselves to the
+15 most relevant tools, so they stay a short, useful list instead of turning
+into "everything, just re-sorted."
 
 **F3** previews what's actually inside the highlighted category — every
 command it holds, with its description, at a glance rather than opening it
@@ -238,8 +241,8 @@ needs one entry categorized into it with F8 first.
 **Ctrl-D** in that picker deletes the highlighted category. It asks first and
 shows how many entries the category holds — every other action here is a toggle
 you can undo with the same key, so this is the one worth pausing on. `All`,
-`Hidden`, `Favorites`, `Most Used` and `Recently Added` can neither be renamed
-nor deleted.
+`Hidden`, `Favorites`, `Most Used`, `Recently Launched`, and `Recently Added`
+can neither be renamed nor deleted.
 
 Once your categories are actually populated, **F4 → Actions → Settings →
 Open to Categories** opens straight into this picker on every launch
@@ -435,6 +438,17 @@ actually launches — the main list's own Enter, *and* any preset it's a member
 of. Configuring it once covers both; there's no separate per-preset version to
 keep in sync.
 
+### Run With Args
+
+**F4 → Actions → Run With Args** on a highlighted entry prompts for extra
+arguments for just this one launch — a one-off, forgotten immediately after,
+rather than the standing setting [Launch Flags](#custom-launch-flags) is.
+Prefilled with the current Launch Flags value, if any, as a convenient
+starting point, but leaving it blank and pressing Enter here just runs the
+tool plain — it doesn't clear anything, since there's nothing stored to
+clear. Esc cancels without launching. A run started this way still counts
+toward `Most Used` and `Recently Launched` like any other launch.
+
 ### Color themes
 
 <p align="center"><img src="assets/themes.png" alt="The same list rendered in all ten themes side by side, showing each palette's actual colors"></p>
@@ -545,6 +559,7 @@ reference below, from inside the launcher.
 | — | Create a new preset | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Set custom launch flags for the highlighted entry | Actions only |
+| — | Run the highlighted entry with one-off extra arguments | Actions only |
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
@@ -633,7 +648,7 @@ line, `#` comments and blank lines ignored:
 ~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8
 ~/.config/brew-launcher/categories/<name>    # one file per category
 ~/.config/brew-launcher/categories/Favorites
-~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used
+~/.config/brew-launcher/launch-history       # one line per launch, powers Most Used and Recently Launched
 ~/.config/brew-launcher/presets/<name>       # one file per preset — see below
 ```
 

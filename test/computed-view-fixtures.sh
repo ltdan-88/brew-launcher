@@ -1,8 +1,8 @@
 #!/bin/zsh
 #
-# Most Used / Recently Added ranking test.
+# Most Used / Recently Launched / Recently Added ranking test.
 #
-# build_entries() re-sorts its filtered results for these two views —
+# build_entries() re-sorts its filtered results for these three views —
 # every other view stays in the alphabetical order the cache file is
 # already written in. That re-sort broke silently during development:
 # ${(On)array} quoted as "${(On)array}" collapses the whole sorted
@@ -61,6 +61,7 @@ max_size=6
 
 typeset -A hidden_commands category_members favorite_commands
 typeset -A categorized_commands outdated_formulas install_times launch_counts
+typeset -A last_launched_order
 
 # build_entries() records every row's size into this unconditionally
 # (for SORT_ORDER=size — see sort-fixtures.sh), regardless of which
@@ -139,4 +140,41 @@ if (( ${#entries[@]} > COMPUTED_VIEW_LIMIT )); then
     fail "Most Used returned more than COMPUTED_VIEW_LIMIT ($COMPUTED_VIEW_LIMIT) entries"
 fi
 
-printf 'PASS: Most Used and Recently Added rank correctly and independently, capped at %s\n' "$COMPUTED_VIEW_LIMIT"
+# ------------------------------------------------------------
+# 4. Recently Launched: raised live (from a summary of 1980s-launcher
+#    ideas), "Display the last few launched applications." A different
+#    question from Most Used's own count — something launched once,
+#    recently, should outrank something launched many times, long ago.
+#    last_launched_order holds each command's position in the launch
+#    log (higher = more recent, same shape install_times already uses
+#    for Recently Added), independent of launch_counts entirely.
+#
+#    Deliberately the *reverse* of section 2's own launch_counts
+#    (still loaded: apple 1, cherry 5, elderberry 3) rather than
+#    another arbitrary ordering — apple ranks last on Most Used (fewest
+#    launches) but first here (most recent), so a real mix-up between
+#    the two sort keys would fail this in an obvious way, not agree by
+#    coincidence.
+# ------------------------------------------------------------
+
+last_launched_order=(apple 3 elderberry 2 cherry 1)
+
+CURRENT_VIEW="Recently Launched"
+build_entries
+
+if (( ${#entries[@]} != 3 )); then
+    fail "Recently Launched: expected 3 entries (only ever-launched commands), got ${#entries[@]}: $(for e in "${entries[@]}"; do print -n "${e%%$'\t'*} "; done)"
+fi
+
+expected_order=(apple elderberry cherry)
+i=1
+
+for expected in "${expected_order[@]}"; do
+    got="${entries[$i]%%$'\t'*}"
+    if [[ "$got" != "$expected" ]]; then
+        fail "Recently Launched: position $i expected '$expected', got '$got' — full order: $(for e in "${entries[@]}"; do print -n "${e%%$'\t'*} "; done)"
+    fi
+    (( i++ ))
+done
+
+printf 'PASS: Most Used, Recently Launched, and Recently Added each rank correctly and independently (Recently Launched deliberately reverses Most Used'"'"'s own order on the same fixture data, so a real sort-key mix-up would fail loudly), all capped at %s\n' "$COMPUTED_VIEW_LIMIT"
