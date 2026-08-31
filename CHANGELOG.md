@@ -9,8 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Run With Args now previews the tool's own `--help` output.** Raised
-  live: "would it be feasible to show what arguments are available?"
+- **Run With Args now previews the tool's own `--help` output.**
   `F3` / `⌥D` from the Run With Args prompt shows it in a preview
   pane — on demand only, never automatically: this install list is
   full of games and animations (`cmatrix`, `asciiquarium`,
@@ -30,8 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   you've only run once, moments ago, outranks something you run
   constantly but haven't opened in weeks. Same 15-tool cap as the
   other two computed views, and the same "can't be renamed or
-  deleted" treatment. Raised live, from a summary of 1980s-launcher
-  ideas: "Display the last few launched applications."
+  deleted" treatment.
 - **Run With Args.** `F4 → Actions → Run With Args` on a highlighted
   entry launches it right now with extra arguments, just this once —
   a one-off, forgotten immediately after, distinct from the standing
@@ -41,25 +39,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the tool plain — there's nothing stored to clear the way there is
   in Launch Flags. Esc cancels without launching. A run started this
   way still counts toward `Most Used` and `Recently Launched`, like
-  any other launch. Also raised live, from the same 1980s-launcher
-  ideas summary: "Launch with Arguments... optionally prompt for
-  arguments [before launching]."
+  any other launch.
 
 ## [0.53.1] — 2026-08-31
 
 ### Fixed
 
-- **The theme counter showed in the wrong place.** Raised live: "you
-  misunderstood the theme counter. It should show in the settings
-  menu, e.g. Themes (9)." The position-among-ten indicator inside the
-  Theme screen itself stays (a different, still-useful question —
-  "where is the one I'm on now"); the Settings row itself now also
-  shows the total, `Themes (10)`, same convention Settings' own row
-  already uses for its own item count.
-- **Editing a preset could silently break its own numbering.** Raised
-  live: "some TUIs that aren't listed anymore still show up, break the
-  numbering logic, but are not selectable." Two real causes: a preset
-  member you'd since hidden (F6) — still installed, just excluded from
+- **The theme counter showed in the wrong place.** The position-among-ten
+  indicator inside the Theme screen itself stays (a different,
+  still-useful question — "where is the one I'm on now"); the
+  Settings row itself now also shows the total, `Themes (10)`, same
+  convention Settings' own row already uses for its own item count.
+- **Editing a preset could silently break its own numbering.** Two
+  real causes: a preset member you'd since hidden (F6) — still installed, just excluded from
   "All" the normal way — was excluded from the edit screen's own tool
   list the same way, even though it's exactly the kind of tool you'd
   hide precisely because you only run it via a preset. Fixed by
@@ -75,31 +67,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Compact View now also hides the `+`/`#`/`*` markers**, not just
-  the version/size columns. Raised live: "For compact view I would
-  even go further and hide all the category, favorites etc. flags (#,
-  + etc.)" The footer's legend explaining those markers is suppressed
-  too, since there's nothing left to explain.
+  the version/size columns. The footer's legend explaining those
+  markers is suppressed too, since there's nothing left to explain.
 
 ## [0.53.0] — 2026-08-31
 
 ### Added
 
-- **Custom launch flags (Actions → Launch Flags)** — raised live:
-  "Actions: option to always run TUI with specific commands?" /
-  "Presets: action to run with specific commands?" One setting
-  answers both: extra arguments to always pass a command whenever it
-  launches, stored per command name, so it applies wherever that
-  command actually launches — the main list's own Enter, and any
+- **Custom launch flags (Actions → Launch Flags)** — extra arguments
+  to always pass a command whenever it launches, stored per command
+  name, so it applies wherever that command actually launches — the
+  main list's own Enter, and any
   preset it's a member of — from one config, not two. Prefilled with
   the current flags for editing; the Actions row shows them too, so
   there's no need to open the prompt just to check. Blank + Enter is
   a real "clear the flags" answer, correctly distinguished from Esc
   (the one prompt here where an empty result isn't automatically a
   Cancel).
-- **Compact View (Actions → Settings → Compact View)** — raised live
-  as "detailed vs clean view," clarified to mean the main list's own
-  VERSION/SIZE columns. Off (default) shows every column, as before;
-  on drops VERSION/SIZE entirely, leaving just the marker, name, and
+- **Compact View (Actions → Settings → Compact View)** — a toggle for
+  the main list's own VERSION/SIZE columns. Off (default) shows every
+  column, as before; on drops VERSION/SIZE entirely, leaving just the marker, name, and
   description. Applies everywhere a row shows up, not only the main
   list.
 
@@ -121,8 +108,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Update All (Actions → Update All)** runs `brew upgrade` for
-  everything outdated. Raised live: "Action to launch TUI update or
-  update all TUIs with command?" Runs in a real terminal, through the
+  everything outdated. Runs in a real terminal, through the
   same current-terminal/tmux/Ghostty paths a normal tool launch
   already goes through (via a throwaway self-deleting script, so the
   three existing launch functions needed no changes), so you see its
@@ -139,9 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Ctrl-E on a highlighted preset (F9) rearranges it.** Raised live:
-  "option to rearrange TUIs in existing presets." Before this, the
-  only way to change a preset's order was Create Preset again with the
+- **Ctrl-E on a highlighted preset (F9) rearranges it.** Before this,
+  the only way to change a preset's order was Create Preset again with the
   same name, which always started blank — every tool had to be
   re-marked from scratch just to reorder. Ctrl-E opens the same
   Tab-to-mark screen Create Preset uses, but seeded with the preset's
@@ -163,9 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (visidata's own alias for its main binary — `visidata` already covers
   it, so having both showed the same tool twice), and `vd2to3.vdx`
   (visidata's one-shot file-conversion script, not an interactive
-  tool). Raised live: "there are several duplicate entries (mostly one
-  with the command in brackets and the other not)" — confirmed by
-  inspecting what these formulas actually install: a formula that ships
+  tool). Confirmed by inspecting what these formulas actually install:
+  a formula that ships
   more than one binary gets a row per binary by design (so linecast's 6
   view-shortcut binaries stay visible, each a genuinely different
   thing), but these three were auxiliary/duplicate, not genuinely
@@ -176,8 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Refresh (F5) moved out of the main footer into Actions.** Raised
-  live: "Remove refresh from main menu and place it into actions?"
+- **Refresh (F5) moved out of the main footer into Actions.**
   F5 / ⌥R still work as a direct keypress everywhere they always did —
   the main list and the view picker (F2) — same as F6/F7/F8, which
   are also listed in Actions despite having their own key. Only the
@@ -190,9 +173,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Details Position (Actions → Settings → Details Position)** — a new
   toggle switching whether the details/preview pane opens above or
-  below the list (`Top` / `Bottom`, default `Bottom`). Raised live:
-  "Toggle for details pane on the top or bottom." Applies everywhere a
-  details/preview pane shows up: the main list, F2, F9, and
+  below the list (`Top` / `Bottom`, default `Bottom`). Applies
+  everywhere a details/preview pane shows up: the main list, F2, F9, and
   Actions/Settings' own always-on panes.
 
 ## [0.49.0] — 2026-08-31
@@ -201,13 +183,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The Theme screen (Actions → Settings → Theme) now shows where the
   current theme sits among all ten**, e.g. `Current: dracula  (5 of
-  10)`. Raised live: "show counter for themes?" — with ten to scroll
-  through and nothing marking your place, there was no way to tell how
-  many more there were below the fold.
+  10)` — with ten to scroll through and nothing marking your place,
+  there was no way to tell how many more there were below the fold.
 - **The preset preview (F9's details pane) now numbers each entry**,
   e.g. `1. newsboat`, `2. weather`, instead of relying on position
-  alone to show launch order. Raised live: "Presets: show explicitly
-  order of TUIs."
+  alone to show launch order.
 
 ### Fixed
 
@@ -290,14 +270,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **"In the view picker, when you select hide/favorite/categorize
-  multiple, it shows 0 entries. This means this feature is basically
-  unusable in this menu."** Hide Multiple/Favorite Multiple/
+- **Hide/Favorite/Categorize Multiple showed 0 entries from the view
+  picker, making them unusable there.** Hide Multiple/Favorite Multiple/
   Categorize Multiple/Create Preset all pick tools from `$entries` —
   whatever's currently on screen — but the view picker (F2) has no
   such list of its own (it lists categories, not tools), so those rows
-  had nothing real to draw from there. "I would prefer if menu entries
-  like hide/favorite/categorize multiple only show up when usable."
+  had nothing real to draw from there.
   All four rows now only appear in Actions when it's opened with an
   actual highlighted entry (i.e. not from the view picker) — Settings
   and Backup are the only rows left there, since neither needs one.
@@ -305,9 +283,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Create Preset now builds from whatever view is actually on
-  screen**, not always the full `All` list. "The create preset should
-  only show what is actually listed in the current menu (e.g. all,
-  categories, favorites etc.)." Browsing a category and pressing
+  screen**, not always the full `All` list. Browsing a category and pressing
   Create Preset now offers only that category's own tools, matching
   how the bulk actions already worked.
 
@@ -315,8 +291,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **"When you cancel/exit bulk categorize, it opens the 'new or
-  existing' prompt, instead of cancelling/exiting."** Root cause: a
+- **Cancelling out of bulk categorize opened the "new or existing"
+  naming prompt anyway, instead of actually cancelling.** Root cause: a
   genuine zsh quirk — `selected=("${(@f)$(cmd)}")` where `cmd` prints
   nothing (Esc pressed) produces a one-element array holding a single
   empty string, not a zero-element one, so the "was anything actually
@@ -329,9 +305,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A Quit/Cancel confirm before Esc actually exits.** "I often
-  accidentally exit the brew-launcher with ESC. Can you make a prompt
-  similar to after when you quit a TUI?" Esc on `All` (the one screen
+- **A Quit/Cancel confirm before Esc actually exits.** Esc on `All` (the one screen
   with nowhere further back to go) now opens a confirm — Cancel listed
   first, and Esc there means Cancel too, so a second stray Esc lands
   back on the list rather than compounding the first one.
@@ -340,10 +314,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Bulk Hide, Favorite, and Categorize.** "I like the behavior of how
-  we create presets (adding TUIs with tab). Would it be feasible to
-  implement this behavior for Hide, Favorite, and Categorize as
-  well?" New Actions rows — **Hide Multiple**, **Favorite Multiple**,
+- **Bulk Hide, Favorite, and Categorize.** New Actions rows —
+  **Hide Multiple**, **Favorite Multiple**,
   **Categorize Multiple** — each open a Tab-to-mark picker over
   whatever's currently on screen and act on every marked entry at
   once (or just the highlighted one, if nothing was marked). Unlike
@@ -359,9 +331,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Multiple prompts for a category once for the whole batch, or —
   while already viewing a real category — removes the marked batch
   from it instantly, same as F8's own instant per-entry toggle there.
-- **A separate Settings screen.** "It seems Actions menu mixes up
-  actual Actions and System Settings, how do we solve this (e.g.
-  create a separate Settings menu)?" Every standing preference (Theme,
+- **A separate Settings screen.** Every standing preference (Theme,
   Default Categories, Default Hidden, Open to Categories, Sort,
   Details, Alt Keybinds) moved out of Actions into a new **Settings**
   screen, reached via a single Actions row — the same one-level-down
@@ -372,8 +342,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **"Bottom menu is missing when launching into view screen (toggle
-  on)."** Actions → Open to Categories runs `pick_view()` once at
+- **The footer went missing when launching straight into the view
+  screen (Open to Categories on).** Actions → Open to Categories runs `pick_view()` once at
   startup, before the main loop — and `pick_view()` calls
   `build_picker_footer()`, which was defined hundreds of lines later
   in the script. zsh doesn't hoist function definitions, so that call
@@ -385,8 +355,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at a time: the Open to Categories startup trigger now runs just
   before the main loop, after every function in the script has been
   defined. Confirmed live (a real tmux session, the previously-
-  released binary) reproducing the exact reported blank-footer
-  screenshot, then confirming the fix. New `function-order-fixtures`
+  released binary) reproducing the exact blank-footer symptom, then
+  confirming the fix. New `function-order-fixtures`
   test statically checks that no top-level codepath can reach a
   not-yet-defined function, so this class of bug can't come back
   unnoticed as new Actions rows get added later.
@@ -395,21 +365,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Reorganized the Actions menu (F4).** Four related requests in one
+- **Reorganized the Actions menu (F4).** Four related changes in one
   batch:
-  - "I think that launch preset should be removed from this menu,
-    since it is redundant having F9 always shown." Removed — F9
+  - Launch Preset removed from the menu — F9
     already runs it directly and sits in the footer on every screen
     Actions is reachable from.
-  - "Also i would move Create Preset and Create Shortcut up under
-    Categorize." Both moved right after Categorize — closer in spirit
-    to Hide/Favorite/Categorize than to a settings toggle.
-  - "All other items are basically settings, so they should be
-    clustered together (challenge whether current order is correct)."
-    Theme through Alt Keybinds now form one contiguous settings
+  - Create Preset and Create Shortcut moved right after Categorize —
+    closer in spirit to Hide/Favorite/Categorize than to a settings toggle.
+  - Theme through Alt Keybinds now form one contiguous settings
     cluster, with Backup as the closing action.
-  - "Preset menu F9 should offer same behavior as F4 menu (details
-    pane always on)." F9's own preview pane is no longer gated behind
+  - F9's own preview pane is no longer gated behind
     F3/`DETAILS_VISIBLE` — it's simply always shown, same as F4's own
     pane, since a preset list is usually short and the point of
     glancing at one is seeing what's in it before launching. F3 is no
@@ -421,8 +386,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Renaming a category or preset to a name that still fuzzy-matches
-  the old one silently did nothing.** "I cannot rename category
-  'Weathers' into 'Weather'." Root cause: `rename_category()`/
+  the old one silently did nothing** — e.g. renaming "Weathers" to
+  "Weather." Root cause: `rename_category()`/
   `rename_preset()` read the typed name from fzf's `--print-query`
   output via `tail -n1`, but that output is *[typed query, then the
   matched row]* — and the picker's only row is the old name itself, so
@@ -434,20 +399,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **A footer toggle: Fn keys only, or Fn plus their ⌥ alternatives.**
-  "The bottom menu is inconsistent — while in All-view it shows Fn and
-  alternative keybinds, it doesn't in F2 (view picker) or F9
-  (presets). I prefer a toggle switch in F4 that switches between Fn
-  and the alternative keybinds, changes must be reflected in bottom
-  menu." Before this, whether a ⌥ alias showed was decided purely by
+  The footer was inconsistent about this — All showed both, but F2
+  (view picker) and F9 (presets) never did. Before this, whether a ⌥
+  alias showed was decided purely by
   whether it happened to fit the terminal width — never a real choice,
   and F2/F9's own footer never even tried to show one. New **Actions →
   Alt Keybinds** (on by default): on tries to show each action's ⌥
   alias wherever it fits, same as before; off never shows one, on the
   main list, F2, or F9 alike. The F-keys themselves always work either
   way — this only changes what the footer prints.
-- **A details pane in the Actions menu (F4), on by default.** "Can we
-  add a details pane to F4 that is always on by default. This should
-  describe what the toggles mean etc." Unlike the shared Details
+- **A details pane in the Actions menu (F4), on by default**,
+  describing what each toggle means. Unlike the shared Details
   toggle elsewhere (off by default, something you turn on), there's
   nothing to have deliberately hidden here yet — the whole point is
   explaining rows whose one-line label doesn't say what they actually
@@ -459,21 +421,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **F3's category preview now respects Default Categories being off,
-  and doesn't double-claim a manually-filed command.** "Reading &
-  Reference (0) lists 3 apps, which are gone." Not actually gone —
-  they're bundled defaults for a category the user had turned Default
-  Categories off for (Actions → Default Categories), so the count
-  correctly showed 0 while the preview, which had no idea that
-  setting existed, still resurrected all 3. Confirmed live against the
-  user's real config. The preview's bundled-category scan now checks
+  and doesn't double-claim a manually-filed command.** A category
+  showing a count of 0 could still list its bundled-default tools in
+  the F3 preview — not actually a bug in the count itself: those were
+  bundled defaults for a category Default Categories had been turned
+  off for (Actions → Default Categories), and the preview, which had
+  no idea that setting existed, still resurrected them. The preview's bundled-category scan now checks
   `CONFIG_DEFAULT_CATEGORIES` the same way `load_bundled_categories()`
   itself does, and additionally skips a command already filed by hand
   into some *other* real category, matching that function's
   `manually_categorized_commands` check too — otherwise a tool could
   appear to belong to two categories at once in the preview alone.
 - **The F2/F9 pickers' own footer is now width-aware, same as the main
-  list's.** "The bottom menu is becoming too wide, would harmonizing
-  it with All view make sense?" Both had grown a static single-line
+  list's.** Both had grown a static single-line
   footer past what fzf could safely render — F2 alone reached 6
   actions past nav/search, and confirmed live that even the tightest
   single-line rendering doesn't fit below roughly 95 columns, so fzf
@@ -487,10 +447,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Esc no longer undoes a Details choice made via Actions.** "I found
-  a conflict between the Esc behavior closing the details pane and
-  the details toggle... I think the toggle should override this
-  behavior." Turning Details on from F4 → Actions was meant as a
+- **Esc no longer undoes a Details choice made via Actions.**
+  Turning Details on from F4 → Actions was meant as a
   standing "always on" choice (0.41.0), but the main list's own
   Esc-closes-the-pane-first behavior (0.31.0) couldn't tell that
   apart from a pane opened with a quick F3 press — so the very next
@@ -510,8 +468,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **F3's category preview (0.41.0) now excludes hidden entries, same
-  as the category's own count.** "Category counter and actual number
-  of tools don't match." Confirmed live: a category with two hidden
+  as the category's own count.** A category with two hidden
   members showed "3" as its count but 5 tools in the preview — both
   numbers were individually correct by their own rules, but visibly
   disagreed with each other. The preview's hidden-status check is
@@ -521,11 +478,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same reasoning already documented for not calling it, just now
   actually replicating its combining rule instead of skipping it.
 - **The F3/Details toggle is one shared state again, not two.**
-  "When it is on, it should always be on, on every screen where a
-  details pane is available." Shipped in 0.41.0 as two separate flags
-  (`DETAILS_VISIBLE` for the main list, `PICKER_DETAILS_VISIBLE` for
-  F2/F9) specifically so turning one on wouldn't silently turn the
-  other on too — raised live as the opposite of what was wanted.
+  Shipped in 0.41.0 as two separate flags (`DETAILS_VISIBLE` for the
+  main list, `PICKER_DETAILS_VISIBLE` for F2/F9) specifically so
+  turning one on wouldn't silently turn the other on too — the
+  opposite of the intended behavior: once on, it should stay on
+  everywhere a details pane is available.
   `PICKER_DETAILS_VISIBLE` is gone; F2 and F9 now toggle and read the
   same `DETAILS_VISIBLE` the main list and Actions → Details already
   do, verified live across all three screens in one session.
@@ -557,34 +514,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A "Details" toggle in Actions, mirroring F3.** "Implement a toggle
-  for details pane (F3) in F4 Actions." Same `DETAILS_VISIBLE` flag F3
-  itself already flips, just also reachable — and its current state
-  visible — from Actions, for anyone who reaches for the menu before
-  remembering the direct key.
+- **A "Details" toggle in Actions, mirroring F3.** Same
+  `DETAILS_VISIBLE` flag F3 itself already flips, just also reachable
+  — and its current state visible — from Actions, for anyone who
+  reaches for the menu before remembering the direct key.
 - **F9 (Launch Preset) now works from the view picker (F2) too.**
-  "Why is there no F9 preset access in view picker?" F4 and F5 already
-  worked there; F9 not doing the same read as an inconsistency once
-  someone actually went looking for it.
+  F4 and F5 already worked there; F9 not doing the same read as an
+  inconsistency once someone actually went looking for it.
 - **F1/Help is now shown in the footer**, last (lowest priority, first
-  dropped on a narrow terminal). "Why is F1 help nowhere mentioned?"
-  It used to be deliberately left off everywhere on the theory that
-  F1=help is close to universal knowledge — a real user not finding
-  it is direct evidence that assumption doesn't hold for everyone.
+  dropped on a narrow terminal). It used to be deliberately left off
+  everywhere on the theory that F1=help is close to universal
+  knowledge — not finding it in practice is direct evidence that
+  assumption doesn't hold for everyone.
 
 ### Fixed
 
 - **The F3 category preview (0.39.0) now actually shows a bundled-only
-  category's tools, instead of explaining why it won't.** "I still
-  want to see the tools, regardless of who has categorized them."
-  Shows the union of a category's real file (if any) and every command
-  whose cached default_category matches, minus anything explicitly
-  excluded — the same membership the real F2 view itself shows when
-  you open it. Deliberately doesn't filter out hidden commands the
-  way the real view's own count does, on the theory that replicating
-  three functions' worth of hidden-status logic here to stay in sync
-  forever was a worse trade than an occasional preview slightly wider
-  than what F2 lists — and it matches what was actually asked for.
+  category's tools, instead of explaining why it won't.** Shows the
+  union of a category's real file (if any) and every command whose
+  cached default_category matches, minus anything explicitly excluded
+  — the same membership the real F2 view itself shows when you open
+  it. Deliberately doesn't filter out hidden commands the way the real
+  view's own count does, on the theory that replicating three
+  functions' worth of hidden-status logic here to stay in sync forever
+  was a worse trade than an occasional preview slightly wider than
+  what F2 lists.
   Caught a second, more fundamental bug while fixing this: the first
   draft read the cache's default_category column via a zsh `read`
   loop with placeholder variables for the fields in between, which
@@ -598,9 +552,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Sort by name or size.** "Would an option for sorting by name or
-  size make sense?" — the fourth of a batch of ideas, held back from
-  the other three to ship on its own once it needed real parsing work.
+- **Sort by name or size.** The fourth of a batch of ideas, held back
+  from the other three to ship on its own once it needed real parsing
+  work.
   **F4 → Actions → Sort** toggles between `Name` (the cache's own
   alphabetical order, already free on every view) and `Size` (largest
   first — handy for "what's actually taking up space" without leaving
@@ -619,21 +573,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-Three ideas raised live in the same message.
+Three related ideas shipped together.
 
 - **A `*` after brew-launcher's own version, once a newer one is
-  installable.** "Would it make sense to put an asterisk behind the
-  brew-launcher version on the UI frame, whenever a newer version is
-  available?" Reuses the exact outdated-formula snapshot that already
-  powers the `*` marker on every other row — brew-launcher is just
-  another installed formula to that mechanism, so `launcher_update_marker()`
-  is a one-line hash lookup, shown on every screen's border via
-  `screen_border_label()`. Same freshness caveat as every other `*`
-  already has: reflects whatever Homebrew last knew locally, not a
-  live check on every launch.
+  installable.** Reuses the exact outdated-formula snapshot that
+  already powers the `*` marker on every other row — brew-launcher is
+  just another installed formula to that mechanism, so
+  `launcher_update_marker()` is a one-line hash lookup, shown on every
+  screen's border via `screen_border_label()`. Same freshness caveat
+  as every other `*` already has: reflects whatever Homebrew last
+  knew locally, not a live check on every launch.
 - **F3 details for the F2 (categories) and F9 (presets) pickers.**
-  "Would F2 and F9 benefit from an F3 details pane, where you could
-  see at a glance what TUIs are within the categories or presets?"
   Reuses the exact same preview mechanism the main list's own details
   pane already uses, pointed at a category or preset file's contents
   instead of `brew info` — every command it holds, with its
@@ -642,8 +592,7 @@ Three ideas raised live in the same message.
   Added) or a bundled-only category with no real file yet explains
   why there's nothing to preview instead of showing a blank pane.
 - **Which presets a command belongs to, in its own F3 details pane.**
-  "Would it make sense to tell what presets are currently assigned to
-  a TUI in F3 details pane?" The reverse lookup of the point above — a
+  The reverse lookup of the point above — a
   `Presets` line next to the existing `Categories` one, filled in at
   render time from `PRESETS_DIR` the same way `Categories` is filled
   in from `CATEGORIES_DIR`. Omitted when the command isn't in any.
@@ -652,8 +601,7 @@ Three ideas raised live in the same message.
 
 ### Added
 
-- **Rename categories and presets from the UI.** Raised live: "I would
-  like to be able to rename categories and presets from the UI." Both
+- **Rename categories and presets from the UI.** Both
   are just a named file (`~/.config/brew-launcher/categories/<name>`,
   `~/.config/brew-launcher/presets/<name>`), so renaming either is
   **Ctrl-R** in its picker (F2 for categories, F9 for presets) — type
@@ -670,9 +618,7 @@ Three ideas raised live in the same message.
   preset with a session already running under its old name doesn't
   reach into that session — it keeps working under the old name until
   it ends.
-- **Backup.** Raised in the same message: "would a feature like brew
-  bundle make sense... a backup of your brew apps, categories, and
-  presets, for when you want to freshly install a computer?" **F4 →
+- **Backup.** **F4 →
   Actions → Backup** writes `~/brew-launcher-backup.tar.gz` (always
   that path, overwritten every run) containing a Brewfile from `brew
   bundle dump` — every installed formula, cask and tap, including the
@@ -699,9 +645,7 @@ Three ideas raised live in the same message.
 ### Fixed
 
 - **The 0.36.0 press-any-key pause didn't actually fix `fastfetch`.**
-  Reported live, right after that fix shipped: "fastfetch still
-  quickly exits. However now I see the prompt to hit any key to
-  return to the launcher." The pause itself was working — the output
+  The pause itself was working — the output
   was gone by the time it appeared. Root cause: fzf's own picker UI
   runs inside the alternate screen too (confirmed live — `--height=100%`
   still opens with a genuine `?1049h`; `--no-clear` only skips fzf's
@@ -738,9 +682,8 @@ Three ideas raised live in the same message.
 ### Fixed
 
 - **A one-shot CLI's output (`fastfetch`, `eza`, `jq`, ...) was getting
-  wiped before it could be read.** Reported live: "it launches
-  fastfetch, but quickly returns to the launcher" — the previous
-  "relaunch the picker after a tool exits" fix (0.34.0) fired
+  wiped before it could be read.** The previous "relaunch the picker
+  after a tool exits" fix (0.34.0) fired
   immediately once the command finished, so the picker's full-screen
   UI painted straight over the output. It looked exactly like the
   command had silently failed when it had actually run fine; a
@@ -768,9 +711,7 @@ Three ideas raised live in the same message.
 
 - **Detaching from a preset (or the preset ending) now brings the
   launcher back**, extending the previous "relaunch after quitting a
-  tool" fix to presets: "would it make sense to return to the launcher
-  as well, when you have multiple tmux panes open and you hit Ctrl+B
-  d?" All three of `preset_show_session()`'s outcomes now relaunch the
+  tool" fix to presets. All three of `preset_show_session()`'s outcomes now relaunch the
   launcher once the tmux side of things ends, instead of leaving a
   dead pane or a bare shell behind.
 
@@ -809,10 +750,9 @@ Three ideas raised live in the same message.
 ### Changed
 
 - **Quitting a launched tool now brings the picker back**, instead of
-  always dropping to a plain shell. Raised live: "someone who wants
-  to continue working in a plain shell can just create a new tab or
-  open a new window. the experience seems better if you use the
-  launcher to launch a TUI, and quit the TUI [back to the launcher]."
+  always dropping to a plain shell — opening a new tab or window is
+  already how you'd get a plain shell if you wanted one, so returning
+  to the picker is the more useful default after quitting a TUI.
   All three single-tool launch paths — `current`, `tmux`, and
   Ghostty — now exec into the launcher itself (`$SCRIPT_PATH`) as the
   fallback once a tool exits, rather than a bare `zsh`. Presets are
@@ -855,9 +795,8 @@ Three ideas raised live in the same message.
 ### Added
 
 - **Launching a preset opens its own window instead of always closing
-  the one you launched it from.** Raised live: "when you launch a
-  preset it makes more sense to open a separate window instead of a
-  new tab, since it will contain multiple TUIs at once" — and a
+  the one you launched it from.** A preset holding several TUIs at
+  once deserves more than a corner of an existing tab, and a
   follow-up question confirmed the picker really was being replaced
   outright (`exec` never returns), not just backgrounded. New
   `preset_show_session()` picks one of three outcomes:
@@ -885,7 +824,7 @@ Three ideas raised live in the same message.
 
 - **The More menu is now the Actions menu**, and its border label names
   the row it's about to act on (e.g. "Actions on fastfetch") instead
-  of a generic label. Raised live: someone used to a GUI right-click
+  of a generic label. Someone used to a GUI right-click
   menu wouldn't necessarily know that pressing F4 acts on whatever's
   currently highlighted — "More" doesn't say that, the way a context
   menu opening already anchored to what you clicked would. Opened from
@@ -947,8 +886,7 @@ Three ideas raised live in the same message.
 ### Fixed
 
 - **Clicking `[Delete]` in the Launch Preset (F9) screen launched the
-  preset instead of deleting it.** Reported live: "i noticed that
-  delete preset in brackets is not clickable." A footer click reports
+  preset instead of deleting it.** A footer click reports
   through a small side-channel file since it never matches `--expect`'s
   key list directly — `launch_preset()` was clearing that file right
   after fzf exited, before ever checking it, so the click was silently
@@ -964,9 +902,7 @@ Three ideas raised live in the same message.
 ### Added
 
 - **Create Preset now shows launch order as a number, not just a dot.**
-  Suggested live: "wouldn't it be great if you could set the order
-  during preset creation? so when you press tab, instead of a dot, you
-  see a number which represents the order." Tab marks a tool and shows
+  Tab marks a tool and shows
   its position (`1`, `2`, `3`, ...); pressing Tab again on a marked
   tool unmarks it and renumbers everything after it down. Enter saves
   the preset in that exact order — previously the order always came
@@ -984,17 +920,15 @@ Three ideas raised live in the same message.
 - **Enter with nothing marked now shows an error** ("Mark at least one
   tool with Tab before saving a preset.") and reopens the same screen,
   instead of silently saving whatever the cursor happened to be
-  sitting on as a one-tool preset — raised live as not really what
-  presets are for, since you'd just launch that one tool directly.
+  sitting on as a one-tool preset — not really what presets are for,
+  since you'd just launch that one tool directly.
 
 ## [0.29.1] — 2026-08-27
 
 ### Fixed
 
 - **Launching a preset could look exactly like it did nothing.**
-  Reported live: "when I launch a preset, it exits the launcher and
-  returns to the shell without doing anything" — a right-click
-  revealed it was actually tmux's own context menu, meaning the preset
+  A right-click revealed it was actually tmux's own context menu, meaning the preset
   had launched correctly all along. Root cause: a preset session that
   ends up with only one live pane (a one-tool preset, or one tool
   skipped because it wasn't found on PATH) is visually identical to a
@@ -1022,7 +956,7 @@ Three ideas raised live in the same message.
 ### Fixed
 
 - **Editing a preset while its tmux session was still running left the
-  session unchanged** — reported live: a preset trimmed from 4 tools
+  session unchanged** — a preset trimmed from 4 tools
   down to 3 still opened with 4 panes. Root cause: reattaching to an
   already-running preset session skipped rebuilding entirely, so it
   never noticed the file had changed. `run_preset()` now stashes a
@@ -1051,8 +985,8 @@ Three ideas raised live in the same message.
 ### Changed
 
 - **F4 (More) and F5 (Refresh) now work from inside the view picker
-  (F2) itself**, not just the main list. Reported live: the view picker's
-  own code comment called it "the main navigation hub," but it couldn't
+  (F2) itself**, not just the main list. The view picker's own code
+  comment called it "the main navigation hub," but it couldn't
   actually reach either. More opened from there now offers only the
   actions that don't need a highlighted row (Launch Preset, Theme, the
   three toggles, Create Preset) — Hide/Favorite/Categorize/Create
@@ -1061,7 +995,7 @@ Three ideas raised live in the same message.
   (extracted from the old F5 handler) back this without duplicating either
   flow.
 - **Esc from Theme (or any other loop-back More action) now returns to
-  the More menu, not out to `All`.** Reported live: closing Theme used
+  the More menu, not out to `All`.** Closing Theme used
   to dump you all the way out. Theme, Create Preset, and Launch Preset
   don't need a highlighted row either, so they're now handled inside
   `open_more_menu()`'s own loop, which reopens More after each one
@@ -1085,7 +1019,7 @@ Three ideas raised live in the same message.
 ### Changed
 
 - **Every screen now shows the "Homebrew CLI vX" border label**, not
-  just the main list. Reported live: View, More, Theme, Categorize,
+  just the main list. View, More, Theme, Categorize,
   Launch Preset, and the rest all showed a bare label like `View` or
   `More` with no version/branding — inconsistent, and more noticeable
   now that Open to Categories can make View the very first screen a
@@ -1093,8 +1027,8 @@ Three ideas raised live in the same message.
   " Homebrew CLI vX · <label> " shape the main list already uses for a
   filtered view, just without the main list's disk-usage figures) now
   backs all 11 secondary fzf screens.
-- **Esc now closes the details pane (F3) before doing anything else**,
-  reported live: pressing Esc while it was open used to fall straight
+- **Esc now closes the details pane (F3) before doing anything else**.
+  Pressing Esc while it was open used to fall straight
   through to Quit or Views, since F3 was a native fzf toggle-preview
   bind entirely invisible to this script — Esc had no way to know the
   pane was even open. F3/⌥D moved off that native bind and onto the
@@ -1115,8 +1049,8 @@ Three ideas raised live in the same message.
 - **The three More-menu switches (Default Categories, Default Hidden,
   Open to Categories) now flip with Space as well as Enter, and reopen
   the menu right after** instead of dropping back to the main list —
-  reported live: pressing Enter to toggle a setting felt like "leaving
-  the screen" the way Enter does on every other row, and having to
+  pressing Enter to toggle a setting felt like leaving the screen the
+  way Enter does on every other row, and having to
   press F4 again to touch a second setting was real friction for
   something meant to be flipped quickly, possibly more than one at a
   time. `pick_more_action()` gained `--bind 'space:accept'` (Space now
@@ -1133,12 +1067,12 @@ Three ideas raised live in the same message.
 
 ### Fixed
 
-- **The view picker's "All" row now shows a count**, reported live as
-  an inconsistency: every other row had a number, "All" didn't. It was
+- **The view picker's "All" row now shows a count** — every other
+  row had a number, "All" didn't. It was
   left out on the theory that fzf's own inline counter repeats it once
   you're actually in that view, but from the picker screen itself the
   missing number read as something broken rather than intentional.
-  Also addresses a related point raised in the same report — "All"
+  Also addresses a related point — "All"
   isn't literally every installed tool, it excludes `Hidden` the same
   way the real view does — by making that visible rather than changing
   the behavior: `All (50)` and `Hidden (63)` now sit on screen
@@ -1170,10 +1104,8 @@ Three ideas raised live in the same message.
 
 ### Fixed
 
-- **The view picker's category counts could overcount** — reported
-  live: "the TUI counter to the right of the category names don't
-  always match with the actual number of TUIs located in the
-  category." Root cause was two-fold. A plain `grep -c` on a real
+- **The view picker's category counts could overcount**. Root cause
+  was two-fold. A plain `grep -c` on a real
   category file counted blank/comment lines and entries that no
   longer exist or are hidden, and the bundled-category tally never
   checked hidden status at all — several bundled-hidden commands
