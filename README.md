@@ -83,12 +83,10 @@ Doesn't touch `Most Used`, `Recently Launched`, or `Recently Added`, which
 already have their own meaningful order.
 
 **F4 → Actions → Settings → Compact View** drops the version and size columns
-entirely — raised live as "detailed vs clean view," then taken further:
-"I would even go further and hide all the category, favorites etc. flags (#,
-+ etc.)" So it does — the `+`/`#`/`*` markers go too, along with the
-footer's legend explaining them (nothing left to explain), leaving just the
-name and description. Off by default (every column and marker shown, as
-above); applies everywhere a row shows up, not only the main list.
+entirely, and hides the `+`/`#`/`*` markers too, along with the footer's
+legend explaining them (nothing left to explain), leaving just the name and
+description. Off by default (every column and marker shown, as above);
+applies everywhere a row shows up, not only the main list.
 
 The top border also shows how much disk space Homebrew's own installs are
 using and how much is still free on the volume — visible on `All`, hidden on
@@ -118,11 +116,10 @@ Actions-only, since they're one-time rather than everyday. Launch Preset
 isn't offered here at all — **F9** already runs it directly and sits in the
 footer on every screen Actions is reachable from, so a second, Actions-only
 path to the exact same thing would just be redundant. **Refresh** (**F5**)
-used to sit in the footer too — raised live: "Remove refresh from main menu
-and place it into actions?" It's an Actions row now, right before Settings;
-**F5** / **⌥R** still work as a direct keypress everywhere they always did,
-same as Hide/Favorite/Categorize's own keys, this just stopped spending a
-permanent footer slot on something reached for far less often than the rest.
+used to sit in the footer too; it's an Actions row now, right before
+Settings, freeing that slot since it's reached for far less often than the
+rest. **F5** / **⌥R** still work as a direct keypress everywhere they always
+did, same as Hide/Favorite/Categorize's own keys.
 
 The menu names each action in words and prints its shortcut next to it, which
 makes it easier to discover than an F-number in a crowded footer, and means it
@@ -134,11 +131,10 @@ than to a setting — then **Settings** itself, then Backup last. A details
 pane below the list — on by default, no toggle to remember — spells out what
 the highlighted row actually does.
 
-**Hide Multiple**, **Favorite Multiple**, and **Categorize Multiple** — raised
-live: "I like the behavior of how we create presets (adding TUIs with tab).
-Would it be feasible to implement this behavior for Hide, Favorite, and
-Categorize as well?" Each opens a Tab-to-mark picker over whatever's
-currently on screen — fzf's own built-in multi-select, not Create Preset's
+**Hide Multiple**, **Favorite Multiple**, and **Categorize Multiple** bring
+the same Tab-to-mark idea Create Preset uses to these three actions. Each
+opens a picker over whatever's currently on screen — fzf's own built-in
+multi-select, not Create Preset's
 custom ordered-badge mechanism, since order doesn't matter for any of these
 three, only membership does — and acts on every marked tool at once, or just
 the highlighted one if nothing was marked. A marked batch always moves to
@@ -158,16 +154,11 @@ necessarily already a member, so it removes them instantly instead, same as
 All three, plus Create Preset, only appear when there's an actual list of
 tools to work from — none of them are offered in Actions when it's opened
 from the view picker (**F2**) itself, since a list of categories isn't a
-list of tools to hide/favorite/categorize/bundle into a preset. Raised
-live: "in the view picker, when you select hide/favorite/categorize
-multiple, it shows 0 entries... I would prefer if menu entries like
-hide/favorite/categorize multiple only show up when usable." Create Preset
+list of tools to hide/favorite/categorize/bundle into a preset. Create Preset
 used to force the full `All` list regardless of context (masking this same
 inconsistency for itself); it now draws from whatever's actually on screen,
 same as the three above.
 
-Raised live: "it seems Actions menu mixes up actual Actions and System
-Settings, how do we solve this (e.g. create a separate Settings menu)?" —
 Actions used to also hold every standing preference (Theme, Default
 Categories, Default Hidden, Open to Categories, Sort, Details, Alt
 Keybinds) inline, mixing "things you do" with "things you set" in one list.
@@ -386,9 +377,9 @@ own details pane — always on, no toggle needed — previews what's in the
 highlighted preset: every command, numbered and with its description, in the
 order it launches in (not alphabetical — this is the same order Tab built
 when you created it). **Ctrl-E** on a highlighted preset lets you rearrange
-it — raised live: "option to rearrange TUIs in existing presets." The same
-Tab-to-mark screen Create Preset uses, but seeded with the preset's current
-members already badged in their current order instead of starting blank:
+it, using the same Tab-to-mark screen Create Preset uses, but seeded with
+the preset's current members already badged in their current order instead
+of starting blank:
 Tab still marks/unmarks, and unmarking then remarking a tool moves it to the
 end, so reordering means doing that to whichever tools need to move, in the
 order you want them to land in. You can add tools that weren't in the
@@ -422,8 +413,6 @@ the exact install command rather than silently failing.
 
 ### Custom launch flags
 
-Raised live: "option to always run a TUI with specific commands?" — and
-separately, the same question for a preset member. One answer covers both:
 **F4 → Actions → Launch Flags** on a highlighted entry sets extra arguments to
 always pass it when it launches — `--tree`, `-w /some/path`, whatever the tool
 actually takes. Prefilled with whatever's already set, so editing is just
@@ -498,7 +487,6 @@ the instant the command finishes.
 
 ### Update everything at once
 
-Raised live: "Action to launch TUI update or update all TUIs with command?"
 **F4 → Actions → Update All** runs `brew upgrade` for everything outdated, in
 a real terminal so you actually see its output — the same three
 current-terminal/tmux/Ghostty paths a normal tool launch already goes
@@ -608,8 +596,7 @@ of its own — and, once that key existed everywhere Actions is reachable
 from, a matching Actions row would've just been the same action twice, so it
 isn't offered there at all. **F5** (Refresh) used to sit in the footer too,
 matching the convention it has in every browser and file manager, but it's
-reached for far less often than the others — raised live: "Remove refresh
-from main menu and place it into actions?" It moved to Actions (still
+reached for far less often than the others. It moved to Actions (still
 pressable directly at any time, same as F6/F7/F8), freeing a permanent
 footer slot for something used only occasionally.
 
@@ -689,10 +676,10 @@ alongside the launcher; run it outside tmux and it just falls back to
 `auto` itself is SSH-aware, so this is usually nothing you need to set by
 hand: connected over SSH (detected via the standard `SSH_TTY`/
 `SSH_CONNECTION`/`SSH_CLIENT` env vars) and already inside a tmux session, it
-picks `tmux`; over SSH without one, `current`. Reported live: launching a
-single tool over SSH used to still reach for Ghostty and just hang, since
-`auto` had no way to tell "a Mac with Ghostty installed" from "a Mac with
-Ghostty installed that I can't currently see."
+picks `tmux`; over SSH without one, `current`. Without that check, launching
+a single tool over SSH would still reach for Ghostty and just hang — there'd
+be no way to tell "a Mac with Ghostty installed" from "a Mac with Ghostty
+installed that isn't currently reachable."
 
 ### Theme
 
