@@ -56,7 +56,9 @@ preset_marker = sys.argv[8]
 # DEFAULT_HIDDEN: exact command names for genuinely auxiliary/minor
 # commands a multi-command formula installs alongside its main one
 # (e.g. age's own key-generation plugin helper, calcurse's one-time
-# migration script) — reviewed one at a time, not a blanket rule. A
+# migration script, musikcube's headless daemon "musikcubed", visidata's
+# "vd" alias for its own main binary and its "vd2to3.vdx" one-shot
+# conversion script) — reviewed one at a time, not a blanket rule. A
 # command belongs here only if it was actually checked, not guessed;
 # see CONTRIBUTING.md for why a generic heuristic was rejected instead.
 #
@@ -217,6 +219,9 @@ chkfont
 figlist
 showfigfonts
 podboat
+musikcubed
+vd
+vd2to3.vdx
 """
 
 default_categories = {}
