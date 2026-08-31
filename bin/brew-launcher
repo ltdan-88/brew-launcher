@@ -174,9 +174,9 @@ PRESETS_DIR="$CONFIG_DIR/presets"
 LAUNCH_HISTORY_FILE="$CONFIG_DIR/launch-history"
 
 # Tab-separated "command<TAB>flags" lines — extra arguments to always
-# pass a command whenever it's actually launched. Raised live: "Actions:
-# option to always run TUI with specific commands?" / "Presets: action
-# to run with specific commands?" Keyed by command name, same as every
+# pass a command whenever it's actually launched. One answer for both
+# the "always run this with specific arguments" and the "same, but
+# for a preset member" cases. Keyed by command name, same as every
 # other per-entry marker here (hidden, favorited, categorized), rather
 # than per-formula or per-preset separately — one config answers both
 # requests, since a preset launches the exact same commands the main
@@ -226,9 +226,8 @@ PREVIEW_DIR="$CACHE_DIR/previews"
 PREVIEW_CATEGORY_MARKER="@@CATEGORIES@@"
 
 # Same reasoning as PREVIEW_CATEGORY_MARKER above, for "which presets
-# is this command part of" — raised live: "would it make sense to tell
-# what presets are currently assigned to a TUI in F3 details pane?"
-# Preset membership is per-command too (a preset file lists commands,
+# is this command part of" in the F3 details pane. Preset membership
+# is per-command too (a preset file lists commands,
 # same as a category file), so it's filled in at render time from
 # PRESETS_DIR the same way category membership is filled in from
 # CATEGORIES_DIR, not baked into the per-formula cache at build time.
@@ -971,9 +970,7 @@ if [[ "$1" == "--internal-preview" ]]; then
 
     # Same idea and same grep -lxF trick as the category lookup above,
     # against PRESETS_DIR instead of CATEGORIES_DIR — a preset file is
-    # just a plain list of command names too. Raised live: "would it
-    # make sense to tell what presets are currently assigned to a TUI
-    # in F3 details pane?"
+    # just a plain list of command names too.
     preview_presets=()
     preview_preset_files=("$PRESETS_DIR"/*(N))
 
@@ -1008,12 +1005,9 @@ fi
 # F3 details preview for the view picker (F2): what's actually inside
 # the highlighted category, at a glance.
 #
-# Raised live: "would F2 and F9 benefit from an F3 details pane, where
-# you could see at a glance what TUIs are within the categories or
-# presets?" First shipped scoped to real category files only, refusing
+# First shipped scoped to real category files only, refusing
 # a bundled-only category (see load_bundled_categories) with an
-# explanation instead — raised live again right after: "I still want
-# to see the tools, regardless who has categorized them." Shows the
+# explanation instead of showing its tools — widened to show the
 # union of both now: real file membership, plus every command whose
 # cached default_category (field 10, the same one --internal-preview
 # already reads for its own "(default)" note) matches this category
@@ -1204,9 +1198,9 @@ if [[ "$1" == "--internal-preview-preset" ]]; then
     # File order, not alphabetical — this is also the launch order
     # (top to bottom, left to right in the tmux layout), which is
     # worth showing as-is rather than obscuring it by sorting. Numbered
-    # explicitly — raised live: "Presets: show explicitly order of
-    # TUIs." Position in the list already implied the order, but only
-    # if you counted rows yourself; a number makes it explicit the way
+    # explicitly rather than left implicit: position in the list already
+    # implied the order, but only if you counted rows yourself; a
+    # number makes it explicit the way
     # Create Preset's own tab-to-add badges already do.
     preview_preset_num=0
     for preview_member in "${preview_preset_commands[@]}"; do
@@ -1223,11 +1217,10 @@ if [[ "$1" == "--internal-preview-preset" ]]; then
 fi
 
 # ------------------------------------------------------------
-# F4 Actions menu's own F3 details pane (internal use only).
+# F4 Actions menu's own F3 details pane (internal use only), on by
+# default, describing what each row/toggle means.
 #
-# Raised live: "can we add a details pane to F4 that is always on by
-# default, describing what the toggles mean etc." Actions mixes plain
-# commands (Hide, Create Preset) with settings whose current state is
+# Actions mixes plain commands (Hide, Create Preset) with settings whose current state is
 # already shown in the row itself but whose *effect* isn't obvious
 # from a one-line label alone (Default Categories, Sort, Alt
 # Keybinds...). Same idiom as --internal-preview-category/-preset: a
@@ -1309,8 +1302,7 @@ fi
 # Run With Args' own usage preview (internal use only)
 #
 # Invoked by run_with_args()'s F3/⌥D bind, on demand only — never
-# automatically when the prompt opens. Raised live: "would it be
-# feasible to show what arguments are available?" The honest risk is
+# automatically when the prompt opens. The honest risk is
 # this install list is full of games and animations (cmatrix,
 # asciiquarium, moon-buggy...) that may not recognize --help at all
 # and would launch straight into their own full-screen mode instead of
@@ -1477,7 +1469,7 @@ done
 # Shows a preset's tmux session to the user — the one place that
 # decides *how*, since a preset with several TUIs at once deserves its
 # own window rather than always replacing whatever's already on
-# screen. Reported live: launching a preset used to always exec away
+# screen. Launching a preset used to always exec away
 # outright, so the picker was gone, not just backgrounded — surprising
 # and avoidable whenever a real GUI is actually available to open a
 # genuinely separate window in instead.
@@ -1485,10 +1477,8 @@ done
 # Three outcomes, tried in order — every one of them, once the tmux
 # side of things ends (you detach, or the preset session itself is
 # killed), falls through to relaunching the launcher rather than
-# leaving a dead pane or a bare shell behind. Reported live, right
-# after the launch-a-tool version of this same fix shipped: "would it
-# make sense to return to the launcher as well, when you have multiple
-# tmux panes open and you hit Ctrl+B d?"
+# leaving a dead pane or a bare shell behind, extending the
+# launch-a-tool version of this same fix to presets too.
 #
 # Verified live with a real attached client that this genuinely
 # mattered for (2) below, not just a nice-to-have: switch-client's own
@@ -1786,10 +1776,10 @@ run_preset() {
             # Collected rather than printed here — printing immediately
             # would just get overwritten the instant this function execs
             # into tmux a few lines down, on a preset with any working
-            # commands left. Reported live as looking exactly like
-            # nothing happened: with only one tool left after a skip,
-            # the single resulting pane is a plain shell prompt with no
-            # visible sign anything launched at all.
+            # commands left. Skipping a tool silently can look exactly
+            # like nothing happened: with only one tool left after a
+            # skip, the single resulting pane is a plain shell prompt
+            # with no visible sign anything launched at all.
             preset_warnings+=("Warning: \"$preset_cmd\" not found on PATH, skipping.")
             continue
         fi
@@ -1874,9 +1864,8 @@ run_preset() {
 
     # Same reasoning, same scoping: a preset session is otherwise
     # visually identical to a plain shell whenever it only ends up with
-    # one pane (a skipped tool, or a one-tool preset), and that's
-    # exactly the scenario reported live as "launched a preset, it just
-    # dropped me back at the shell and did nothing" — it hadn't; there
+    # one pane (a skipped tool, or a one-tool preset) — it can look
+    # exactly like nothing launched at all, when it actually had; there
     # was just nothing on screen saying otherwise. Forcing the status
     # bar on guarantees the session name is always visible, regardless
     # of what your own tmux config does elsewhere.
@@ -2024,14 +2013,13 @@ SORT_ORDER="${CONFIG_SORT:-name}"
 
 # Same idea as SORT_ORDER above — "bottom" (the pane sits below the
 # list, fzf's "down" position) is the long-standing default; "top"
-# flips it above. Raised live: "Toggle for details pane on the top or
-# bottom." Read by details_preview_window() below, wherever a screen
+# flips it above. Read by details_preview_window() below, wherever a screen
 # builds its own --preview-window value.
 DETAILS_POSITION="${CONFIG_DETAILS_POSITION:-bottom}"
 
-# Opt-in (default off, same reasoning as OPEN_TO_CATEGORIES above),
-# raised live as "detailed vs clean view" and clarified to mean the
-# main list's own VERSION/SIZE columns specifically: off (default)
+# Opt-in (default off, same reasoning as OPEN_TO_CATEGORIES above).
+# Controls the main list's own VERSION/SIZE columns specifically:
+# off (default)
 # shows everything build_entries() already computes; on drops those
 # two columns, leaving just the marker, name, and description. Read
 # by build_entries() and the column-header build further down, the
@@ -2330,16 +2318,16 @@ for formula in data.get("formulae", []):
 # Prune category files (Favorites included — it's just another file
 # under CATEGORIES_DIR) of any command that's no longer installed.
 #
-# Raised live: a Favorites count of "0" despite two genuine entries in
-# the file read as a bug, not obviously-correct behavior. Both had
+# A Favorites count of "0" despite two genuine entries in
+# the file reads as a bug, not obviously-correct behavior. Both had
 # been uninstalled since being favorited — compute_category_counts()
 # already excludes anything not currently known when it counts, so
 # the number itself was accurate, but the stale line just sat there
-# forever with nothing explaining the gap. Presented as a real design
-# question rather than assumed: leave the stale reference (so
+# forever with nothing explaining the gap. Three options existed:
+# leave the stale reference (so
 # reinstalling brings the favorite/category back automatically), show
 # the gap explicitly ("2, 0 installed"), or clean it up when a rebuild
-# confirms it's actually gone. Chosen live: clean it up.
+# confirms it's actually gone. Went with cleaning it up.
 #
 # Runs once per real cache rebuild, not on every launch — the set of
 # installed formulae has to be freshly confirmed for "no longer
@@ -2869,23 +2857,22 @@ DETAILS_VISIBLE=false
 # F2/F9's own F3 preview (what's inside the highlighted category/
 # preset) shares this exact flag rather than tracking its own — first
 # shipped as a separate PICKER_DETAILS_VISIBLE precisely so turning
-# one on wouldn't silently turn the other on too, but raised live
-# right after: "when it is on, it should always be on, on every
-# screen where a details pane is available." One flag, one on/off
+# one on wouldn't silently turn the other on too, but the intended
+# behavior turned out to be the opposite: once on, it should stay on
+# everywhere a details pane is available. One flag, one on/off
 # state, everywhere F3 (or Actions -> Details) can toggle it.
 
-# Raised live once both fixes above landed: turning Details on via
-# Actions is meant as a standing preference ("always on"), but the
-# main list's own Esc-closes-the-pane-first behavior (see the "Whether
-# the F3 details pane" comment above) would immediately undo it on the
-# very next Esc, indistinguishable from a pane opened with a quick F3
-# press. Tracks *how* the pane was last turned on: F3 always sets this
-# false (a peek — Esc closing it first is exactly the point), Actions
-# -> Details sets it to match DETAILS_VISIBLE (a standing choice — Esc
-# should skip straight past it to whatever the next back-step is,
-# same as if the pane weren't there). Answers the user's own "I think
-# the toggle should override this" instinct: yes, and this is the flag
-# that lets Esc tell the two cases apart without guessing.
+# Turning Details on via Actions is meant as a standing preference
+# ("always on"), but the main list's own Esc-closes-the-pane-first
+# behavior (see the "Whether the F3 details pane" comment above) would
+# immediately undo it on the very next Esc, indistinguishable from a
+# pane opened with a quick F3 press. Tracks *how* the pane was last
+# turned on: F3 always sets this false (a peek — Esc closing it first
+# is exactly the point), Actions -> Details sets it to match
+# DETAILS_VISIBLE (a standing choice — Esc should skip straight past
+# it to whatever the next back-step is, same as if the pane weren't
+# there). This is the flag that lets Esc tell the two cases apart
+# without guessing.
 DETAILS_PINNED=false
 
 typeset -A category_members
@@ -2996,8 +2983,6 @@ load_category_members() {
 }
 
 # " *" once a newer brew-launcher itself is available, "" otherwise.
-# Raised live: "would it make sense to put an asterisk behind the
-# brew-launcher version... whenever a newer version is available?"
 # Reuses the exact outdated-formulae snapshot every other "*" marker in
 # this app already reads from (see load_outdated_formulas above) —
 # brew-launcher is just another installed formula to that mechanism,
@@ -3092,8 +3077,8 @@ rename_category() {
     # (e.g. "Weathers" -> "Weather") still fuzzy-matches it, and
     # tail -n1 would grab that stale match instead of what was typed —
     # silently discarding the rename entirely, since it then reads as
-    # "new name == old name". Raised live: renaming "Weathers" to
-    # "Weather" did nothing. tail -n1 made sense for toggle_category(),
+    # "new name == old name" (e.g. renaming "Weathers" to "Weather" did
+    # nothing). tail -n1 made sense for toggle_category(),
     # which offers a real list of choices and deliberately prefers an
     # exact existing match over the raw query; there is no such list
     # here, so the query is always what we want.
@@ -3191,9 +3176,8 @@ rename_category() {
 #
 # Used to be deliberately left off the footer on the theory that
 # F1=help is close to universal knowledge, not worth spending space
-# teaching. Raised live — "why is there no F1 help mentioned?" — a
-# real user not finding it is direct evidence that assumption doesn't
-# hold for everyone; now the last (lowest-priority, first-dropped on a
+# teaching. Not finding it in practice is direct evidence that
+# assumption doesn't hold for everyone; now the last (lowest-priority, first-dropped on a
 # narrow terminal) item in footer_actions(). Still not in the Actions
 # menu's own listing — Actions already means "act on the highlighted
 # row," and Help isn't that. Purely informational: the same fzf list
@@ -3334,8 +3318,7 @@ pick_help() {
 
 # Builds the --preview-window value shared by every screen with a
 # details/preview pane, honoring DETAILS_POSITION (top = fzf's "up",
-# bottom/default = "down") — raised live: "Toggle for details pane on
-# the top or bottom." The single border stays on the side facing the
+# bottom/default = "down"). The single border stays on the side facing the
 # list either way (border-top when the pane is below it, border-bottom
 # when it's above), so the divider is always between the two panes
 # rather than at the outer screen edge. $1, when passed, is the same
@@ -3368,8 +3351,8 @@ pick_more_action() {
     # Defaults true so every existing call site (all from the main
     # list) is unaffected without having to pass it explicitly.
     local has_entry="${2:-true}"
-    # Named in the border label below when present — reported live as
-    # a real point of confusion for anyone used to a GUI right-click
+    # Named in the border label below when present — a real point of
+    # confusion for anyone used to a GUI right-click
     # menu: "Actions" alone doesn't say *which* row it's about to act
     # on, unlike a context menu that opens already anchored to
     # whatever you clicked. Empty when has_entry is false (nothing to
@@ -3382,11 +3365,9 @@ pick_more_action() {
     # picker (F2) — see this param's own comment. Everything in this
     # block needs $entries to actually mean something (a real,
     # currently-displayed list of tools), which the view picker has no
-    # equivalent of — it lists categories, not tools. Raised live: "in
-    # the view picker, when you select hide/favorite/categorize
-    # multiple, it shows 0 entries. This seems inconsistent. I would
-    # prefer if menu entries like hide/favorite/categorize multiple
-    # only show up when usable." Create Preset moved in here too, for
+    # equivalent of — it lists categories, not tools, so Hide/Favorite/
+    # Categorize Multiple would show 0 entries and be unusable there.
+    # Create Preset moved in here too, for
     # the same reason — see its own comment for why it no longer forces
     # CURRENT_VIEW to "All" regardless of context.
     if [[ "$has_entry" == true ]]; then
@@ -3394,10 +3375,9 @@ pick_more_action() {
         rows+=("f7"$'\t'"$(printf '%-20s%s' 'Favorite' 'F7 / ⌥F')")
         rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
 
-        # Bulk counterparts of the three above — raised live: "I like
-        # the behavior of how we create presets (adding TUIs with
-        # tab). Would it be feasible to implement this behavior for
-        # Hide, Favorite, and Categorize as well?" Each opens its own
+        # Bulk counterparts of the three above, bringing the same
+        # Tab-to-mark idea Create Preset uses to these three actions.
+        # Each opens its own
         # mark-then-act picker (see pick_multiple_entries()) over
         # $entries rather than acting on the highlighted row directly.
         # Grouped right under their single-entry counterpart rather
@@ -3430,8 +3410,8 @@ pick_more_action() {
             rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
         fi
 
-        # Raised live: "Actions: option to always run TUI with specific
-        # commands?" — entry-scoped too, same reasoning as Create
+        # Extra arguments to always pass this command — entry-scoped
+        # too, same reasoning as Create
         # Shortcut above. $entry_name is the real command (see this
         # function's own call sites), the same key LAUNCH_FLAGS_FILE
         # and launch_flags[] use throughout. The hint shows the current
@@ -3439,8 +3419,7 @@ pick_more_action() {
         local launch_flags_hint="${launch_flags[$entry_name]-}"
         rows+=("launch_flags"$'\t'"$(printf '%-20s%s' 'Launch Flags' "$launch_flags_hint")")
 
-        # Raised live (from a summary of 1980s-launcher ideas): "Launch
-        # with Arguments... optionally prompt for arguments." A one-off
+        # A one-off
         # sibling of Launch Flags right above it, not a variant — see
         # run_with_args()'s own comment for why they're kept separate.
         rows+=("run_with_args"$'\t'"$(printf '%-20s%s' 'Run With Args' '')")
@@ -3449,8 +3428,7 @@ pick_more_action() {
     # Refresh, not gated on has_entry — rebuilding the cache doesn't
     # depend on there being a highlighted row or even a real list on
     # screen, so it works the same from here and from the view picker.
-    # Moved out of the main footer itself — raised live: "Remove
-    # refresh from main menu and place it into actions?" F5/⌥R still
+    # Moved out of the main footer itself. F5/⌥R still
     # work as a direct keypress everywhere they always did (same as
     # F6/F7/F8, which are also listed here despite having their own
     # key); this row exists so the action stays discoverable without
@@ -3458,9 +3436,8 @@ pick_more_action() {
     # occasionally.
     rows+=("refresh"$'\t'"$(printf '%-20s%s' 'Refresh' 'F5 / ⌥R')")
 
-    # Not gated on has_entry, same reasoning as Refresh right above —
-    # raised live: "Action to launch TUI update or update all TUIs
-    # with command?" The count in parens is the same outdated_formulas
+    # Not gated on has_entry, same reasoning as Refresh right above.
+    # The count in parens is the same outdated_formulas
     # data the * marker and F3 details pane already read, so it's
     # never a second source of truth about what's actually outdated.
     local update_all_hint=''
@@ -3468,9 +3445,8 @@ pick_more_action() {
     rows+=("update_all"$'\t'"$(printf '%-20s%s' 'Update All' "$update_all_hint")")
 
     # Everything settings-related now lives one level down, in its own
-    # screen — raised live: "it seems Actions menu mixes up actual
-    # Actions and System Settings, how do we solve this (e.g. create a
-    # separate Settings menu)?" This row is the only settings-shaped
+    # screen, so Actions doesn't mix actual actions and standing
+    # preferences together. This row is the only settings-shaped
     # thing left here; Theme, the bundled-defaults toggles, Open to
     # Categories, Sort, Details, and Alt Keybinds all moved into
     # pick_settings_action()/open_settings_menu(). No F-key of its own
@@ -3488,9 +3464,8 @@ pick_more_action() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
-    # Details pane, always on by default — raised live: "can we add a
-    # details pane to F4 that is always on by default, describing what
-    # the toggles mean etc." Unlike DETAILS_VISIBLE elsewhere (a shared
+    # Details pane, always on by default, describing what each toggle
+    # means. Unlike DETAILS_VISIBLE elsewhere (a shared
     # on/off the user controls, off by default), there's nothing here
     # for a user to have deliberately hidden yet, and the whole point
     # is explaining rows whose one-line label doesn't say what they
@@ -3599,9 +3574,7 @@ open_more_menu() {
 # ------------------------------------------------------------
 # The Settings screen — Actions -> Settings.
 #
-# Raised live: "it seems Actions menu mixes up actual Actions and
-# System Settings, how do we solve this (e.g. create a separate
-# Settings menu)?" Actions had grown to mix two different kinds of
+# Actions had grown to mix two different kinds of
 # row: things you DO to the highlighted entry or to build something
 # new (Hide, Favorite, Categorize, Create Preset, Create Shortcut,
 # Backup), and standing preferences that change ongoing behavior
@@ -3621,8 +3594,8 @@ pick_settings_action() {
     local -a rows=()
     local result
 
-    # Raised live: "you misunderstood the theme counter. It should
-    # show in the settings menu, e.g. Themes (9)." The position-among-
+    # The count belongs on the Settings row itself, not just inside the
+    # Theme screen. The position-among-
     # ten indicator inside the Theme screen itself (pick_theme()'s own
     # header, via theme_position_label()) answers a different
     # question — "where is the one I'm on now" — this one just says
@@ -3664,9 +3637,8 @@ pick_settings_action() {
     [[ "$SORT_ORDER" == size ]] && sort_state='Size'
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
 
-    # Raised live as "detailed vs clean view," clarified to mean the
-    # main list's VERSION/SIZE columns specifically. Opt-in (default
-    # off), same reasoning as Open to Categories above — this changes
+    # Controls the main list's VERSION/SIZE columns specifically.
+    # Opt-in (default off), same reasoning as Open to Categories above — this changes
     # what every row looks like, so it defaults to the familiar full
     # layout rather than switching it out from under anyone. Read by
     # build_entries() and the column header, the only two places that
@@ -3675,8 +3647,7 @@ pick_settings_action() {
     [[ "$COMPACT_VIEW" == on ]] && compact_view_state='On'
     rows+=("toggle_compact_view"$'\t'"$(printf '%-20s%s' 'Compact View' "$compact_view_state")")
 
-    # Raised live: "implement a toggle for details pane (F3) in F4
-    # Actions." Same DETAILS_VISIBLE flag F3 itself toggles — on
+    # Same DETAILS_VISIBLE flag F3 itself toggles — on
     # every screen with an F3 details/preview pane (main list, F2
     # alike, see DETAILS_VISIBLE's own comment) — just also reachable
     # (and its current state visible) from here, for anyone who
@@ -3685,7 +3656,6 @@ pick_settings_action() {
     [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
     rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
 
-    # Raised live: "Toggle for details pane on the top or bottom."
     # Persisted (unlike Details above, which is a per-session peek) —
     # where the pane sits is a standing layout preference, same as
     # Sort or Alt Keybinds. Read by details_preview_window(), which
@@ -3695,9 +3665,8 @@ pick_settings_action() {
     [[ "$DETAILS_POSITION" == top ]] && details_position_state='Top'
     rows+=("toggle_details_position"$'\t'"$(printf '%-20s%s' 'Details Position' "$details_position_state")")
 
-    # Raised live: "the bottom menu is inconsistent — All view shows
-    # Fn and alternative keybinds, F2/F9 don't. I prefer a toggle
-    # switch that switches between Fn and the alternative keybinds."
+    # The footer was inconsistent about this — All showed both Fn keys
+    # and their ⌥ alternatives, F2/F9 never did.
     # Before this, whether ⌥ aliases showed was decided automatically,
     # purely by whether they happened to fit the terminal width — never
     # a real user choice, and F2/F9's own footer never even tried. Now
@@ -3855,8 +3824,7 @@ open_settings_menu() {
 # Finds $1 (a theme name) among the "name<TAB>display" rows in $2... and
 # prints "N of TOTAL" (1-based) on match, or nothing (exit 1) if it
 # isn't in there at all. Split out of pick_theme() so the count math is
-# testable without driving fzf — raised live: "show counter for
-# themes?"
+# testable without driving fzf.
 theme_position_label() {
 
     local target="$1"
@@ -4059,9 +4027,7 @@ pick_view() {
 
     # Same launch-history data as Most Used just above, ordered by
     # recency instead of frequency — a different question ("what did I
-    # just run" vs "what do I run a lot"), raised live from a summary
-    # of 1980s-launcher ideas: "Display the last few launched
-    # applications." Grouped right next to Most Used since both come
+    # just run" vs "what do I run a lot"). Grouped right next to Most Used since both come
     # from the same underlying log; Recently Added (install date) is a
     # third, unrelated axis.
     count="${#last_launched_order[@]}"
@@ -4079,9 +4045,8 @@ pick_view() {
 
     rm -f "$FOOTER_CLICK_FILE"
 
-    # Width-aware, same idea as the main list's own footer — raised
-    # live: "the bottom menu is becoming too wide, would harmonizing
-    # it with All view make sense?" This screen alone had grown to 7
+    # Width-aware, same idea as the main list's own footer. This screen
+    # alone had grown to 7
     # actions plus nav/search, more than a single static footer string
     # can safely promise; fzf was truncating it mid-word instead of
     # degrading gracefully. See build_picker_footer() for how.
@@ -4161,8 +4126,7 @@ pick_view() {
         return $?
     fi
 
-    # F9 — Launch Preset, reachable from here too now. Raised live:
-    # "why is there no F9 preset access in view picker?" F4/F5 already
+    # F9 — Launch Preset, reachable from here too now. F4/F5 already
     # worked from this screen; F9 not doing the same read as an
     # inconsistency once someone actually looked for it. Same
     # not-installed message as the main list's own F9 handling, not a
@@ -4627,10 +4591,8 @@ build_entries() {
         size_fmt="$(printf "%-${max_size}s" "$size")"
 
         # Compact View (Settings) drops the VERSION/SIZE columns
-        # entirely rather than just leaving them blank — raised live
-        # as "detailed vs clean view," then extended live again: "I
-        # would even go further and hide all the category, favorites
-        # etc. flags (#, + etc.)" — so the leading marker column goes
+        # entirely rather than just leaving them blank, and hides the
+        # leading marker column
         # too (the "*" outdated marker needs no separate handling: it
         # lives inside version_text above, which is already gone).
         # Everything else about a row (the command/formula/description
@@ -4657,9 +4619,8 @@ build_entries() {
     # default, so the rank only matters for these three, applied after
     # the fact and only to whatever already survived the filter above.
     #
-    # SORT_ORDER=size (Actions → Sort) rides the same mechanism: raised
-    # live as "would an option for sorting by name or size make sense?"
-    # — name is just the alphabetical order already there for free, so
+    # SORT_ORDER=size (Actions → Sort) rides the same mechanism —
+    # name is just the alphabetical order already there for free, so
     # the only real work is size, largest first, same "biggest number
     # first" convention the other three already use. Doesn't apply to
     # any of them, though — each already has a more meaningful order of
@@ -4837,7 +4798,7 @@ launch_in_current_terminal() {
     # of the launcher itself afterwards (rather than a plain shell)
     # fixes the one-shot-CLI case above and matches what a *launcher*
     # should feel like: pick a tool, use it, quit, and you're back
-    # picking another one. Raised live: someone who wants a plain
+    # picking another one. Someone who wants a plain
     # shell after a tool can already open a new tab or window for that
     # themselves — the launcher reappearing is the more useful default
     # for the case it's actually for. Both paths are passed as
@@ -4864,7 +4825,8 @@ launch_in_current_terminal() {
     # active and ends up drawing onto that same alternate buffer —
     # which the *after* printf then switches away from once the
     # command's done, discarding output that had nowhere else to go.
-    # Reported live as "fastfetch still quickly exits" even after the
+    # This meant a fast one-shot CLI could still look like it exited
+    # instantly even after the
     # press-any-key pause landed: the pause was working, but by the
     # time it appeared the output was already gone, switched out from
     # under it. Confirmed with a real tmux pane and pipe-pane capture
@@ -4876,8 +4838,8 @@ launch_in_current_terminal() {
     # alternate screen fresh when it starts, and the *after* printf
     # still recovers that if it crashes without exiting cleanly.
     #
-    # The "press any key" pause right before the relaunch was raised
-    # live too: a one-shot CLI prints and exits in under a second, and
+    # The "press any key" pause right before the relaunch matters for
+    # the same reason: a one-shot CLI prints and exits in under a second, and
     # without this the relaunch landed so fast it painted the picker's
     # full-screen UI over that output before there was any real chance
     # to read it — looked exactly like the command had silently
@@ -5003,8 +4965,7 @@ APPLESCRIPT
 # Backup — one archive with everything needed to rebuild this exact
 # setup on a fresh machine.
 #
-# Raised live: "would a feature like brew bundle make sense... a
-# backup of your brew apps, categories, and presets?" `brew bundle
+# `brew bundle
 # dump` already covers "what's installed" (formulae, casks, taps —
 # including the tap this launcher itself came from, so a restore pulls
 # it back in too); it has no idea this launcher exists, so it can't
@@ -5018,7 +4979,7 @@ APPLESCRIPT
 # derived, rebuilt automatically, and would only bloat the archive.
 #
 # Restore is left as a manual two-step rather than a launcher action
-# of its own (raised live too, deliberately out of scope for now):
+# of its own, deliberately out of scope for now:
 # untar this file, then `brew bundle install --file=Brewfile` plus
 # copying brew-launcher-config back to $CONFIG_DIR. Restoring only
 # ever happens once per fresh machine, so it doesn't need to be one
@@ -5487,8 +5448,7 @@ set_launch_flags() {
 
 # ------------------------------------------------------------
 # Launch Flags prompt — Actions -> Launch Flags, for the highlighted
-# entry. Raised live: "Actions: option to always run TUI with specific
-# commands?"
+# entry: extra arguments to always pass when it launches.
 #
 # Prefilled with the current flags (if any), same "type over what's
 # already there" idiom as rename_category(). Unlike every other
@@ -5558,9 +5518,8 @@ pick_launch_flags() {
 }
 
 # ------------------------------------------------------------
-# Run With Args — Actions -> Run With Args, for the highlighted entry.
-# Raised live (from a summary of 1980s-launcher ideas): "Launch with
-# Arguments... optionally prompt for arguments [before launching]."
+# Run With Args — Actions -> Run With Args, for the highlighted entry:
+# launches it right now with extra arguments, just this once.
 #
 # Deliberately separate from Launch Flags above, not a variant of it:
 # Launch Flags is a standing choice (always these flags, every time,
@@ -5718,8 +5677,7 @@ confirm_relaunch() {
 # pinned details pane in the way — see the main loop's own Esc
 # handler for exactly when this is reached).
 #
-# Raised live: "I often accidentally exit the brew-launcher with ESC.
-# Can you make a prompt similar to after when you quit a TUI?" Esc is
+# Esc is
 # the single most-pressed key for "go back one level" everywhere else
 # in the app (closing the details pane, backing out of a category, out
 # of Actions/Settings...), so on "All" — the one screen with nowhere
@@ -5797,8 +5755,7 @@ confirm_update_all() {
 
 # ------------------------------------------------------------
 # Update All — Actions -> Update All. Runs `brew upgrade` for
-# everything outdated, raised live: "Action to launch TUI update or
-# update all TUIs with command?"
+# everything outdated.
 #
 # Reuses the three existing launch paths (current terminal/tmux/
 # Ghostty) a normal tool launch already goes through, via a throwaway
@@ -6143,9 +6100,8 @@ add_to_category() {
 
 # ------------------------------------------------------------
 # Shared multi-select picker for the bulk Hide/Favorite/Categorize
-# actions below — raised live: "I like the behavior of how we create
-# presets (adding TUIs with tab). Would it be feasible to implement
-# this behavior for Hide, Favorite, and Categorize as well?"
+# actions below, bringing the same Tab-to-mark idea Create Preset uses
+# to these three actions.
 #
 # Deliberately NOT Create Preset's own custom ordered-badge mechanism
 # (--internal-preset-tab and its side-channel state file) — that exists
@@ -6225,9 +6181,8 @@ bulk_hide() {
     # "${(@f)$(...)}" on an empty string yields a one-element array
     # (one empty string), not a zero-element one, in zsh. Skipping this
     # check let bulk_categorize() below fall through to its
-    # pick_category_name() prompt even after Esc; raised live as
-    # "when you cancel/exit bulk categorize, it opens the 'new or
-    # existing' prompt, instead of cancelling/exiting."
+    # pick_category_name() prompt even after Esc, opening the "new or
+    # existing" naming prompt instead of actually cancelling.
     raw_selection="$(pick_multiple_entries "$border_label" "$action_verb")"
     [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
 
@@ -6376,9 +6331,7 @@ create_preset() {
     local pick_valid=false
 
     # 1. Pick tools from whatever's currently on screen ($entries,
-    #    i.e. whatever CURRENT_VIEW already is) — raised live: "create
-    #    preset should only show what is actually listed in the
-    #    current menu (e.g. all, categories, favorites etc.)." Used to
+    #    i.e. whatever CURRENT_VIEW already is). Used to
     #    always force CURRENT_VIEW to "All" regardless of context; that
     #    made it the one Actions row whose own picker didn't match what
     #    you were actually looking at, and — since Actions has no
@@ -6565,7 +6518,7 @@ create_preset() {
 # ------------------------------------------------------------
 # Rearrange (or add/remove tools in) an existing preset — F9's Ctrl-E.
 #
-# Raised live: "option to rearrange TUIs in existing presets." Before
+# Before
 # this, the only way to change a preset's order was Create Preset
 # again with the exact same name (replacing it outright) — which meant
 # re-marking every tool from scratch in the new order, since Create
@@ -6621,8 +6574,6 @@ edit_preset() {
     # preset) would otherwise vanish from its own edit screen the same
     # way an uninstalled one does below — present in the file, not
     # selectable, silently eating a number in the badge sequence.
-    # Raised live: "some TUIs that aren't listed anymore still show
-    # up, break the numbering logic, but are not selectable."
     local saved_view="$CURRENT_VIEW"
     local -a saved_entries=("${entries[@]}")
     local -A saved_hidden=("${(kv)hidden_commands[@]}")
@@ -6897,9 +6848,8 @@ launch_preset() {
             $'Ctrl-E\t\t[Edit]' $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
     )"
 
-    # Preview pane always on here, no F3 toggle — raised live: "Preset
-    # menu F9 should offer same behavior as F4 menu (details pane
-    # always on)." A preset list is usually short and the whole point
+    # Preview pane always on here, no F3 toggle, matching Actions' own
+    # always-on pane. A preset list is usually short and the whole point
     # of glancing at one before launching it is seeing what's actually
     # in it, so — like Actions' own always-on pane — there's nothing to
     # remember to turn on. DETAILS_VISIBLE (and F3) still control the
@@ -6937,7 +6887,7 @@ launch_preset() {
     # this is the only way to recover which word was actually clicked.
     # Clearing it before this check (as this function used to) meant a
     # "[Delete]" click always fell through to launching the preset
-    # instead — reported live as "delete in brackets is not clickable."
+    # instead of deleting it.
     if [[ -f "$FOOTER_CLICK_FILE" ]]; then
         clicked_word="$(sed -n '1p' "$FOOTER_CLICK_FILE")"
         rm -f "$FOOTER_CLICK_FILE"
@@ -7038,7 +6988,7 @@ launch_preset() {
 # that one gap; there's no narrower tier below it to fall back to.
 #
 # The border/padding overhead below is a real measured constant, not
-# an estimate — reported live after the [Actions] rename (3 characters
+# an estimate — found after the [Actions] rename (3 characters
 # wider than the old [More]) pushed tier 1's line to exactly the old
 # budget's ceiling with zero margin, which turned out to still overflow
 # in practice: rendering it at every width from 96 to 106 columns found
@@ -7083,8 +7033,7 @@ footer_actions() {
     parts+=("$(footer_key F3 D $with_alt)  [Details]")
     parts+=("$(footer_key F4 M $with_alt)  [Actions]")
 
-    # Refresh dropped from here — raised live: "Remove refresh from
-    # main menu and place it into actions?" It's now Actions -> Refresh
+    # Refresh dropped from here. It's now Actions -> Refresh
     # (see pick_more_action()); F5/⌥R still work as a direct keypress
     # exactly as before, this only stops spending a permanent footer
     # slot on something reached for far less often than the four above.
@@ -7098,11 +7047,11 @@ footer_actions() {
     # stays terse like every other entry here.
     parts+=("$(footer_key F9 P $with_alt)  [Presets]")
 
-    # Last, not grouped up with the rest — raised live: "why is there
-    # no F1 help mentioned?" It used to be deliberately left off
+    # Last, not grouped up with the rest. It used to be deliberately
+    # left off
     # everywhere on the theory that F1=help is close to universal
-    # knowledge, not worth spending footer space teaching; a real user
-    # not finding it is direct evidence that assumption doesn't hold
+    # knowledge, not worth spending footer space teaching; not finding
+    # it in practice is direct evidence that assumption doesn't hold
     # for everyone. Placed last specifically so it's still the first
     # thing dropped if a narrower terminal can't fit everything (see
     # build_footer()'s three-attempt fallback) — worth showing when
@@ -7163,9 +7112,8 @@ build_footer() {
 
 # ------------------------------------------------------------
 # Same two-line, width-aware idea as build_footer()/footer_actions()
-# above, generalized for the F2 and F9 pickers' own footers — raised
-# live: "the bottom menu is becoming too wide, would harmonizing it
-# with All view make sense?" Both had grown past what a single static
+# above, generalized for the F2 and F9 pickers' own footers.
+# Both had grown past what a single static
 # footer string can safely promise (Ctrl-R/Ctrl-D, F3 Details, F9
 # Presets all landed there over a few PRs, with nothing checking
 # whether they'd actually fit on screen) — fzf just truncates
@@ -7364,9 +7312,9 @@ HOMEBREW_USAGE="$(cat "$HOMEBREW_USAGE_FILE" 2>/dev/null)"
 # Backup, every settings toggle, Launch Preset...), and this used to
 # run from up there, near CONFIG_OPEN_TO_CATEGORIES's own declaration —
 # fine for whichever of those happened to already be defined by that
-# point, silently broken for whichever weren't. Raised live via a
-# screenshot: "bottom menu is missing when launching into view screen
-# (toggle on)" — build_picker_footer() was one of the not-yet-defined
+# point, silently broken for whichever weren't: the footer went
+# missing when launching straight into the view screen with this
+# toggle on — build_picker_footer() was one of the not-yet-defined
 # ones, so the footer variable came back empty. Confirmed live (a real
 # tmux session, the previously-released binary, this exact toggle) and
 # fixed generally rather than one function at a time: see
@@ -7537,9 +7485,8 @@ while true; do
     # not duplicated in Actions too — unlike Create Preset (a one-time
     # setup step), running a preset is something to reach for
     # repeatedly, worth its own always-visible key rather than a menu
-    # row buried behind F4. Raised live: "I think that launch preset
-    # should be removed from this menu, since it is redundant having
-    # F9 always shown." launch_preset() does its own picker and, on
+    # row buried behind F4, redundant with F9 always being shown
+    # anyway. launch_preset() does its own picker and, on
     # success, execs into tmux and never returns — a failure (or Esc)
     # falls back to the picker, same as any other action here.
     # --------------------------------------------------------
@@ -7608,10 +7555,7 @@ while true; do
     # rather than jumping straight to "All", so you can switch to a
     # different category without detouring through the full list.
     #
-    # Skipped entirely when DETAILS_PINNED is true — raised live: "I
-    # found a conflict between the Esc behavior closing the details
-    # pane and the details toggle... I think the toggle should
-    # override this behavior." Turning Details on via Actions is a
+    # Skipped entirely when DETAILS_PINNED is true. Turning Details on via Actions is a
     # standing "always on" choice; Esc immediately undoing it on the
     # very next press would make that choice pointless. A pane opened
     # with a quick F3 press is the opposite — Esc closing it first is
