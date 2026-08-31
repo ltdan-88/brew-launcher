@@ -148,4 +148,27 @@ grep -qx "THEME=nord" "$CONFIG_FILE" && fail "the old THEME=nord line should be 
 grep -qx "# a note I wrote by hand" "$CONFIG_FILE" || fail "a hand-written comment should survive an update to a different concern"
 grep -qx "TERMINAL=current" "$CONFIG_FILE" || fail "TERMINAL=current should still be there, untouched by a THEME update"
 
-printf 'PASS: all named themes accepted, unknown theme rejected, config file honored, env var still wins, set_config_value writes/updates correctly\n'
+# ------------------------------------------------------------
+# 6. theme_position_label() — the count math behind the Theme screen's
+#    "(N of TOTAL)" header. Raised live: "show counter for themes?"
+#    Pure (no fzf), so sourced and called directly, same approach as
+#    set_config_value above.
+# ------------------------------------------------------------
+
+source <(sed -n '/^theme_position_label() {/,/^}/p' "$LAUNCHER")
+
+fixture_choices=("aaa"$'\t'"AAA display" "bbb"$'\t'"BBB display" "ccc"$'\t'"CCC display")
+
+out="$(theme_position_label "bbb" "${fixture_choices[@]}")" ||
+    fail "theme_position_label should succeed for a name that's in the list"
+[[ "$out" == "2 of 3" ]] || fail "expected '2 of 3' for the middle entry, got: $out"
+
+out="$(theme_position_label "aaa" "${fixture_choices[@]}")" ||
+    fail "theme_position_label should succeed for the first entry"
+[[ "$out" == "1 of 3" ]] || fail "expected '1 of 3' for the first entry, got: $out"
+
+if theme_position_label "not-a-real-theme" "${fixture_choices[@]}" >/dev/null; then
+    fail "theme_position_label should fail (return 1) for a name not in the list"
+fi
+
+printf 'PASS: all named themes accepted, unknown theme rejected, config file honored, env var still wins, set_config_value writes/updates correctly, theme_position_label counts correctly\n'

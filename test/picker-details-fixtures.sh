@@ -186,7 +186,9 @@ echo "$output" | grep -qi "Empty" ||
 
 # ------------------------------------------------------------
 # 5. Preset preview: lists its members in FILE order (the launch
-#    order), not alphabetical, with descriptions.
+#    order), not alphabetical, with descriptions, and numbered
+#    explicitly — raised live: "Presets: show explicitly order of
+#    TUIs."
 # ------------------------------------------------------------
 
 printf 'tele\nfastfetch\n' > "$PRESETS_DIR/morning"
@@ -200,8 +202,13 @@ echo "$output" | grep -q "fastfetch" ||
 echo "$output" | grep -q "TUI Telegram client" ||
     fail "preset preview should show tele's description from the cache, got: $output"
 
-tele_line="$(echo "$output" | grep -n "^  tele" | cut -d: -f1)"
-fastfetch_line="$(echo "$output" | grep -n "^  fastfetch" | cut -d: -f1)"
+echo "$output" | grep -qE "^ *1\. tele" ||
+    fail "tele should be badged 1 (first in file order), got: $output"
+echo "$output" | grep -qE "^ *2\. fastfetch" ||
+    fail "fastfetch should be badged 2 (second in file order), got: $output"
+
+tele_line="$(echo "$output" | grep -nE "^ *[0-9]+\. tele" | cut -d: -f1)"
+fastfetch_line="$(echo "$output" | grep -nE "^ *[0-9]+\. fastfetch" | cut -d: -f1)"
 (( tele_line < fastfetch_line )) ||
     fail "preset preview should preserve file/launch order (tele first), not sort alphabetically — got tele at line $tele_line, fastfetch at $fastfetch_line"
 

@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.49.0] — 2026-08-31
+
+### Added
+
+- **The Theme screen (Actions → Settings → Theme) now shows where the
+  current theme sits among all ten**, e.g. `Current: dracula  (5 of
+  10)`. Raised live: "show counter for themes?" — with ten to scroll
+  through and nothing marking your place, there was no way to tell how
+  many more there were below the fold.
+- **The preset preview (F9's details pane) now numbers each entry**,
+  e.g. `1. newsboat`, `2. weather`, instead of relying on position
+  alone to show launch order. Raised live: "Presets: show explicitly
+  order of TUIs."
+
+### Fixed
+
+- A few in-app and README references to Create Preset and Theme still
+  said `F4 → Create Preset` / `F4 → Theme`, from before both moved a
+  level down (Create Preset into Actions, Theme into Settings). Updated
+  to the current paths (`F4 → Actions → Create Preset` /
+  `F4 → Actions → Settings → Theme`).
+
 ## [0.48.0] — 2026-08-29
 
 ### Changed
