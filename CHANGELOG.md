@@ -5,6 +5,41 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.53.1] — 2026-08-31
+
+### Fixed
+
+- **The theme counter showed in the wrong place.** Raised live: "you
+  misunderstood the theme counter. It should show in the settings
+  menu, e.g. Themes (9)." The position-among-ten indicator inside the
+  Theme screen itself stays (a different, still-useful question —
+  "where is the one I'm on now"); the Settings row itself now also
+  shows the total, `Themes (10)`, same convention Settings' own row
+  already uses for its own item count.
+- **Editing a preset could silently break its own numbering.** Raised
+  live: "some TUIs that aren't listed anymore still show up, break the
+  numbering logic, but are not selectable." Two real causes: a preset
+  member you'd since hidden (F6) — still installed, just excluded from
+  "All" the normal way — was excluded from the edit screen's own tool
+  list the same way, even though it's exactly the kind of tool you'd
+  hide precisely because you only run it via a preset. Fixed by
+  clearing the hidden set for that one build. A genuinely uninstalled
+  member has no row to show at all — now dropped with a one-line note
+  when the editor opens, instead of silently occupying an invisible,
+  unselectable slot in the badge sequence. Also fixed a related edge
+  case caught while testing this: if every member turned out to be
+  stale, the seeded state file ended up with one phantom blank-line
+  entry instead of genuinely empty, which would have reproduced the
+  exact same bug for a different reason.
+
+### Changed
+
+- **Compact View now also hides the `+`/`#`/`*` markers**, not just
+  the version/size columns. Raised live: "For compact view I would
+  even go further and hide all the category, favorites etc. flags (#,
+  + etc.)" The footer's legend explaining those markers is suppressed
+  too, since there's nothing left to explain.
+
 ## [0.53.0] — 2026-08-31
 
 ### Added

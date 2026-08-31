@@ -147,4 +147,137 @@ launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$launch_preset_block" == *'edit_preset "$preset_name"'* ]] ||
     fail "launch_preset should dispatch ctrl-e to edit_preset"
 
-printf 'PASS: --internal-preset-tab correctly seeds badges from an existing preset'"'"'s members/order (not blank, unlike Create Preset), unmark-then-remark reorders as promised, marking a tool not originally in the preset appends it, edit_preset() builds its own All-based tool list (restoring the caller'"'"'s view/entries) and saves straight back to the same file with no name prompt, and launch_preset wires Ctrl-E end to end\n'
+# ------------------------------------------------------------
+# 6. Real functional test of the fix raised live: "I tried editing a
+#    preset and noticed that some TUIs that aren't listed anymore
+#    still show up, break the numbering logic, but are not
+#    selectable." Two distinct causes, both covered here:
+#
+#      - A HIDDEN (F6) but still-installed member used to be excluded
+#        from edit_preset()'s own "All" base list the same way it's
+#        excluded from the real All view, since build_entries() always
+#        excludes hidden entries there — even though the member is
+#        still perfectly real. edit_preset() now clears
+#        hidden_commands for that one build.
+#      - A genuinely uninstalled member has no row to build at all —
+#        dropped from the seeded state instead, with a printed note,
+#        rather than left in to eat a badge slot invisibly.
+#
+# fzf itself is stubbed (a fake binary on PATH) rather than driven for
+# real — it just captures what edit_preset() built (the seeded state
+# file, and whatever's piped to fzf as the rendered list) and reports
+# Esc, so edit_preset() cancels cleanly with no interaction needed.
+# This is the one thing the earlier source-text-only coverage above
+# couldn't have caught: the actual runtime content of what gets seeded
+# and rendered, not just that the right lines of code exist.
+# ------------------------------------------------------------
+
+EDIT_TEST_HOME="$(mktemp -d)"
+
+export XDG_CACHE_HOME="$EDIT_TEST_HOME/cache"
+export XDG_CONFIG_HOME="$EDIT_TEST_HOME/config"
+CACHE_DIR="$XDG_CACHE_HOME/brew-launcher"
+CONFIG_DIR="$XDG_CONFIG_HOME/brew-launcher"
+PRESETS_DIR="$CONFIG_DIR/presets"
+mkdir -p "$CACHE_DIR" "$PRESETS_DIR"
+
+CACHE_FILE="$CACHE_DIR/entries"
+cat > "$CACHE_FILE" <<'EOF'
+visibletool	Visible tool	visibletool	1.0	1MB	0	visibletool	/bin/visibletool	100
+hiddentool	Hidden tool	hiddentool	1.0	1MB	0	hiddentool	/bin/hiddentool	200
+EOF
+
+CACHE_FORMAT_VERSION="$(sed -n 's/^CACHE_FORMAT_VERSION=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
+{
+    print -r -- "$CACHE_FORMAT_VERSION"
+    print -r -- "fixture-state-snapshot"
+} > "$CACHE_DIR/state"
+: > "$CACHE_DIR/outdated"
+
+printf 'visibletool\nhiddentool\nno-longer-installed-tool\n' > "$PRESETS_DIR/mixedpreset"
+
+FAKE_BIN="$EDIT_TEST_HOME/fake-bin"
+mkdir -p "$FAKE_BIN"
+CAPTURED_LIST="$EDIT_TEST_HOME/captured-list"
+CAPTURED_STATE="$EDIT_TEST_HOME/captured-state"
+
+cat > "$FAKE_BIN/fzf" <<EOF
+#!/bin/zsh
+cat > "$CAPTURED_LIST"
+cp "\$PRESET_ORDER_STATE_FILE" "$CAPTURED_STATE" 2>/dev/null || : > "$CAPTURED_STATE"
+printf 'esc\n'
+EOF
+chmod +x "$FAKE_BIN/fzf"
+
+# edit_preset() is only reachable through the interactive Actions menu
+# — sourced and called directly here instead, with the same fixture
+# globals build_entries() needs (same technique compact-view-fixtures.sh
+# and sort-fixtures.sh already use).
+FAVORITE_MARKER_TEXT="+"
+CATEGORIZED_MARKER_TEXT="#"
+UPDATE_INDICATOR_TEXT="*"
+COMPACT_VIEW="off"
+LEFT_MARKER_WIDTH=4
+max_name=20
+max_version=8
+max_size=6
+COMPUTED_VIEW_LIMIT="$(sed -n 's/^COMPUTED_VIEW_LIMIT=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
+[[ -n "$COMPUTED_VIEW_LIMIT" ]] || fail "could not read COMPUTED_VIEW_LIMIT from $LAUNCHER"
+
+typeset -A category_members favorite_commands categorized_commands
+typeset -A outdated_formulas install_times launch_counts entry_sizes
+typeset -A hidden_commands=(hiddentool 1)
+
+CURRENT_VIEW="All"
+entries=()
+
+source <(sed -n '/^build_entries() {/,/^}/p' "$LAUNCHER")
+source <(sed -n '/^edit_preset() {/,/^}/p' "$LAUNCHER")
+source <(sed -n '/^screen_border_label() {/,/^}/p' "$LAUNCHER")
+source <(sed -n '/^launcher_update_marker() {/,/^}/p' "$LAUNCHER")
+
+SCRIPT_PATH="$LAUNCHER"
+TMUX_AVAILABLE=true
+FOOTER_CLICK_FILE="$EDIT_TEST_HOME/footer-click"
+VERSION="test"
+FZF_COLORS=""
+
+note_output="$(PATH="$FAKE_BIN:$PATH" edit_preset mixedpreset 2>&1)"
+
+echo "$note_output" | grep -q "no-longer-installed-tool" ||
+    fail "should have printed a note naming the genuinely-uninstalled member, got: $note_output"
+echo "$note_output" | grep -q "1 command" ||
+    fail "should have said exactly 1 command was dropped, got: $note_output"
+
+[[ -f "$CAPTURED_LIST" ]] || fail "edit_preset should have reached the fzf call at all"
+
+grep -qE $'^visibletool\t 1 ' "$CAPTURED_LIST" ||
+    fail "visibletool should be badged 1, got: $(cat "$CAPTURED_LIST")"
+grep -qE $'^hiddentool\t 2 ' "$CAPTURED_LIST" ||
+    fail "hiddentool (still installed, just hidden from the main list) should be badged 2 — not missing, and not skipping a number — got: $(cat "$CAPTURED_LIST")"
+grep -q "no-longer-installed-tool" "$CAPTURED_LIST" &&
+    fail "the genuinely uninstalled member has no row to show at all and should not appear in the rendered list: $(cat "$CAPTURED_LIST")"
+
+[[ "$(<"$CAPTURED_STATE")" == $'visibletool\nhiddentool' ]] ||
+    fail "the seeded state should keep visibletool and hiddentool, in order, dropping only the uninstalled one, got: $(cat "$CAPTURED_STATE")"
+
+# ------------------------------------------------------------
+# 7. Every member stale: the empty-array guard. Caught live before it
+#    existed: `printf '%s\n' "${empty[@]}"` still writes one blank
+#    line, which --internal-preset-tab reads back as one real
+#    (empty-string) entry — silently eating badge #1 the exact same
+#    way an unfiltered stale member would have.
+# ------------------------------------------------------------
+
+printf 'gone-tool-one\ngone-tool-two\n' > "$PRESETS_DIR/allstale"
+rm -f "$CAPTURED_LIST" "$CAPTURED_STATE"
+
+PATH="$FAKE_BIN:$PATH" edit_preset allstale >/dev/null 2>&1
+
+[[ -f "$CAPTURED_STATE" ]] || fail "edit_preset should still reach fzf even when every member is stale"
+[[ ! -s "$CAPTURED_STATE" ]] ||
+    fail "the seeded state should be genuinely empty (0 bytes), not a single blank line, when every member is stale — got $(wc -c < "$CAPTURED_STATE") byte(s): $(cat -A "$CAPTURED_STATE" 2>/dev/null || od -c "$CAPTURED_STATE")"
+
+rm -rf "$EDIT_TEST_HOME"
+
+printf 'PASS: --internal-preset-tab correctly seeds badges from an existing preset'"'"'s members/order (not blank, unlike Create Preset), unmark-then-remark reorders as promised, marking a tool not originally in the preset appends it, edit_preset() builds its own All-based tool list (restoring the caller'"'"'s view/entries) and saves straight back to the same file with no name prompt, launch_preset wires Ctrl-E end to end, a hidden-but-installed member is included and correctly badged (not excluded the way All itself excludes it), a genuinely uninstalled member is dropped with a printed note instead of silently breaking the badge sequence, and seeding an entirely-stale preset leaves a genuinely empty state file rather than one phantom blank-line entry\n'

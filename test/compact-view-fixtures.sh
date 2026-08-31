@@ -47,9 +47,15 @@ max_name=20
 max_version=8
 max_size=6
 
-typeset -A hidden_commands category_members favorite_commands
-typeset -A categorized_commands outdated_formulas install_times launch_counts
+typeset -A hidden_commands category_members
+typeset -A outdated_formulas install_times launch_counts
 typeset -A entry_sizes
+# Favorited and categorized, so the +/# markers have something real to
+# show in section 1 and genuinely disappear (not just "nothing to
+# show anyway") in section 2.
+typeset -A favorite_commands=(btop 1)
+typeset -A categorized_commands=(btop 1)
+typeset -A outdated_formulas=(btop "1.5.0")
 
 source <(sed -n '/^build_entries() {/,/^}/p' "$LAUNCHER")
 
@@ -73,6 +79,12 @@ echo "$display" | grep -q "1.5MB" ||
     fail "COMPACT_VIEW=off should show the size in the display string, got: $display"
 echo "$display" | grep -q "Resource monitor" ||
     fail "the description should always show regardless of Compact View, got: $display"
+echo "$display" | grep -q '\*' ||
+    fail "COMPACT_VIEW=off should show the outdated marker, got: $display"
+echo "$display" | grep -q '+' ||
+    fail "COMPACT_VIEW=off should show the favorited marker, got: $display"
+echo "$display" | grep -q '#' ||
+    fail "COMPACT_VIEW=off should show the categorized marker, got: $display"
 
 # ------------------------------------------------------------
 # 2. COMPACT_VIEW=on: the version and size are gone entirely, not
@@ -94,14 +106,25 @@ echo "$display" | grep -q "btop" ||
 echo "$display" | grep -q "Resource monitor" ||
     fail "the description should still show in Compact View, got: $display"
 
+# Raised live: "For compact view I would even go further and hide all
+# the category, favorites etc. flags (#, + etc.)" — this fixture is
+# favorited, categorized, AND outdated, so all three markers have
+# something real to fail on if they leaked through.
+echo "$display" | grep -q '\*' &&
+    fail "COMPACT_VIEW=on should not show the outdated marker either, got: $display"
+echo "$display" | grep -q '+' &&
+    fail "COMPACT_VIEW=on should not show the favorited marker, got: $display"
+echo "$display" | grep -q '#' &&
+    fail "COMPACT_VIEW=on should not show the categorized marker, got: $display"
+
 # ------------------------------------------------------------
-# 3. Column header (FZF_HEADER): drops VERSION/SIZE when compact,
-#    same as the row data itself. A top-level computed constant, not
-#    a function, so checked as source text rather than sourced.
+# 3. Column header (build_fzf_header): drops VERSION/SIZE when
+#    compact, same as the row data itself — checked as source text,
+#    same reasoning as before.
 # ------------------------------------------------------------
 
-header_block="$(sed -n '/^# Column header$/,/^fi$/p' "$LAUNCHER")"
-[[ -n "$header_block" ]] || fail "column header block not found"
+header_block="$(sed -n '/^build_fzf_header() {/,/^}/p' "$LAUNCHER")"
+[[ -n "$header_block" ]] || fail "build_fzf_header() not found"
 
 [[ "$header_block" == *'COMPACT_VIEW" == on'* ]] ||
     fail "the column header should branch on COMPACT_VIEW, same as build_entries()"
@@ -109,7 +132,22 @@ header_block="$(sed -n '/^# Column header$/,/^fi$/p' "$LAUNCHER")"
     fail "the compact branch should still print NAME and DESCRIPTION"
 
 # ------------------------------------------------------------
-# 4. Wiring: Settings offers Compact View, and toggling it rebuilds
+# 4. Footer legend (+/#/* explanation): also suppressed when compact —
+#    explaining markers that no longer appear anywhere would just be
+#    confusing. Checked as source text; build_footer() itself isn't
+#    sourced and run directly here, same reasoning
+#    actions-menu-fixtures.sh gives for footer_actions() (a real zsh
+#    `${(l:...)}`-under-set -u quirk unrelated to this feature).
+# ------------------------------------------------------------
+
+footer_block="$(sed -n '/^build_footer() {/,/^}/p' "$LAUNCHER")"
+[[ -n "$footer_block" ]] || fail "build_footer() not found"
+
+[[ "$footer_block" == *'COMPACT_VIEW" == on'*'line1="$nav"'* ]] ||
+    fail "build_footer should drop the legend (fall back to \$nav) when Compact View is on"
+
+# ------------------------------------------------------------
+# 5. Wiring: Settings offers Compact View, and toggling it rebuilds
 #    the list right away (same as Sort) rather than waiting for the
 #    next incidental redraw.
 # ------------------------------------------------------------
@@ -135,4 +173,4 @@ toggle_block="$(printf '%s\n' "$open_settings_block" | sed -n '/toggle_compact_v
 [[ "$toggle_block" == *'build_fzf_header'* ]] ||
     fail "toggling Compact View should also rebuild the column header (build_fzf_header), not just the row data — otherwise it keeps showing VERSION/SIZE column names over rows that no longer have them"
 
-printf 'PASS: build_entries() drops the version/size text entirely from the display string when Compact View is on (keeping the marker, name, and description), the column header branches the same way, and Settings -> Compact View toggles + persists it with an immediate rebuild of both the rows and the column header\n'
+printf 'PASS: build_entries() drops the version/size text entirely from the display string when Compact View is on, and also drops the +/#/* markers entirely (a favorited, categorized, outdated fixture proves it, not just an unmarked one) while keeping the name and description; the column header and footer legend both suppress themselves the same way; and Settings -> Compact View toggles + persists it with an immediate rebuild of both the rows and the column header\n'
