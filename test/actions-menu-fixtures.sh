@@ -307,4 +307,51 @@ backup_pos="$(echo "$rows_order" | grep -n '"backup"' | cut -d: -f1)"
 [[ "$launch_preset_block" != *'f3'* ]] ||
     fail "launch_preset should no longer expect or offer f3 — its details pane has no toggle anymore"
 
-printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Settings holds every setting (Theme, bundled defaults, Open to Categories, Sort, Details, Alt Keybinds) behind one Actions row, DETAILS_PINNED keeps Esc from undoing a Details choice made via Settings, Alt Keybinds is wired end to end, Actions and Settings each have their own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize, and F9 has its own unconditional details pane\n'
+# ------------------------------------------------------------
+# 9. Refresh moved out of the main footer into Actions — raised live:
+#    "Remove refresh from main menu and place it into actions?" F5/⌥R
+#    still work as a direct keypress everywhere they always did (same
+#    idea as F6/F7/F8, which keep their own key despite also being
+#    listed in Actions); only the permanent footer slot and the two
+#    click-word mappings that pointed at it are gone.
+# ------------------------------------------------------------
+
+full_source="$(cat "$LAUNCHER")"
+has_entry_block="$(printf '%s\n' "$more_action_block" | sed -n '/if \[\[ "\$has_entry" == true \]\]; then/,/^    fi$/p')"
+
+[[ "$footer_actions_block" != *'[Refresh]'* ]] ||
+    fail "footer_actions() should no longer show [Refresh] — it moved into Actions"
+
+[[ "$click_table" != *"'[Refresh]'"* ]] ||
+    fail "--internal-footer-click should no longer recognize a [Refresh] click — nothing shows that text anymore"
+
+[[ "$more_action_block" == *'rows+=("refresh"'* ]] ||
+    fail "pick_more_action should offer a refresh row"
+[[ "$open_menu_block" == *$'\n            refresh)'* && "$open_menu_block" == *'refresh_cache_and_state'* ]] ||
+    fail "open_more_menu should dispatch refresh to refresh_cache_and_state"
+
+# NOT gated on has_entry — refreshing the cache doesn't need a
+# highlighted row or even a real list on screen, so it should work the
+# same from the view picker's own Actions (has_entry=false) too.
+[[ "$has_entry_block" != *'rows+=("refresh"'* ]] ||
+    fail "refresh's row should sit outside the has_entry-gated block — it doesn't need \$entries to mean anything"
+
+# F5 itself still works as a direct keypress, both on the main list and
+# from inside the view picker (F2) — only its footer/click-word
+# presence is gone, not the key.
+[[ "$full_source" == *'"$action" == "f5" || "$action" == "alt-r"'* ]] ||
+    fail "the main list should still handle a direct f5/alt-r keypress"
+[[ "$pick_view_block" == *'f5'* ]] ||
+    fail "pick_view (F2) should still expect f5 as a direct keypress"
+[[ "$pick_view_block" == *'refresh_cache_and_state'* ]] ||
+    fail "pick_view (F2) should still call refresh_cache_and_state on f5"
+
+# But the view picker's own footer spec/click-word mapping for it are
+# gone, same as the main list's.
+view_footer_call="$(sed -n '/view_footer="\$(/,/)"/p' "$LAUNCHER")"
+[[ "$view_footer_call" != *'[Refresh]'* ]] ||
+    fail "pick_view's footer spec should no longer include [Refresh]"
+[[ "$pick_view_block" != *"'[Refresh]'"* ]] ||
+    fail "pick_view's click-word mapping should no longer recognize a [Refresh] click"
+
+printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Settings holds every setting (Theme, bundled defaults, Open to Categories, Sort, Details, Alt Keybinds) behind one Actions row, DETAILS_PINNED keeps Esc from undoing a Details choice made via Settings, Alt Keybinds is wired end to end, Actions and Settings each have their own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize, F9 has its own unconditional details pane, and Refresh moved out of both footers into Actions (has_entry-independent) while F5/⌥R keep working directly\n'

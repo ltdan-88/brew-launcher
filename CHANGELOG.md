@@ -5,6 +5,29 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.0] — 2026-08-31
+
+### Changed
+
+- **Refresh (F5) moved out of the main footer into Actions.** Raised
+  live: "Remove refresh from main menu and place it into actions?"
+  F5 / ⌥R still work as a direct keypress everywhere they always did —
+  the main list and the view picker (F2) — same as F6/F7/F8, which
+  are also listed in Actions despite having their own key. Only the
+  permanent footer slot and the two now-unreachable click-word
+  mappings are gone. Actions' Refresh row isn't gated on there being a
+  highlighted entry, so it shows up from the view picker's own Actions
+  too (alongside Settings and Backup).
+
+### Added
+
+- **Details Position (Actions → Settings → Details Position)** — a new
+  toggle switching whether the details/preview pane opens above or
+  below the list (`Top` / `Bottom`, default `Bottom`). Raised live:
+  "Toggle for details pane on the top or bottom." Applies everywhere a
+  details/preview pane shows up: the main list, F2, F9, and
+  Actions/Settings' own always-on panes.
+
 ## [0.49.0] — 2026-08-31
 
 ### Added

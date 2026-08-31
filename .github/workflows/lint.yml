@@ -221,6 +221,14 @@ name: CI
 #       Enter still prefers the cache's resolved path over a fresh PATH
 #       lookup (inline in the main loop, not its own function — same
 #       "no drive-by refactor" reasoning as rename-fixtures.sh).
+#
+#   24. details-position-fixtures — Settings -> Details Position,
+#       raised live: "Toggle for details pane on the top or bottom."
+#       details_preview_window() (the shared --preview-window builder
+#       every one of the five details/preview screens now goes
+#       through) is pure, sourced and called directly; the Settings
+#       row/dispatch are source-text assertions, same reasoning as
+#       actions-menu-fixtures.sh.
 
 on:
   push:
@@ -553,6 +561,18 @@ jobs:
 
       - name: Security regression test
         run: zsh test/security-fixtures.sh
+
+  details-position-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — details_preview_window() is
+      # sourced and called directly; the Settings row/dispatch are
+      # source-text assertions.
+      - name: Details Position test
+        run: zsh test/details-position-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
