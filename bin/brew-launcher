@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.51.0"
+VERSION="0.52.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -602,6 +602,15 @@ Mouse:
   next to them does (e.g. clicking [Hide] is the same as pressing
   F2). Plain, unbracketed footer text — like the "+"/"*" legend or
   "Navigate" — isn't clickable; it's there to explain, not to act on.
+
+Update All:
+  Actions → Update All runs 'brew upgrade' for everything outdated, in
+  a real terminal so you see its actual output — the same
+  current-terminal/tmux/Ghostty paths a normal tool launch already
+  goes through. Shows how many formulae are outdated (the same count
+  the * marker and F3 details pane already read) and asks first, since
+  this can take a while. Relaunches afterward same as any other
+  launch; F5 picks up the new versions right away.
 
 Backup:
   Actions → Backup writes one file, ~/brew-launcher-backup.tar.gz
@@ -1218,6 +1227,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             ;;
         refresh)
             printf 'Refresh\n\nRebuild the cache without leaving the launcher — the same\nthing F5 / ⌥R already do directly, everywhere they work\n(including the view picker). This row exists so the action\nstays discoverable without permanently spending a footer\nslot on it.\n'
+            ;;
+        update_all)
+            printf 'Update All\n\nRun brew upgrade for everything outdated, in a real\nterminal so you see its actual output. Asks first — this\ncan take a while. Press F5 afterward to see the new\nversions right away, same as after any other change.\n'
             ;;
         create_preset)
             printf 'Create Preset\n\nBuild a new preset: pick which entries belong in it and\nwhat order they launch in, then name it. Needs tmux.\n'
@@ -3015,6 +3027,8 @@ pick_help() {
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
     fi
+    rows+=("        Update All  brew upgrade for everything outdated, in a")
+    rows+=("                    real terminal. Asks first; shows the count")
     rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
     rows+=("                    Sort, Details, Alt Keybinds — see below")
     rows+=("            Backup  Brewfile + categories/presets/theme in one")
@@ -3190,6 +3204,15 @@ pick_more_action() {
     # occasionally.
     rows+=("refresh"$'\t'"$(printf '%-20s%s' 'Refresh' 'F5 / ⌥R')")
 
+    # Not gated on has_entry, same reasoning as Refresh right above —
+    # raised live: "Action to launch TUI update or update all TUIs
+    # with command?" The count in parens is the same outdated_formulas
+    # data the * marker and F3 details pane already read, so it's
+    # never a second source of truth about what's actually outdated.
+    local update_all_hint=''
+    (( ${#outdated_formulas} > 0 )) && update_all_hint="(${#outdated_formulas})"
+    rows+=("update_all"$'\t'"$(printf '%-20s%s' 'Update All' "$update_all_hint")")
+
     # Everything settings-related now lives one level down, in its own
     # screen — raised live: "it seems Actions menu mixes up actual
     # Actions and System Settings, how do we solve this (e.g. create a
@@ -3293,6 +3316,10 @@ open_more_menu() {
                 ;;
             refresh)
                 refresh_cache_and_state
+                continue
+                ;;
+            update_all)
+                update_all
                 continue
                 ;;
             settings)
@@ -5147,6 +5174,129 @@ confirm_quit() {
     rm -f "$FOOTER_CLICK_FILE"
 
     [[ "$answer" == "Quit brew-launcher" ]]
+}
+
+# Same Cancel-first convention as confirm_quit()/confirm_delete_category()
+# above — Update All isn't destructive, but it's a real, not-instant
+# operation (network + possibly compiling), so it gets a confirm the
+# same way anything with a real consequence does here.
+confirm_update_all() {
+
+    local count="$1"
+    local noun="formulae"
+    local answer
+
+    (( count == 1 )) && noun="formula"
+
+    answer="$(
+        printf '%s\n' "Cancel" "Update all $count $noun" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Update All')" \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            --header="Runs brew upgrade for everything outdated — can take a while." \
+            `# Same reasoning as confirm_relaunch/confirm_quit above:` \
+            `# "Enter chooses" stays unbracketed/unclickable so a` \
+            `# clickable [Confirm] can't fire while Cancel is highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == "Update all $count $noun" ]]
+}
+
+# ------------------------------------------------------------
+# Update All — Actions -> Update All. Runs `brew upgrade` for
+# everything outdated, raised live: "Action to launch TUI update or
+# update all TUIs with command?"
+#
+# Reuses the three existing launch paths (current terminal/tmux/
+# Ghostty) a normal tool launch already goes through, via a throwaway
+# self-deleting script — those functions are built around "one
+# already-resolved binary, no arguments," not a full command line, and
+# generalizing them to accept arguments would mean touching three
+# carefully-tuned, security-reviewed functions for one caller. Writing
+# `brew upgrade` to an executable temp file and handing THAT to the
+# unmodified launch functions gets the exact same live-output/
+# press-any-key/relaunch behavior for free.
+#
+# Relaunches bare afterward, same as any other tool — not straight
+# into a forced --refresh. Tried that first (the script exec-ing its
+# own way into `$SCRIPT_PATH --refresh` before returning), on the
+# theory that "just upgraded everything" is exactly when stale
+# versions/outdated markers would be most misleading — but that relies
+# on `exec` inside a command run as a plain foreground step (`"$1"`
+# partway through the launch functions' own script) somehow replacing
+# the *caller's* process too. It doesn't: `exec` only replaces the
+# child actually running the script; once that child exits normally,
+# the launch function's own script keeps going right where it left
+# off and relaunches bare regardless — confirmed live with a fake
+# launcher recording what it was actually invoked with. The cache's
+# own freshness check already bounds how stale this can get, and F5 is
+# one keypress away in the meantime, so a plain relaunch — no changes
+# needed to launch_in_current_terminal/tmux/ghostty at all — is both
+# simpler and correct, unlike the version that looked more thorough on
+# paper but didn't actually do what it claimed to.
+# ------------------------------------------------------------
+
+update_all() {
+
+    local outdated_count=${#outdated_formulas}
+
+    if (( outdated_count == 0 )); then
+        printf '\n'
+        printf 'Everything is already up to date.\n'
+        sleep 1
+        return 1
+    fi
+
+    confirm_update_all "$outdated_count" || return 1
+
+    local update_script
+    update_script="$(mktemp "$CACHE_DIR/update-all.XXXXXX")" || return 1
+
+    cat > "$update_script" <<'EOF'
+#!/bin/zsh
+brew upgrade
+printf '\nDone — press F5 (or reopen) to refresh the list with the new versions.\n'
+rm -f -- "$0"
+EOF
+
+    chmod +x "$update_script"
+
+    if [[ "$TERMINAL" == "current" ]]; then
+
+        launch_in_current_terminal "$update_script"
+
+    elif [[ "$TERMINAL" == "ghostty" ]]; then
+
+        if ! launch_in_ghostty "$update_script"; then
+            printf '\n'
+            printf 'Unable to launch Update All.\n'
+            printf 'Make sure Ghostty is installed and macOS allows\n'
+            printf 'brew-launcher to control Ghostty.\n'
+            rm -f "$update_script"
+            sleep 2
+        fi
+
+    elif [[ "$TERMINAL" == "tmux" ]]; then
+
+        if ! launch_in_tmux "$update_script"; then
+            printf '\n'
+            printf 'Unable to launch Update All.\n'
+            rm -f "$update_script"
+            sleep 2
+        fi
+
+    fi
 }
 
 # ------------------------------------------------------------

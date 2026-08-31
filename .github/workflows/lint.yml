@@ -239,6 +239,18 @@ name: CI
 #       confirming unmark-then-remark actually reorders. edit_preset()
 #       itself and launch_preset()'s Ctrl-E wiring are source-text
 #       assertions, same reasoning as rename-fixtures.sh.
+#
+#   26. update-all-fixtures — Actions -> Update All, raised live:
+#       "Action to launch TUI update or update all TUIs with command?"
+#       update_all() is driven for real: a fake `brew` on PATH stands
+#       in for the real one (this must never touch the real Homebrew
+#       install), confirm_update_all() is stubbed as a call-counter
+#       (same technique bulk-cancel-and-quit-confirm-fixtures.sh uses),
+#       and the real launch_in_current_terminal() actually runs (in a
+#       subshell, same reasoning relaunch-fixtures.sh gives) against a
+#       fake stand-in launcher, confirming the generated script calls
+#       brew, cleans up after itself, and relaunches bare rather than
+#       forcing any special flag.
 
 on:
   push:
@@ -595,6 +607,20 @@ jobs:
       # launch_preset()'s Ctrl-E wiring are source-text assertions.
       - name: Edit Preset test
         run: zsh test/edit-preset-fixtures.sh
+
+  update-all-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf or tmux needed, and the one real `brew` call is stubbed
+      # with a fake one on PATH — this must never touch the real
+      # Homebrew install. confirm_update_all() is stubbed as a
+      # call-counter; launch_in_current_terminal() runs for real
+      # against a fake stand-in launcher.
+      - name: Update All test
+        run: zsh test/update-all-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest

@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.52.0] — 2026-08-31
+
+### Added
+
+- **Update All (Actions → Update All)** runs `brew upgrade` for
+  everything outdated. Raised live: "Action to launch TUI update or
+  update all TUIs with command?" Runs in a real terminal, through the
+  same current-terminal/tmux/Ghostty paths a normal tool launch
+  already goes through (via a throwaway self-deleting script, so the
+  three existing launch functions needed no changes), so you see its
+  actual output rather than a hidden background call. The row shows
+  how many formulae are outdated right now — the same count the `*`
+  marker and F3 details pane already read — and doesn't offer anything
+  to confirm when there's nothing to update. Asks first (Cancel
+  listed first, same convention as every other confirm here), since
+  this can take a while. Relaunches afterward same as any other
+  launch; F5 picks up the new versions right away rather than waiting
+  on the next automatic check.
+
 ## [0.51.0] — 2026-08-31
 
 ### Added
