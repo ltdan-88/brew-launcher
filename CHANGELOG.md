@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.50.1] — 2026-08-31
+
+### Added
+
+- **Three more commands added to the bundled-hidden list**: `musikcubed`
+  (musikcube's headless daemon, not meant to launch on its own), `vd`
+  (visidata's own alias for its main binary — `visidata` already covers
+  it, so having both showed the same tool twice), and `vd2to3.vdx`
+  (visidata's one-shot file-conversion script, not an interactive
+  tool). Raised live: "there are several duplicate entries (mostly one
+  with the command in brackets and the other not)" — confirmed by
+  inspecting what these formulas actually install: a formula that ships
+  more than one binary gets a row per binary by design (so linecast's 6
+  view-shortcut binaries stay visible, each a genuinely different
+  thing), but these three were auxiliary/duplicate, not genuinely
+  separate tools, the same reasoning already covering `age-inspect` and
+  `calcurse-caldav`/`-upgrade`/`-vdir`.
+
 ## [0.50.0] — 2026-08-31
 
 ### Changed
