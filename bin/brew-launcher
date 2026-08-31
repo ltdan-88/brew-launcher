@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.50.1"
+VERSION="0.51.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -368,16 +368,20 @@ Presets:
   tool and shows a number badge for the order it'll launch in (top
   to bottom in the file); Tab again on a marked tool unmarks it and
   renumbers the rest down. F9 launches an existing one without
-  leaving the picker; F3 there previews what's actually in the
-  highlighted preset — every command, numbered and with its
-  description, in launch order rather than alphabetical. Ctrl-R
-  renames the highlighted preset (just a file rename, same name
-  your presets directory already uses); Ctrl-D
-  deletes it instead, asking first and showing how many commands it
-  holds — the one action here you can't undo. Both F4 and F9 stay
-  visible even if tmux isn't installed — pressing either then explains
-  what to install rather than being hidden outright, so the feature is
-  still discoverable.
+  leaving the picker; its own details pane (always on, no toggle
+  needed) previews what's actually in the highlighted preset — every
+  command, numbered and with its description, in launch order rather
+  than alphabetical. Ctrl-E rearranges an existing preset — the same
+  Tab-to-mark screen, seeded with its current members already badged
+  in order instead of starting blank, so unmarking then remarking a
+  tool moves it without having to rebuild the whole thing (you can
+  add or drop tools there too, not just reorder). Ctrl-R renames the
+  highlighted preset (just a file rename, same name your presets
+  directory already uses); Ctrl-D deletes it instead, asking first
+  and showing how many commands it holds — the one action here you
+  can't undo. Both F4 and F9 stay visible even if tmux isn't
+  installed — pressing either then explains what to install rather
+  than being hidden outright, so the feature is still discoverable.
 
   Mouse mode is on for every preset session (that session only, not
   your tmux config) — click a pane to focus it, drag a border to
@@ -2978,8 +2982,10 @@ pick_help() {
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
         rows+=("            otherwise reattaches if it's already running")
         rows+=("            Its own details pane, always on, previews what's in")
-        rows+=("            the highlighted preset. Ctrl-R renames it, Ctrl-D")
-        rows+=("            deletes it")
+        rows+=("            the highlighted preset. Ctrl-E rearranges it (same")
+        rows+=("            Tab-to-mark screen as Create Preset, seeded from its")
+        rows+=("            current members — can add/remove too, not just")
+        rows+=("            reorder), Ctrl-R renames it, Ctrl-D deletes it")
     else
         rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
     fi
@@ -5823,6 +5829,151 @@ create_preset() {
     return 0
 }
 
+# ------------------------------------------------------------
+# Rearrange (or add/remove tools in) an existing preset — F9's Ctrl-E.
+#
+# Raised live: "option to rearrange TUIs in existing presets." Before
+# this, the only way to change a preset's order was Create Preset
+# again with the exact same name (replacing it outright) — which meant
+# re-marking every tool from scratch in the new order, since Create
+# Preset always starts blank. This reuses the exact same Tab-to-mark
+# screen, just seeded from the preset's current members/order instead
+# of starting empty — Tab still marks/unmarks (toggling one moves it to
+# the end, same as building a preset the first time), so reordering
+# means unmark-then-remark whichever tools need to move, in the order
+# you want them to land in.
+#
+# Deliberately does NOT follow $entries/CURRENT_VIEW the way Create
+# Preset does — that's right for *building* a preset from whatever
+# you're currently browsing, but wrong here: an existing member that
+# happens to be outside the current view would still be preserved (it
+# lives in PRESET_ORDER_STATE_FILE independently of what's rendered)
+# but wouldn't be visible to reorder, and anything not currently in
+# view couldn't be added either. Builds its own list from "All"
+# instead — saving and restoring CURRENT_VIEW/$entries around it so
+# the caller's own view is untouched once this returns.
+# ------------------------------------------------------------
+
+edit_preset() {
+
+    local preset_name="$1"
+    local preset_file="$PRESETS_DIR/$preset_name"
+    local -a selected_commands=() existing_members=()
+    local fzf_result line member
+    local -a result_lines=()
+    local pick_valid=false
+
+    [[ -f "$preset_file" ]] || return 1
+
+    if [[ "$TMUX_AVAILABLE" == false ]]; then
+        printf '\n'
+        printf 'Presets need tmux: brew install tmux\n'
+        sleep 2
+        return 1
+    fi
+
+    while IFS= read -r line; do
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -z "$line" ]] && continue
+        [[ "$line" == \#* ]] && continue
+        existing_members+=("$line")
+    done < "$preset_file"
+
+    # See this function's own comment above for why "All", not
+    # $entries as-is.
+    local saved_view="$CURRENT_VIEW"
+    local -a saved_entries=("${entries[@]}")
+    CURRENT_VIEW="All"
+    build_entries
+    local -a all_entries=("${entries[@]}")
+    CURRENT_VIEW="$saved_view"
+    entries=("${saved_entries[@]}")
+
+    export PRESET_ORDER_BASE_FILE="$CACHE_DIR/preset-order-base.$$"
+    export PRESET_ORDER_LIST_FILE="$CACHE_DIR/preset-order-list.$$"
+    export PRESET_ORDER_STATE_FILE="$CACHE_DIR/preset-order-state.$$"
+
+    mkdir -p "$CACHE_DIR"
+    printf '%s\n' "${existing_members[@]}" > "$PRESET_ORDER_STATE_FILE"
+    printf '%s\n' "${all_entries[@]}" > "$PRESET_ORDER_BASE_FILE"
+
+    # Same seeding trick create_preset() uses for its own blank start —
+    # this just regenerates the badges from a non-empty
+    # PRESET_ORDER_STATE_FILE instead, so the screen opens already
+    # numbered in the preset's current order.
+    "$SCRIPT_PATH" --internal-preset-tab "" >/dev/null
+
+    while [[ "$pick_valid" == false ]]; do
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        fzf_result="$(
+            fzf \
+                --height=100% \
+                --no-clear \
+                --layout=reverse \
+                --border=rounded \
+                --border-label="$(screen_border_label "Edit preset \"$preset_name\"")" \
+                --border-label-pos=2 \
+                --prompt=' 󰣇  ' \
+                --pointer='▌' \
+                --delimiter=$'\t' \
+                --with-nth=2 \
+                --nth=1,2,3,4 \
+                --header="Tab marks a tool — the number is the order it'll launch in. Tab again to unmark, then remark to move it." \
+                --footer='  ↑ ↓  Navigate    Tab  Mark/unmark    Enter  [Save]    Esc  [Cancel]' \
+                --bind "tab:transform:$SCRIPT_PATH --internal-preset-tab {1}" \
+                --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+                --expect=enter,esc \
+                --color="$FZF_COLORS" \
+                < "$PRESET_ORDER_LIST_FILE"
+        )"
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        if [[ -z "$fzf_result" ]]; then
+            rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
+            return 1
+        fi
+
+        result_lines=("${(@f)fzf_result}")
+
+        if [[ "${result_lines[1]}" != "enter" ]]; then
+            rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
+            return 1
+        fi
+
+        selected_commands=()
+        if [[ -s "$PRESET_ORDER_STATE_FILE" ]]; then
+            for line in "${(@f)$(<"$PRESET_ORDER_STATE_FILE")}"; do
+                [[ -z "$line" ]] && continue
+                selected_commands+=("$line")
+            done
+        fi
+
+        # Same guard as create_preset() — unmarking everything isn't
+        # "save an empty preset," it's Ctrl-D's job.
+        if (( ${#selected_commands[@]} == 0 )); then
+            printf '\n'
+            printf 'Mark at least one tool with Tab before saving.\n'
+            sleep 2
+        else
+            pick_valid=true
+        fi
+    done
+
+    rm -f "$PRESET_ORDER_BASE_FILE" "$PRESET_ORDER_LIST_FILE" "$PRESET_ORDER_STATE_FILE"
+
+    printf '%s\n' "${selected_commands[@]}" > "$preset_file"
+
+    printf '\n'
+    printf 'Preset "%s" updated with %d command(s).\n' "$preset_name" "${#selected_commands[@]}"
+    sleep 1
+
+    return 0
+}
+
 # Same convention as confirm_delete_category() — Cancel listed first so
 # it's the default and Esc also cancels, count shown so "Delete
 # devops?" is real information rather than noise.
@@ -5957,7 +6108,7 @@ launch_preset() {
         build_picker_footer \
             '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
             '  ↑ ↓  Navigate    Enter  [Launch]    Esc  [Cancel]' \
-            $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
+            $'Ctrl-E\t\t[Edit]' $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
     )"
 
     # Preview pane always on here, no F3 toggle — raised live: "Preset
@@ -5982,7 +6133,7 @@ launch_preset() {
             --preview "${(q)SCRIPT_PATH} --internal-preview-preset {1}" \
             --preview-window="$(details_preview_window)" \
             --footer="$preset_footer" \
-            --expect=enter,ctrl-d,ctrl-r \
+            --expect=enter,ctrl-d,ctrl-r,ctrl-e \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
     )"
@@ -6008,11 +6159,23 @@ launch_preset() {
         case "$clicked_word" in
             '[Delete]'|Delete) pick_action="ctrl-d" ;;
             '[Rename]'|Rename) pick_action="ctrl-r" ;;
+            '[Edit]'|Edit) pick_action="ctrl-e" ;;
             '[Launch]'|Launch) pick_action="enter" ;;
         esac
     fi
 
     [[ -z "$preset_name" ]] && return 1
+
+    if [[ "$pick_action" == "ctrl-e" ]]; then
+
+        edit_preset "$preset_name"
+
+        # Same redraw-in-place idea as Ctrl-R/Ctrl-D below, whether the
+        # edit was saved or cancelled — either way there's nothing more
+        # to do than show the (possibly updated) list again.
+        launch_preset
+        return $?
+    fi
 
     if [[ "$pick_action" == "ctrl-r" ]]; then
 
