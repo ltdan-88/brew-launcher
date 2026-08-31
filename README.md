@@ -83,9 +83,12 @@ Doesn't touch `Most Used` or `Recently Added`, which already have their own
 meaningful order.
 
 **F4 → Actions → Settings → Compact View** drops the version and size columns
-entirely, leaving just the marker, name, and description — raised live as
-"detailed vs clean view." Off by default (every column shown, as above);
-applies everywhere a row shows up, not only the main list.
+entirely — raised live as "detailed vs clean view," then taken further:
+"I would even go further and hide all the category, favorites etc. flags (#,
++ etc.)" So it does — the `+`/`#`/`*` markers go too, along with the
+footer's legend explaining them (nothing left to explain), leaving just the
+name and description. Off by default (every column and marker shown, as
+above); applies everywhere a row shows up, not only the main list.
 
 The top border also shows how much disk space Homebrew's own installs are
 using and how much is still free on the volume — visible on `All`, hidden on
@@ -389,8 +392,15 @@ order you want them to land in. You can add tools that weren't in the
 preset or unmark ones to drop them, too — it isn't limited to reordering.
 Builds its list from the full toolset regardless of whatever view you
 happen to be browsing, unlike Create Preset — the point here is managing
-everything already in the preset, not building from what's on screen.
-Saves straight back to the same preset, no naming step. **Ctrl-R** on a
+everything already in the preset, not building from what's on screen. That
+includes tools you've since hidden with F6: a preset member you only ever
+run *through* the preset is exactly the kind of thing you'd hide from
+everyday browsing, so hiding one no longer makes it vanish from its own
+preset's edit screen. A member that's been fully uninstalled since, though,
+has no row left to show at all — dropped with a one-line note when you open
+the editor, rather than left in to silently break the numbering on
+everything after it. Saves straight back to the same preset, no naming step.
+**Ctrl-R** on a
 highlighted preset renames it — same "type a new
 name over the prefilled current one" as renaming a category, since a preset
 is exactly the same shape: a name that's just its filename under
@@ -440,12 +450,13 @@ terminals displayed. The CRT pair is monochrome on purpose: that hardware
 could only show one hue at varying brightness, so unlike the rest these
 never reach for a second color.
 
-**F4 → Actions → Settings → Theme** shows a short description next to each
-name and where the current one sits among all ten (`3 of 10`), so you don't
-have to guess from the name alone or scroll to find your place. Picking one
-writes the config file for you — no terminal needed — and offers to relaunch
-immediately since colors are resolved once at startup. Env var and
-config-file syntax are in [Configuration](#configuration).
+The Settings row itself shows how many there are — **Themes (10)** — and
+opening it shows a short description next to each name plus where the
+current one sits among them (`3 of 10`), so you don't have to guess from the
+name alone or scroll to find your place. Picking one writes the config file
+for you — no terminal needed — and offers to relaunch immediately since
+colors are resolved once at startup. Env var and config-file syntax are in
+[Configuration](#configuration).
 
 ### Desktop shortcuts
 
@@ -541,7 +552,7 @@ reference below, from inside the launcher.
 | — | Toggle Default Categories / Default Hidden | Settings only |
 | — | Toggle Open to Categories | Settings only |
 | — | Sort by name or size | Settings only |
-| — | Toggle Compact View (hide the version/size columns) | Settings only |
+| — | Toggle Compact View (hide version/size columns and +/#/\* markers) | Settings only |
 | — | Toggle the details pane (mirrors F3) | Settings only |
 | — | Toggle where the details pane opens — top or bottom | Settings only |
 | — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Settings only |

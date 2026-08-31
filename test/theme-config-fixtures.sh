@@ -171,4 +171,29 @@ if theme_position_label "not-a-real-theme" "${fixture_choices[@]}" >/dev/null; t
     fail "theme_position_label should fail (return 1) for a name not in the list"
 fi
 
-printf 'PASS: all named themes accepted, unknown theme rejected, config file honored, env var still wins, set_config_value writes/updates correctly, theme_position_label counts correctly\n'
+
+# ------------------------------------------------------------
+# 7. Settings row: the counter belongs there, not (only) inside the
+#    Theme screen itself. Raised live: "you misunderstood the theme
+#    counter. It should show in the settings menu, e.g. Themes (9)."
+#    Checked as source text (pick_settings_action() calls fzf), and
+#    cross-checked against the real number of themes pick_theme()
+#    itself offers, so a theme added later without updating this
+#    row's hardcoded count fails loudly instead of just going stale.
+# ------------------------------------------------------------
+
+settings_action_block="$(sed -n '/^pick_settings_action() {/,/^}/p' "$LAUNCHER")"
+[[ -n "$settings_action_block" ]] || fail "pick_settings_action() not found"
+
+[[ "$settings_action_block" == *"rows+=(\"theme\""*"'Themes'"* ]] ||
+    fail "the theme row's label should be 'Themes' (plural), got: $(echo "$settings_action_block" | grep 'rows+=("theme"')"
+
+pick_theme_block="$(sed -n '/^pick_theme() {/,/^}/p' "$LAUNCHER")"
+real_theme_count="$(printf '%s\n' "$pick_theme_block" | grep -cE '^\s+"[a-z-]+"\$.\\t.\"')"
+(( real_theme_count > 0 )) || fail "could not count pick_theme()'s own choices array — test itself may be stale"
+
+theme_row_hint="$(printf '%s\n' "$settings_action_block" | grep 'rows+=("theme"' | grep -oE "\([0-9]+\)")"
+[[ "$theme_row_hint" == "($real_theme_count)" ]] ||
+    fail "the theme row's hardcoded count ($theme_row_hint) doesn't match pick_theme()'s actual $real_theme_count choices — bump it"
+
+printf 'PASS: all named themes accepted, unknown theme rejected, config file honored, env var still wins, set_config_value writes/updates correctly, theme_position_label counts correctly, and the Settings row shows the total theme count (matching pick_theme()'"'"'s real list) rather than only the position indicator inside the Theme screen\n'

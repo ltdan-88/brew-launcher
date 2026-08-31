@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.53.0"
+VERSION="0.53.1"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -462,9 +462,10 @@ Theme:
   main list, F2, F9, and Actions/Settings' own always-on panes.
 
   COMPACT_VIEW=on (default off, toggled from Actions → Settings →
-  Compact View) drops the version and size columns entirely, leaving
-  just the marker, name, and description. Applies everywhere a row
-  shows up, not only the main list.
+  Compact View) drops the version and size columns, and the +/#/*
+  markers (and the footer legend explaining them), leaving just the
+  name and description. Applies everywhere a row shows up, not only
+  the main list.
 
   All of these toggles (and Sort, and the details-pane toggle) flip
   with Space as well as Enter, and reopen the Settings screen
@@ -1247,7 +1248,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used or Recently Added, which already have\ntheir own meaningful order.\n'
             ;;
         toggle_compact_view)
-            printf 'Compact View\n\nOff (default): every row shows its version and size.\nOn: drops those two columns, leaving just the marker,\nname, and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
+            printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
             ;;
         toggle_details)
             printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice (it stays on until you turn it off again, here or\nwith F3); pressing F3 directly instead is just a quick\npeek, and Esc there closes it first before doing anything\nelse. The preset picker (F9) has its own details pane that'"'"'s\nalways on, no toggle needed.\n'
@@ -3172,16 +3173,17 @@ pick_help() {
     rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
     rows+=("")
     rows+=("F4 -> Settings — one level down, its own screen")
-    rows+=("            Theme  Switch color theme — shows current position")
-    rows+=("                    among all ten, e.g. \"3 of 10\"")
+    rows+=("      Themes (10)  Switch color theme — opening it shows where")
+    rows+=("                    the current one sits, e.g. \"3 of 10\"")
     rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
     rows+=("Open to Categories  Start on the view picker instead of All")
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
     rows+=("                    first) — not Most Used/Recently Added, which")
     rows+=("                    already have their own order")
-    rows+=("       Compact View  Off (default): every column shows. On: drops")
-    rows+=("                    version/size, leaving marker, name, description")
+    rows+=("       Compact View  Off (default): every column/marker shows.")
+    rows+=("                    On: drops version/size and the +/#/* marks,")
+    rows+=("                    leaving just name and description")
     rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
     rows+=("                    state shows before you even open the pane")
     rows+=("  Details Position  Bottom (default, below the list) or Top —")
@@ -3515,7 +3517,15 @@ pick_settings_action() {
     local -a rows=()
     local result
 
-    rows+=("theme"$'\t'"$(printf '%-20s%s' 'Theme' '')")
+    # Raised live: "you misunderstood the theme counter. It should
+    # show in the settings menu, e.g. Themes (9)." The position-among-
+    # ten indicator inside the Theme screen itself (pick_theme()'s own
+    # header, via theme_position_label()) answers a different
+    # question — "where is the one I'm on now" — this one just says
+    # how many there are to pick from, same as Settings' own row
+    # counts its own items. Hardcoded, same convention as that "(9)":
+    # bump it if a theme is ever added to pick_theme()'s own list.
+    rows+=("theme"$'\t'"$(printf '%-20s%s' 'Themes' '(10)')")
 
     # Global overrides for the bundled curated defaults (categories and
     # pre-hidden commands). Off means "don't apply the bundled data to
@@ -4495,12 +4505,17 @@ build_entries() {
 
         # Compact View (Settings) drops the VERSION/SIZE columns
         # entirely rather than just leaving them blank — raised live
-        # as "detailed vs clean view." Everything else about a row
-        # (the command/formula/description fields entries[] itself
-        # carries, the outdated check above) stays the same either
-        # way; this only changes what's actually rendered.
+        # as "detailed vs clean view," then extended live again: "I
+        # would even go further and hide all the category, favorites
+        # etc. flags (#, + etc.)" — so the leading marker column goes
+        # too (the "*" outdated marker needs no separate handling: it
+        # lives inside version_text above, which is already gone).
+        # Everything else about a row (the command/formula/description
+        # fields entries[] itself carries, the outdated check above)
+        # stays the same either way; this only changes what's actually
+        # rendered.
         if [[ "$COMPACT_VIEW" == on ]]; then
-            display="$left_marker_fmt$name_fmt$description"
+            display="$name_fmt$description"
         else
             display="$left_marker_fmt$name_fmt$version_fmt$size_fmt$description"
         fi
@@ -4651,9 +4666,12 @@ find_entry_position() {
 
 build_fzf_header() {
     if [[ "$COMPACT_VIEW" == on ]]; then
+        # No leading LEFT_MARKER_WIDTH field here — the row data has
+        # no marker column to align under either now (see
+        # build_entries()'s own comment), so reserving that space
+        # would just push NAME out of alignment with it.
         FZF_HEADER="$(
-            printf "%-${LEFT_MARKER_WIDTH}s%-${max_name}s%s" \
-                "" \
+            printf "%-${max_name}s%s" \
                 "NAME" \
                 "DESCRIPTION"
         )"
@@ -6352,21 +6370,74 @@ edit_preset() {
     done < "$preset_file"
 
     # See this function's own comment above for why "All", not
-    # $entries as-is.
+    # $entries as-is. hidden_commands is also cleared for this one
+    # build — "All" still excludes hidden entries the normal way, and
+    # a preset member you later hid from everyday browsing (common:
+    # you'd hide exactly the sort of niche tool you only run via a
+    # preset) would otherwise vanish from its own edit screen the same
+    # way an uninstalled one does below — present in the file, not
+    # selectable, silently eating a number in the badge sequence.
+    # Raised live: "some TUIs that aren't listed anymore still show
+    # up, break the numbering logic, but are not selectable."
     local saved_view="$CURRENT_VIEW"
     local -a saved_entries=("${entries[@]}")
+    local -A saved_hidden=("${(kv)hidden_commands[@]}")
+    hidden_commands=()
     CURRENT_VIEW="All"
     build_entries
     local -a all_entries=("${entries[@]}")
+    hidden_commands=("${(kv)saved_hidden[@]}")
     CURRENT_VIEW="$saved_view"
     entries=("${saved_entries[@]}")
+
+    # Unlike hidden, an actually-uninstalled member has no row to show
+    # at all — there's nothing left in the cache to build one from.
+    # Dropped here, with the same "warn, don't silently lose it"
+    # courtesy run_preset() already extends a stale preset member at
+    # launch time, rather than left in the seeded state to cause the
+    # exact same invisible-and-unselectable problem hidden entries just
+    # got fixed for.
+    local -a base_commands=() valid_members=() stale_members=()
+    for line in "${all_entries[@]}"; do
+        base_commands+=("${line%%$'\t'*}")
+    done
+    for member in "${existing_members[@]}"; do
+        if (( ${base_commands[(Ie)$member]} )); then
+            valid_members+=("$member")
+        else
+            stale_members+=("$member")
+        fi
+    done
+
+    if (( ${#stale_members[@]} > 0 )); then
+        printf '\n'
+        printf 'Note: %d command(s) no longer installed will be dropped: %s\n' \
+            "${#stale_members[@]}" "${stale_members[*]}"
+        sleep 2
+    fi
+
+    existing_members=("${valid_members[@]}")
 
     export PRESET_ORDER_BASE_FILE="$CACHE_DIR/preset-order-base.$$"
     export PRESET_ORDER_LIST_FILE="$CACHE_DIR/preset-order-list.$$"
     export PRESET_ORDER_STATE_FILE="$CACHE_DIR/preset-order-state.$$"
 
     mkdir -p "$CACHE_DIR"
-    printf '%s\n' "${existing_members[@]}" > "$PRESET_ORDER_STATE_FILE"
+
+    # Not a plain printf into the file: with a genuinely empty array
+    # (every member turned out to be stale, above), `printf '%s\n'
+    # "${empty[@]}"` still runs once and writes a single blank line —
+    # confirmed live — which --internal-preset-tab would then read as
+    # one real (empty-string) entry, silently eating badge #1 the
+    # exact same way a stale member being seeded unfiltered would
+    # have. create_preset()'s own blank start avoids this the same
+    # way, with a plain truncate instead of printf-ing nothing.
+    if (( ${#existing_members[@]} > 0 )); then
+        printf '%s\n' "${existing_members[@]}" > "$PRESET_ORDER_STATE_FILE"
+    else
+        : > "$PRESET_ORDER_STATE_FILE"
+    fi
+
     printf '%s\n' "${all_entries[@]}" > "$PRESET_ORDER_BASE_FILE"
 
     # Same seeding trick create_preset() uses for its own blank start —
@@ -6814,7 +6885,11 @@ build_footer() {
     local legend="    +  Favorited    #  Categorized    *  Outdated"
     local nav_short="  ↑ ↓  Navigate    Enter  [Launch]    Esc  [$esc_hint]"
 
+    # Compact View drops the +/#/* markers themselves (see
+    # build_entries()'s own comment) — explaining marks that no longer
+    # appear anywhere would just be confusing, not merely redundant.
     local line1="$nav$legend"
+    [[ "$COMPACT_VIEW" == on ]] && line1="$nav"
     (( ${#line1} > width )) && line1="$nav"
     (( ${#line1} > width )) && line1="$nav_short"
 
