@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.51.0] — 2026-08-31
+
+### Added
+
+- **Ctrl-E on a highlighted preset (F9) rearranges it.** Raised live:
+  "option to rearrange TUIs in existing presets." Before this, the
+  only way to change a preset's order was Create Preset again with the
+  same name, which always started blank — every tool had to be
+  re-marked from scratch just to reorder. Ctrl-E opens the same
+  Tab-to-mark screen Create Preset uses, but seeded with the preset's
+  current members already badged in their current order: Tab still
+  marks/unmarks, and unmarking then remarking a tool moves it to the
+  end, so reordering means doing that to whichever tools need to move.
+  Tools can be added or dropped there too, not just reordered. Saves
+  straight back to the same preset, no naming step. Builds its own
+  tool list from the full toolset regardless of whatever view is
+  active, unlike Create Preset — editing needs to see everything
+  already in the preset, not just what's currently on screen.
+
 ## [0.50.1] — 2026-08-31
 
 ### Added

@@ -374,7 +374,19 @@ a second copy (see [Configuration](#configuration) for exactly which). Its
 own details pane — always on, no toggle needed — previews what's in the
 highlighted preset: every command, numbered and with its description, in the
 order it launches in (not alphabetical — this is the same order Tab built
-when you created it). **Ctrl-R** on a highlighted preset renames it — same "type a new
+when you created it). **Ctrl-E** on a highlighted preset lets you rearrange
+it — raised live: "option to rearrange TUIs in existing presets." The same
+Tab-to-mark screen Create Preset uses, but seeded with the preset's current
+members already badged in their current order instead of starting blank:
+Tab still marks/unmarks, and unmarking then remarking a tool moves it to the
+end, so reordering means doing that to whichever tools need to move, in the
+order you want them to land in. You can add tools that weren't in the
+preset or unmark ones to drop them, too — it isn't limited to reordering.
+Builds its list from the full toolset regardless of whatever view you
+happen to be browsing, unlike Create Preset — the point here is managing
+everything already in the preset, not building from what's on screen.
+Saves straight back to the same preset, no naming step. **Ctrl-R** on a
+highlighted preset renames it — same "type a new
 name over the prefilled current one" as renaming a category, since a preset
 is exactly the same shape: a name that's just its filename under
 `~/.config/brew-launcher/presets`. If a session for that preset is already
@@ -468,6 +480,7 @@ reference below, from inside the launcher.
 | **Esc** | Go back one level; on `All`, asks Quit or Cancel first | footer |
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker; its own details pane is always on, previewing what's in the highlighted preset | footer |
+| **Ctrl-E** | Rearrange (add/remove/reorder tools in) the highlighted preset — in the F9 picker | picker |
 | **Ctrl-R** | Rename the highlighted preset — in the F9 picker | picker |
 | **Ctrl-D** | Delete the highlighted preset — in the F9 picker | picker |
 | **F5** / **⌥R** | Refresh the cache — also works from the view picker; not in the footer, but always available directly | Actions |

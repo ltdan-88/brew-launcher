@@ -229,6 +229,16 @@ name: CI
 #       through) is pure, sourced and called directly; the Settings
 #       row/dispatch are source-text assertions, same reasoning as
 #       actions-menu-fixtures.sh.
+#
+#   25. edit-preset-fixtures — F9's Ctrl-E, raised live: "option to
+#       rearrange TUIs in existing presets." --internal-preset-tab (a
+#       plain CLI subcommand, already covered by preset-order-
+#       fixtures.sh) is driven for real here too, specifically for the
+#       part that's new: seeding PRESET_ORDER_STATE_FILE from an
+#       existing preset's members/order instead of starting blank, and
+#       confirming unmark-then-remark actually reorders. edit_preset()
+#       itself and launch_preset()'s Ctrl-E wiring are source-text
+#       assertions, same reasoning as rename-fixtures.sh.
 
 on:
   push:
@@ -573,6 +583,18 @@ jobs:
       # source-text assertions.
       - name: Details Position test
         run: zsh test/details-position-fixtures.sh
+
+  edit-preset-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — --internal-preset-tab is a
+      # plain CLI subcommand, driven directly; edit_preset() and
+      # launch_preset()'s Ctrl-E wiring are source-text assertions.
+      - name: Edit Preset test
+        run: zsh test/edit-preset-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
