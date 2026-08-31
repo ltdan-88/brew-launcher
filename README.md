@@ -440,6 +440,20 @@ Either way it's the same shell command underneath, so a one-shot CLI's output
 stays readable: the window drops to a live shell afterward instead of closing
 the instant the command finishes.
 
+### Update everything at once
+
+Raised live: "Action to launch TUI update or update all TUIs with command?"
+**F4 → Actions → Update All** runs `brew upgrade` for everything outdated, in
+a real terminal so you actually see its output — the same three
+current-terminal/tmux/Ghostty paths a normal tool launch already goes
+through, not a hidden background call. The row shows how many formulae are
+outdated right now (the same count the `*` marker and F3 details pane are
+already reading), and doesn't offer anything to confirm when there's nothing
+to do. Asks first — this can take a while — Cancel is listed first, same
+convention as every other confirm here. Relaunches the picker afterward same
+as any other launch; **F5** picks up the new versions right away rather than
+waiting on the next automatic check.
+
 ### Backup
 
 **F4 → Actions → Backup** writes one file — always
@@ -496,6 +510,7 @@ reference below, from inside the launcher.
 | — | Categorize multiple entries (Tab to mark) | Actions only |
 | — | Create a new preset | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
+| — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
 | — | Switch color theme | Settings only |
