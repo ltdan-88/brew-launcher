@@ -449,6 +449,14 @@ tool plain — it doesn't clear anything, since there's nothing stored to
 clear. Esc cancels without launching. A run started this way still counts
 toward `Most Used` and `Recently Launched` like any other launch.
 
+**F3 / ⌥D** from that prompt shows the tool's own `--help` output in a
+preview pane, in case you don't remember its flags offhand — on demand only,
+not automatically: this install list is full of games and animations that
+may not recognize `--help` at all, and would otherwise launch straight into
+their own full-screen mode the moment the prompt opened. A tool like that
+gets killed after a second rather than left running, and just shows "No
+usage information available" instead.
+
 ### Color themes
 
 <p align="center"><img src="assets/themes.png" alt="The same list rendered in all ten themes side by side, showing each palette's actual colors"></p>
@@ -560,6 +568,7 @@ reference below, from inside the launcher.
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Set custom launch flags for the highlighted entry | Actions only |
 | — | Run the highlighted entry with one-off extra arguments | Actions only |
+| **F3** / **⌥D** | Preview that entry's own `--help` output | Run With Args only |
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |

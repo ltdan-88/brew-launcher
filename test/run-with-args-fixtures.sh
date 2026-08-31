@@ -23,6 +23,16 @@
 # launch (checking the wrapper script's own content when one should
 # exist) is both simpler and more precise than running a real exec
 # chain just to prove the same thing indirectly.
+#
+# Sections 6-9 cover --internal-preview-usage, raised live: "would it
+# be feasible to show what arguments are available?" On-demand only
+# (F3/⌥D, never automatic) because this install list is full of games
+# and animations that may not recognize --help and would otherwise
+# flash on screen the moment the prompt opened. Invoked directly as a
+# real subprocess of the actual binary (same style as
+# actions-menu-fixtures.sh's own --internal-preview-action checks)
+# rather than sourced, since it's a plain top-level CLI dispatch with
+# no shared state to stub around.
 
 set -u
 
@@ -181,4 +191,79 @@ full_source="$(cat "$LAUNCHER")"
 [[ "$full_source" == *'"$action" == "run_with_args"'* && "$full_source" == *'run_with_args "$command" "$command_path"'* ]] ||
     fail "the main loop should dispatch run_with_args to run_with_args() with the real command and a resolved path"
 
-printf 'PASS: run_with_args() cancels cleanly on Esc (nothing launched, nothing logged, launch_counts untouched), builds a wrapper with exactly the typed arguments as separate words and launches that on Enter, launches the bare tool path directly (no wrapper) when nothing was typed, prefills from the current Launch Flags value as a starting point, logs every real run the same as an ordinary launch, and Actions/the main loop wire it end to end\n'
+# ------------------------------------------------------------
+# 6. --internal-preview-usage: a tool that actually supports --help
+#    gets its output shown, and fast (nowhere near the timeout).
+# ------------------------------------------------------------
+
+HELPFUL_TOOL="$TEST_HOME/helpful-tool"
+cat > "$HELPFUL_TOOL" <<'EOF'
+#!/bin/zsh
+printf 'USAGE: helpful-tool [--flag]\n'
+EOF
+chmod +x "$HELPFUL_TOOL"
+
+usage_output="$("$LAUNCHER" --internal-preview-usage "$HELPFUL_TOOL" 2>&1)"
+[[ "$usage_output" == *'USAGE: helpful-tool'* ]] ||
+    fail "--internal-preview-usage should show a tool's own --help output, got: $usage_output"
+
+# ------------------------------------------------------------
+# 7. A tool that ignores --help and hangs (the real risk this install
+#    list carries — games/animations that launch straight into their
+#    own full-screen mode instead of printing usage and exiting) gets
+#    killed quickly rather than hanging the preview pane. No
+#    `timeout`/`gtimeout` on stock macOS, so this has to actually
+#    measure wall time, not just check the output.
+# ------------------------------------------------------------
+
+HANGING_TOOL="$TEST_HOME/hanging-tool"
+cat > "$HANGING_TOOL" <<'EOF'
+#!/bin/zsh
+sleep 30
+EOF
+chmod +x "$HANGING_TOOL"
+
+start_time=$SECONDS
+usage_output="$("$LAUNCHER" --internal-preview-usage "$HANGING_TOOL" 2>&1)"
+elapsed=$(( SECONDS - start_time ))
+
+(( elapsed <= 5 )) ||
+    fail "a tool that ignores --help and hangs should be killed quickly, took ${elapsed}s"
+[[ "$usage_output" == *'No usage information available'* ]] ||
+    fail "a killed/hung tool should fall back to a plain message, got: $usage_output"
+
+sleep 1
+if pgrep -f "$HANGING_TOOL" >/dev/null 2>&1; then
+    fail "the hanging tool should have been killed, not left running"
+fi
+
+# ------------------------------------------------------------
+# 8. A missing or non-executable path — same fallback message, no
+#    crash. (edit_preset()'s own stale-member handling already proves
+#    this codebase treats "installed at cache time, gone now" as a
+#    normal case, not an error; this is the same idea for a path.)
+# ------------------------------------------------------------
+
+usage_output="$("$LAUNCHER" --internal-preview-usage "$TEST_HOME/does-not-exist" 2>&1)"
+[[ "$usage_output" == *'No usage information available'* ]] ||
+    fail "a missing path should fall back to a plain message, got: $usage_output"
+
+usage_output="$("$LAUNCHER" --internal-preview-usage "" 2>&1)"
+[[ "$usage_output" == *'No usage information available'* ]] ||
+    fail "an empty path should fall back to a plain message, got: $usage_output"
+
+# ------------------------------------------------------------
+# 9. Wiring: run_with_args()'s own fzf call wires the preview up as
+#    hidden-until-asked (F3/⌥D toggles it), not automatic.
+# ------------------------------------------------------------
+
+run_with_args_block="$(sed -n '/^run_with_args() {/,/^}/p' "$LAUNCHER")"
+
+[[ "$run_with_args_block" == *'--internal-preview-usage'* ]] ||
+    fail "run_with_args() should wire its fzf call to --internal-preview-usage"
+[[ "$run_with_args_block" == *'preview-window='*'hidden'* ]] ||
+    fail "run_with_args()'s preview should start hidden — on demand, not automatic"
+[[ "$run_with_args_block" == *'f3,alt-d:toggle-preview'* ]] ||
+    fail "run_with_args() should bind F3/⌥D to toggle-preview"
+
+printf 'PASS: run_with_args() cancels cleanly on Esc (nothing launched, nothing logged, launch_counts untouched), builds a wrapper with exactly the typed arguments as separate words and launches that on Enter, launches the bare tool path directly (no wrapper) when nothing was typed, prefills from the current Launch Flags value as a starting point, logs every real run the same as an ordinary launch, Actions/the main loop wire it end to end, and its F3/⌥D usage preview shows a real --help, kills a tool that ignores it and hangs instead of blocking, falls back cleanly for a missing path, and stays hidden until asked\n'
