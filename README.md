@@ -346,7 +346,7 @@ over it before you get the chance.
 A preset is a named group of tools that all open together, one per tmux pane —
 your morning setup in one shot instead of launching each tool by hand.
 
-**F4 → Create Preset** picks the tools, from whatever view is currently on
+**F4 → Actions → Create Preset** picks the tools, from whatever view is currently on
 screen (`All`, a category, Favorites — the same list you were already
 looking at, not always the full toolset): **Tab** marks one and shows a
 number badge for the order it'll launch in (top to bottom, left to right in
@@ -360,9 +360,9 @@ launches the one you pick — in its own window when there's somewhere to put
 one, otherwise reattaching to it if it's already running rather than opening
 a second copy (see [Configuration](#configuration) for exactly which). Its
 own details pane — always on, no toggle needed — previews what's in the
-highlighted preset: every command, with its description, in the order it
-launches in (not alphabetical — this is the same order Tab built when you
-created it). **Ctrl-R** on a highlighted preset renames it — same "type a new
+highlighted preset: every command, numbered and with its description, in the
+order it launches in (not alphabetical — this is the same order Tab built
+when you created it). **Ctrl-R** on a highlighted preset renames it — same "type a new
 name over the prefilled current one" as renaming a category, since a preset
 is exactly the same shape: a name that's just its filename under
 `~/.config/brew-launcher/presets`. If a session for that preset is already
@@ -373,7 +373,7 @@ a category, showing how many commands it holds before anything's removed.
 File format and the `--preset` CLI flag are also in
 [Configuration](#configuration).
 
-Presets need [tmux](#terminal-backends). **F9** and **F4 → Create Preset**
+Presets need [tmux](#terminal-backends). **F9** and **F4 → Actions → Create Preset**
 both stay visible either way — Create Preset's hint reads "needs tmux" in
 place of the usual keybind when it's missing, and pressing either explains
 the exact install command rather than silently failing.
@@ -393,11 +393,12 @@ terminals displayed. The CRT pair is monochrome on purpose: that hardware
 could only show one hue at varying brightness, so unlike the rest these
 never reach for a second color.
 
-**F4 → Theme** shows a short description next to each name, so you don't have
-to guess from the name alone. Picking one writes the config file for you — no
-terminal needed — and offers to relaunch immediately since colors are resolved
-once at startup. Env var and config-file syntax are in
-[Configuration](#configuration).
+**F4 → Actions → Settings → Theme** shows a short description next to each
+name and where the current one sits among all ten (`3 of 10`), so you don't
+have to guess from the name alone or scroll to find your place. Picking one
+writes the config file for you — no terminal needed — and offers to relaunch
+immediately since colors are resolved once at startup. Env var and
+config-file syntax are in [Configuration](#configuration).
 
 ### Desktop shortcuts
 
