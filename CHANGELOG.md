@@ -5,6 +5,42 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.53.0] — 2026-08-31
+
+### Added
+
+- **Custom launch flags (Actions → Launch Flags)** — raised live:
+  "Actions: option to always run TUI with specific commands?" /
+  "Presets: action to run with specific commands?" One setting
+  answers both: extra arguments to always pass a command whenever it
+  launches, stored per command name, so it applies wherever that
+  command actually launches — the main list's own Enter, and any
+  preset it's a member of — from one config, not two. Prefilled with
+  the current flags for editing; the Actions row shows them too, so
+  there's no need to open the prompt just to check. Blank + Enter is
+  a real "clear the flags" answer, correctly distinguished from Esc
+  (the one prompt here where an empty result isn't automatically a
+  Cancel).
+- **Compact View (Actions → Settings → Compact View)** — raised live
+  as "detailed vs clean view," clarified to mean the main list's own
+  VERSION/SIZE columns. Off (default) shows every column, as before;
+  on drops VERSION/SIZE entirely, leaving just the marker, name, and
+  description. Applies everywhere a row shows up, not only the main
+  list.
+
+### Fixed
+
+- `preset-fixtures.sh`'s real-tmux-session tests could hang for
+  real (confirmed live, once, for about two minutes) on a machine
+  with Ghostty.app installed: `run_preset()` calls
+  `preset_show_session()` once a session's panes are built (not just
+  on a reattach), which without `SSH_TTY` set attempts real Ghostty
+  AppleScript automation — apparently blocking on a permission
+  negotiation nothing in a non-interactive test run can answer, rather
+  than failing fast. Every real session-building invocation in that
+  test now forces the SSH-simulated branch instead, same technique
+  the test's own step 8 already used for exactly this reason.
+
 ## [0.52.0] — 2026-08-31
 
 ### Added

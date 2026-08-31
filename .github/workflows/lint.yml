@@ -39,6 +39,14 @@ name: CI
 #      unknown preset, a preset with no real commands in it), plus a
 #      real tmux session: right pane count on first launch, reattach
 #      instead of duplicating on a second one while it's still alive.
+#      Every real session-building invocation runs with SSH_TTY set
+#      (forcing preset_show_session()'s SSH-simulated branch) — added
+#      after one of these hung for real on a machine with Ghostty.app
+#      installed: run_preset() calls preset_show_session() once the
+#      panes are built (not just on a reattach), which without this
+#      attempts real Ghostty AppleScript automation and can block for
+#      minutes rather than failing fast. None of what these steps
+#      actually check depends on which "show" path runs.
 #
 #   7. preset-order-fixtures — --internal-preset-tab, the handler
 #      behind Create Preset's numbered Tab marking: marks build up in
@@ -251,6 +259,30 @@ name: CI
 #       fake stand-in launcher, confirming the generated script calls
 #       brew, cleans up after itself, and relaunches bare rather than
 #       forcing any special flag.
+#
+#   27. launch-flags-fixtures — Actions -> Launch Flags, raised live:
+#       "Actions: option to always run TUI with specific commands?" /
+#       "Presets: action to run with specific commands?"
+#       resolve_launch_path() and set_launch_flags() are pure, sourced
+#       and run directly; a real --preset run (SSH_TTY-simulated, same
+#       reasoning preset-fixtures.sh gives for its own use of that)
+#       confirms a configured preset member actually launches with its
+#       flags applied — this is also what caught a real function-order
+#       bug before it shipped (resolve_launch_path() unreachable from
+#       the top-level --preset dispatch in its original position; see
+#       this file's own header comment, including why
+#       function-order-fixtures.sh's own static check does not catch
+#       this particular shape). pick_launch_flags() and the Actions
+#       wiring are source-text assertions, same reasoning as
+#       rename-fixtures.sh.
+#
+#   28. compact-view-fixtures — Actions -> Settings -> Compact View,
+#       raised live: "detailed vs clean view." build_entries() is
+#       sourced and run against a fixture cache, same technique
+#       sort-fixtures.sh uses for SORT_ORDER=size, confirming the
+#       VERSION/SIZE text is genuinely absent (not just blank) from
+#       the display string when compact. The column header and
+#       Settings row/dispatch are source-text assertions.
 
 on:
   push:
@@ -621,6 +653,31 @@ jobs:
       # against a fake stand-in launcher.
       - name: Update All test
         run: zsh test/update-all-fixtures.sh
+
+  launch-flags-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # resolve_launch_path()/set_launch_flags() are sourced and run
+      # directly, no fzf needed. The real --preset run needs tmux
+      # (skips if unavailable) and runs SSH_TTY-simulated, same
+      # reasoning preset-fixtures.sh gives for its own use of that.
+      - name: Launch Flags test
+        run: zsh test/launch-flags-fixtures.sh
+
+  compact-view-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — build_entries() is sourced and
+      # run directly against a fixture cache; the column header and
+      # Settings row/dispatch are source-text assertions.
+      - name: Compact View test
+        run: zsh test/compact-view-fixtures.sh
 
   linux:
     runs-on: ubuntu-latest
