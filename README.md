@@ -82,6 +82,11 @@ capped.
 Doesn't touch `Most Used` or `Recently Added`, which already have their own
 meaningful order.
 
+**F4 → Actions → Settings → Compact View** drops the version and size columns
+entirely, leaving just the marker, name, and description — raised live as
+"detailed vs clean view." Off by default (every column shown, as above);
+applies everywhere a row shows up, not only the main list.
+
 The top border also shows how much disk space Homebrew's own installs are
 using and how much is still free on the volume — visible on `All`, hidden on
 filtered views to leave room for the view's own name.
@@ -402,6 +407,24 @@ both stay visible either way — Create Preset's hint reads "needs tmux" in
 place of the usual keybind when it's missing, and pressing either explains
 the exact install command rather than silently failing.
 
+### Custom launch flags
+
+Raised live: "option to always run a TUI with specific commands?" — and
+separately, the same question for a preset member. One answer covers both:
+**F4 → Actions → Launch Flags** on a highlighted entry sets extra arguments to
+always pass it when it launches — `--tree`, `-w /some/path`, whatever the tool
+actually takes. Prefilled with whatever's already set, so editing is just
+typing over it; the row's own hint in Actions shows the current flags too, so
+you don't have to open the prompt to check. Blank clears it — typing nothing
+and pressing Enter is a real, different answer from Esc here, not the same
+"never mind" every other prompt treats it as.
+
+Stored per command, the same key every marker in the main list already keys
+off (favorited, categorized, hidden), so it applies wherever that command
+actually launches — the main list's own Enter, *and* any preset it's a member
+of. Configuring it once covers both; there's no separate per-preset version to
+keep in sync.
+
 ### Color themes
 
 <p align="center"><img src="assets/themes.png" alt="The same list rendered in all ten themes side by side, showing each palette's actual colors"></p>
@@ -510,6 +533,7 @@ reference below, from inside the launcher.
 | — | Categorize multiple entries (Tab to mark) | Actions only |
 | — | Create a new preset | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
+| — | Set custom launch flags for the highlighted entry | Actions only |
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
@@ -517,6 +541,7 @@ reference below, from inside the launcher.
 | — | Toggle Default Categories / Default Hidden | Settings only |
 | — | Toggle Open to Categories | Settings only |
 | — | Sort by name or size | Settings only |
+| — | Toggle Compact View (hide the version/size columns) | Settings only |
 | — | Toggle the details pane (mirrors F3) | Settings only |
 | — | Toggle where the details pane opens — top or bottom | Settings only |
 | — | Toggle Alt Keybinds (show/hide the ⌥ aliases in the footer) | Settings only |

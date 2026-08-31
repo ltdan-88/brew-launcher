@@ -100,7 +100,21 @@ EOF
 # `cat` with no arguments just blocks reading stdin — a real,
 # harmless, long-running-enough process for pane-content purposes,
 # already relied on elsewhere in this project's own tmux testing.
-"$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
+#
+# SSH_TTY (here and at every other real --preset invocation below,
+# except the early argument-validation checks above, which return
+# before ever building a session) forces preset_show_session()'s
+# SSH-simulated branch — same reasoning step 8 further down already
+# gives for its own use of it. Added after this exact line hung for
+# real on a machine with Ghostty.app installed: run_preset() calls
+# preset_show_session() once the panes are built (not just on a
+# reattach), which without this attempts real Ghostty AppleScript
+# automation — confirmed live to occasionally block for minutes,
+# presumably on a permission negotiation nothing here can answer,
+# rather than failing fast. None of what steps 4-7 actually check
+# (pane count, reattach behavior, alternate-screen recovery) depends
+# on which "show" path runs, so forcing this one is free.
+SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
 
 pane_count="$(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
 [[ "$pane_count" == "2" ]] ||
@@ -108,7 +122,7 @@ pane_count="$(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
 
 # Re-invoking the same preset while it's still running should reattach
 # rather than spawn a duplicate session or re-split panes.
-"$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
+SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
 
 pane_count_after="$(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
 [[ "$pane_count_after" == "2" ]] ||
@@ -140,7 +154,7 @@ cat > "$PRESETS_DIR/preset-fixtures-test" <<'EOF'
 cat
 EOF
 
-"$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
+SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-test </dev/null >/dev/null 2>&1
 
 pane_count_edited="$(tmux list-panes -t "$SESSION" 2>/dev/null | wc -l | tr -d ' ')"
 [[ "$pane_count_edited" == "1" ]] ||
@@ -172,7 +186,7 @@ tmux kill-session -t "$BIG_SESSION" 2>/dev/null
 
 for _ in $(seq 1 12); do printf 'cat\n'; done > "$PRESETS_DIR/preset-fixtures-big"
 
-"$LAUNCHER" --preset preset-fixtures-big </dev/null >/dev/null 2>&1
+SSH_TTY=/dev/fake TMUX= "$LAUNCHER" --preset preset-fixtures-big </dev/null >/dev/null 2>&1
 
 big_pane_count="$(tmux list-panes -t "$BIG_SESSION" 2>/dev/null | wc -l | tr -d ' ')"
 [[ "$big_pane_count" == "12" ]] ||
@@ -207,7 +221,7 @@ cat > "$PRESETS_DIR/preset-fixtures-badtui" <<'EOF'
 badtui
 EOF
 
-PATH="$BADTUI_BIN:$PATH" "$LAUNCHER" --preset preset-fixtures-badtui </dev/null >/dev/null 2>&1
+SSH_TTY=/dev/fake TMUX= PATH="$BADTUI_BIN:$PATH" "$LAUNCHER" --preset preset-fixtures-badtui </dev/null >/dev/null 2>&1
 
 alternate_on="$(tmux display-message -p -t "$BADTUI_SESSION" '#{alternate_on}' 2>/dev/null)"
 [[ "$alternate_on" == "0" ]] ||

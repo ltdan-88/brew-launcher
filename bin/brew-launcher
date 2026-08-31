@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.52.0"
+VERSION="0.53.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -122,6 +122,7 @@ CONFIG_OPEN_TO_CATEGORIES=""
 CONFIG_SORT=""
 CONFIG_ALT_KEYBINDS=""
 CONFIG_DETAILS_POSITION=""
+CONFIG_COMPACT_VIEW=""
 
 if [[ -f "$CONFIG_FILE" ]]; then
 
@@ -144,6 +145,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             SORT)                CONFIG_SORT="$config_value" ;;
             ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="$config_value" ;;
             DETAILS_POSITION)    CONFIG_DETAILS_POSITION="$config_value" ;;
+            COMPACT_VIEW)        CONFIG_COMPACT_VIEW="$config_value" ;;
         esac
 
     done < "$CONFIG_FILE"
@@ -170,6 +172,19 @@ PRESETS_DIR="$CONFIG_DIR/presets"
 # usage history is something you'd want to survive a cache clear, the
 # same reasoning that already puts Favorites/categories/ignore there.
 LAUNCH_HISTORY_FILE="$CONFIG_DIR/launch-history"
+
+# Tab-separated "command<TAB>flags" lines — extra arguments to always
+# pass a command whenever it's actually launched. Raised live: "Actions:
+# option to always run TUI with specific commands?" / "Presets: action
+# to run with specific commands?" Keyed by command name, same as every
+# other per-entry marker here (hidden, favorited, categorized), rather
+# than per-formula or per-preset separately — one config answers both
+# requests, since a preset launches the exact same commands the main
+# list does (see run_preset()'s own lookup). Tab-separated, not
+# KEY=value like CONFIG_FILE: a flags string legitimately contains "="
+# (e.g. "--config=/path"), which set_config_value()'s own key=value
+# split would misparse as part of the key.
+LAUNCH_FLAGS_FILE="$CONFIG_DIR/launch-flags"
 
 # How many entries the computed views (Most Used, Recently Added) cap
 # themselves to. Both stay meaningful — "your actual most-used tools",
@@ -446,6 +461,11 @@ Theme:
   the list instead of below it. Applies everywhere one shows up — the
   main list, F2, F9, and Actions/Settings' own always-on panes.
 
+  COMPACT_VIEW=on (default off, toggled from Actions → Settings →
+  Compact View) drops the version and size columns entirely, leaving
+  just the marker, name, and description. Applies everywhere a row
+  shows up, not only the main list.
+
   All of these toggles (and Sort, and the details-pane toggle) flip
   with Space as well as Enter, and reopen the Settings screen
   afterward rather than exiting to the main list — useful for
@@ -602,6 +622,16 @@ Mouse:
   next to them does (e.g. clicking [Hide] is the same as pressing
   F2). Plain, unbracketed footer text — like the "+"/"*" legend or
   "Navigate" — isn't clickable; it's there to explain, not to act on.
+
+Launch Flags:
+  F4 → Actions → Launch Flags on a highlighted entry sets extra
+  arguments to always pass it whenever it launches. Prefilled with
+  whatever's already set; blank and Enter clears it (a real, different
+  answer from Esc here, not the same "never mind"). Stored per
+  command, the same key every other per-entry marker uses, so it
+  applies wherever that command actually launches — the main list's
+  own Enter, and any preset it's a member of — from one setting, not
+  two.
 
 Update All:
   Actions → Update All runs 'brew upgrade' for everything outdated, in
@@ -1216,6 +1246,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
         toggle_sort)
             printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used or Recently Added, which already have\ntheir own meaningful order.\n'
             ;;
+        toggle_compact_view)
+            printf 'Compact View\n\nOff (default): every row shows its version and size.\nOn: drops those two columns, leaving just the marker,\nname, and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
+            ;;
         toggle_details)
             printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice (it stays on until you turn it off again, here or\nwith F3); pressing F3 directly instead is just a quick\npeek, and Esc there closes it first before doing anything\nelse. The preset picker (F9) has its own details pane that'"'"'s\nalways on, no toggle needed.\n'
             ;;
@@ -1236,6 +1269,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             ;;
         shortcut)
             printf 'Create Shortcut\n\nCreate a double-clickable launcher for the highlighted\nentry (macOS: an Automator app; Linux: a .desktop file).\n'
+            ;;
+        launch_flags)
+            printf 'Launch Flags\n\nExtra arguments to always pass when launching the\nhighlighted entry. Applies everywhere it launches from,\nincluding presets it'"'"'s part of. Blank clears it.\n'
             ;;
         backup)
             printf 'Backup\n\nExport your categories, presets, favorites, hidden entries\nand settings to a single file, for safekeeping or moving to\nanother machine.\n'
@@ -1483,6 +1519,87 @@ APPLESCRIPT
     exec zsh -c 'tmux attach-session -t "$1" && exec "$2"' -- "$session" "$SCRIPT_PATH"
 }
 
+# See LAUNCH_FLAGS_FILE's own comment above. Defined and loaded here,
+# well before the ordinary interactive-picker setup further down —
+# run_preset() below needs it (and resolve_launch_path() right after
+# it), and the top-level --preset <name> CLI flag calls run_preset()
+# and exits before ever reaching that later setup. Same reasoning
+# is_ssh_session() above gives for its own early placement: zsh
+# doesn't hoist function definitions, so anything reachable from an
+# early top-level call must already be defined by that point, not
+# just eventually defined somewhere in the file.
+typeset -A launch_flags
+
+load_launch_flags() {
+
+    launch_flags=()
+
+    [[ -f "$LAUNCH_FLAGS_FILE" ]] || return
+
+    local lf_command lf_flags
+
+    while IFS=$'\t' read -r lf_command lf_flags; do
+        [[ -z "$lf_command" ]] && continue
+        launch_flags[$lf_command]="$lf_flags"
+    done < "$LAUNCH_FLAGS_FILE"
+}
+
+load_launch_flags
+
+# ------------------------------------------------------------
+# Turns a resolved binary path into whatever should actually be
+# launched — itself, unchanged, if $command has no custom launch flags
+# configured (the overwhelming common case), or a throwaway
+# self-deleting wrapper script that runs it with those flags if it
+# does. See LAUNCH_FLAGS_FILE's own comment for why this is one shared
+# lookup rather than two separate features.
+#
+# Same self-deleting-wrapper idiom as update_all(), and for the same
+# reason: launch_in_current_terminal/tmux/ghostty (and run_preset()'s
+# own tmux pane command, right below) are all built around "one
+# already-resolved binary, no arguments" — generalizing four call
+# sites to accept an argument list wasn't worth touching that much
+# carefully-tuned, security-reviewed code for one feature. Every
+# launch site funnels its resolved path through this first instead, so
+# Launch Flags apply wherever a command is actually launched — the
+# main list's own Enter, and every preset pane — from one config, not
+# two.
+#
+# The flags string is written into the wrapper as plain, unquoted
+# shell text on purpose: this is a value the user typed specifically
+# to control how a command launches (the same trust level as their own
+# shell aliases), not untrusted data from a formula description or a
+# network response, so it's meant to be interpreted with full shell
+# syntax (quoting, "=", etc.) rather than treated as an opaque string.
+# ------------------------------------------------------------
+
+resolve_launch_path() {
+
+    local command="$1" resolved_path="$2"
+    local flags="${launch_flags[$command]-}"
+
+    if [[ -z "$flags" ]]; then
+        printf '%s' "$resolved_path"
+        return 0
+    fi
+
+    local wrapper
+    wrapper="$(mktemp "$CACHE_DIR/launch-flags-run.XXXXXX")" || {
+        printf '%s' "$resolved_path"
+        return 0
+    }
+
+    cat > "$wrapper" <<EOF
+#!/bin/zsh
+${(q)resolved_path} $flags
+rm -f -- "\$0"
+EOF
+
+    chmod +x "$wrapper"
+
+    printf '%s' "$wrapper"
+}
+
 # ------------------------------------------------------------
 # Launch a preset by name — read its command list and start (or
 # reattach to) one tmux session with a pane per command.
@@ -1588,6 +1705,14 @@ run_preset() {
     for preset_cmd in "${preset_commands[@]}"; do
 
         preset_resolved="$(command -v "$preset_cmd" 2>/dev/null)"
+
+        # Same Launch Flags lookup the main list's own Enter-launch
+        # goes through (see resolve_launch_path()'s own comment) — one
+        # config answers both "run a TUI with specific flags" and "run
+        # a preset member with specific flags", since a preset launches
+        # the exact same commands by name.
+        [[ -n "$preset_resolved" ]] &&
+            preset_resolved="$(resolve_launch_path "$preset_cmd" "$preset_resolved")"
 
         if [[ -z "$preset_resolved" ]]; then
             # Collected rather than printed here — printing immediately
@@ -1835,6 +1960,15 @@ SORT_ORDER="${CONFIG_SORT:-name}"
 # bottom." Read by details_preview_window() below, wherever a screen
 # builds its own --preview-window value.
 DETAILS_POSITION="${CONFIG_DETAILS_POSITION:-bottom}"
+
+# Opt-in (default off, same reasoning as OPEN_TO_CATEGORIES above),
+# raised live as "detailed vs clean view" and clarified to mean the
+# main list's own VERSION/SIZE columns specifically: off (default)
+# shows everything build_entries() already computes; on drops those
+# two columns, leaving just the marker, name, and description. Read
+# by build_entries() and the column-header build further down, the
+# only two places that lay out a row's columns.
+COMPACT_VIEW="${CONFIG_COMPACT_VIEW:-off}"
 
 case "$THEME_NAME" in
     catppuccin)
@@ -3027,10 +3161,13 @@ pick_help() {
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
     fi
+    rows+=("      Launch Flags  Extra arguments to always pass this entry —")
+    rows+=("                    applies to presets it's in too. Blank clears")
     rows+=("        Update All  brew upgrade for everything outdated, in a")
     rows+=("                    real terminal. Asks first; shows the count")
     rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
-    rows+=("                    Sort, Details, Alt Keybinds — see below")
+    rows+=("                    Sort, Compact View, Details, Alt Keybinds —")
+    rows+=("                    see below")
     rows+=("            Backup  Brewfile + categories/presets/theme in one")
     rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
     rows+=("")
@@ -3043,6 +3180,8 @@ pick_help() {
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
     rows+=("                    first) — not Most Used/Recently Added, which")
     rows+=("                    already have their own order")
+    rows+=("       Compact View  Off (default): every column shows. On: drops")
+    rows+=("                    version/size, leaving marker, name, description")
     rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
     rows+=("                    state shows before you even open the pane")
     rows+=("  Details Position  Bottom (default, below the list) or Top —")
@@ -3190,6 +3329,15 @@ pick_more_action() {
         if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
             rows+=("shortcut"$'\t'"$(printf '%-20s%s' 'Create Shortcut' '')")
         fi
+
+        # Raised live: "Actions: option to always run TUI with specific
+        # commands?" — entry-scoped too, same reasoning as Create
+        # Shortcut above. $entry_name is the real command (see this
+        # function's own call sites), the same key LAUNCH_FLAGS_FILE
+        # and launch_flags[] use throughout. The hint shows the current
+        # flags, if any, so it's visible without opening the prompt.
+        local launch_flags_hint="${launch_flags[$entry_name]-}"
+        rows+=("launch_flags"$'\t'"$(printf '%-20s%s' 'Launch Flags' "$launch_flags_hint")")
     fi
 
     # Refresh, not gated on has_entry — rebuilding the cache doesn't
@@ -3222,7 +3370,7 @@ pick_more_action() {
     # pick_settings_action()/open_settings_menu(). No F-key of its own
     # — every F1-F9 is already spoken for, and settings as a whole are
     # reached for far less often than Hide/Favorite/Categorize above.
-    rows+=("settings"$'\t'"$(printf '%-20s%s' 'Settings' '(8)')")
+    rows+=("settings"$'\t'"$(printf '%-20s%s' 'Settings' '(9)')")
 
     # Last, not part of anything above — this isn't "organize a row" or
     # "adjust a setting," it's "export everything," which reads more
@@ -3402,6 +3550,17 @@ pick_settings_action() {
     [[ "$SORT_ORDER" == size ]] && sort_state='Size'
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
 
+    # Raised live as "detailed vs clean view," clarified to mean the
+    # main list's VERSION/SIZE columns specifically. Opt-in (default
+    # off), same reasoning as Open to Categories above — this changes
+    # what every row looks like, so it defaults to the familiar full
+    # layout rather than switching it out from under anyone. Read by
+    # build_entries() and the column header, the only two places that
+    # lay a row's columns out.
+    local compact_view_state='Off'
+    [[ "$COMPACT_VIEW" == on ]] && compact_view_state='On'
+    rows+=("toggle_compact_view"$'\t'"$(printf '%-20s%s' 'Compact View' "$compact_view_state")")
+
     # Raised live: "implement a toggle for details pane (F3) in F4
     # Actions." Same DETAILS_VISIBLE flag F3 itself toggles — on
     # every screen with an F3 details/preview pane (main list, F2
@@ -3521,6 +3680,23 @@ open_settings_menu() {
                 # stale order on screen until something else refreshes
                 # it would look exactly like the toggle did nothing.
                 build_entries
+                continue
+                ;;
+            toggle_compact_view)
+                new_value='on'
+                [[ "$COMPACT_VIEW" == on ]] && new_value='off'
+                set_config_value COMPACT_VIEW "$new_value"
+                COMPACT_VIEW="$new_value"
+
+                # Same reasoning as Sort right above — this changes
+                # every row's own display string, so it needs a
+                # rebuild to actually show up rather than waiting on
+                # the next incidental one. The column header names
+                # need the same recompute, or they'd keep advertising
+                # VERSION/SIZE columns over rows that no longer have
+                # them — confirmed live before this line was added.
+                build_entries
+                build_fzf_header
                 continue
                 ;;
             toggle_details)
@@ -4317,7 +4493,17 @@ build_entries() {
         version_fmt="$(printf "%-${max_version}s" "$version_text")"
         size_fmt="$(printf "%-${max_size}s" "$size")"
 
-        display="$left_marker_fmt$name_fmt$version_fmt$size_fmt$description"
+        # Compact View (Settings) drops the VERSION/SIZE columns
+        # entirely rather than just leaving them blank — raised live
+        # as "detailed vs clean view." Everything else about a row
+        # (the command/formula/description fields entries[] itself
+        # carries, the outdated check above) stays the same either
+        # way; this only changes what's actually rendered.
+        if [[ "$COMPACT_VIEW" == on ]]; then
+            display="$left_marker_fmt$name_fmt$description"
+        else
+            display="$left_marker_fmt$name_fmt$version_fmt$size_fmt$description"
+        fi
 
         entries+=(
             "$command"$'\t'"$display"$'\t'"$formula"$'\t'"$description"$'\t'"$resolved_path"
@@ -4455,16 +4641,35 @@ find_entry_position() {
 
 # ------------------------------------------------------------
 # Column header
+#
+# A function, not a one-time constant, specifically so toggling
+# Compact View can recompute it in place — the column names need to
+# match the row data build_entries() is about to rebuild the same way,
+# not stay stuck showing VERSION/SIZE headers over rows that no longer
+# have them.
 # ------------------------------------------------------------
 
-FZF_HEADER="$(
-    printf "%-${LEFT_MARKER_WIDTH}s%-${max_name}s%-${max_version}s%-${max_size}s%s" \
-        "" \
-        "NAME" \
-        "VERSION" \
-        "SIZE" \
-        "DESCRIPTION"
-)"
+build_fzf_header() {
+    if [[ "$COMPACT_VIEW" == on ]]; then
+        FZF_HEADER="$(
+            printf "%-${LEFT_MARKER_WIDTH}s%-${max_name}s%s" \
+                "" \
+                "NAME" \
+                "DESCRIPTION"
+        )"
+    else
+        FZF_HEADER="$(
+            printf "%-${LEFT_MARKER_WIDTH}s%-${max_name}s%-${max_version}s%-${max_size}s%s" \
+                "" \
+                "NAME" \
+                "VERSION" \
+                "SIZE" \
+                "DESCRIPTION"
+        )"
+    fi
+}
+
+build_fzf_header
 
 # ------------------------------------------------------------
 # Launch application in the current terminal
@@ -5090,6 +5295,122 @@ set_config_value() {
     [[ "$found" == false ]] && print -r -- "$key=$value" >> "$tmp_config"
 
     mv "$tmp_config" "$CONFIG_FILE"
+}
+
+# ------------------------------------------------------------
+# Set (or clear) one command's custom launch flags — same
+# find-or-append idea as set_config_value() above, keyed on the first
+# tab-separated field instead of "key=". Clearing (flags == "") drops
+# the line entirely rather than writing an empty value, since an empty
+# string and "no custom flags at all" mean the same thing everywhere
+# else this is read (launch_flags[$command] unset either way).
+# ------------------------------------------------------------
+
+set_launch_flags() {
+
+    local command="$1" flags="$2"
+    local tmp_flags line line_command found=false
+
+    mkdir -p "$CONFIG_DIR"
+
+    tmp_flags="$(mktemp "$CACHE_DIR/launch-flags.XXXXXX")" || return 1
+
+    if [[ -f "$LAUNCH_FLAGS_FILE" ]]; then
+        while IFS= read -r line; do
+
+            line_command="${line%%$'\t'*}"
+
+            if [[ "$line_command" == "$command" ]]; then
+                found=true
+                [[ -n "$flags" ]] && printf '%s\t%s\n' "$command" "$flags" >> "$tmp_flags"
+            else
+                print -r -- "$line" >> "$tmp_flags"
+            fi
+
+        done < "$LAUNCH_FLAGS_FILE"
+    fi
+
+    [[ "$found" == false && -n "$flags" ]] && printf '%s\t%s\n' "$command" "$flags" >> "$tmp_flags"
+
+    mv "$tmp_flags" "$LAUNCH_FLAGS_FILE"
+
+    if [[ -n "$flags" ]]; then
+        launch_flags[$command]="$flags"
+    else
+        unset "launch_flags[$command]"
+    fi
+}
+
+# ------------------------------------------------------------
+# Launch Flags prompt — Actions -> Launch Flags, for the highlighted
+# entry. Raised live: "Actions: option to always run TUI with specific
+# commands?"
+#
+# Prefilled with the current flags (if any), same "type over what's
+# already there" idiom as rename_category(). Unlike every other
+# prompt here, though, an empty result is a genuinely different,
+# valid answer from Cancel: typing nothing and pressing Enter means
+# "clear the flags," not "never mind." Every existing prompt collapses
+# those two (an empty typed name is always invalid, so Esc and
+# empty-Enter both just mean cancel) — this one can't, so it reads the
+# pressed key explicitly via --expect instead of inferring it from
+# whether the result string is empty.
+# ------------------------------------------------------------
+
+pick_launch_flags() {
+
+    local command="$1"
+    local current="${launch_flags[$command]-}"
+    local fzf_result typed pick_action
+    local -a result_lines
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    fzf_result="$(
+        printf '%s\n' "$current" |
+        fzf \
+            --print-query \
+            --query="$current" \
+            --expect=enter,esc \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label "Launch flags — $command")" \
+            --border-label-pos=2 \
+            --prompt=' Flags: ' \
+            --header="Extra arguments to always pass when launching $command. Blank clears it." \
+            --footer='  Type  Flags    Enter  [Save]    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --pointer='▌' \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    result_lines=("${(@f)fzf_result}")
+    typed="${result_lines[1]}"
+    pick_action="${result_lines[2]}"
+
+    [[ "$pick_action" != "enter" ]] && return 1
+    [[ "$typed" == "$current" ]] && return 1
+
+    # A literal tab can't normally reach here from a single-line query
+    # box, but flattened defensively anyway — same reasoning
+    # cache_writer.py already gives for collapsing one in a formula
+    # description: LAUNCH_FLAGS_FILE is tab-separated, and an embedded
+    # tab in the value would shift or split the row.
+    typed="${typed//$'\t'/ }"
+
+    set_launch_flags "$command" "$typed"
+
+    printf '\n'
+    if [[ -n "$typed" ]]; then
+        printf 'Will always launch %s with: %s\n' "$command" "$typed"
+    else
+        printf 'Cleared custom launch flags for %s.\n' "$command"
+    fi
+    sleep 1
 }
 
 # ------------------------------------------------------------
@@ -7063,6 +7384,18 @@ while true; do
     fi
 
     # --------------------------------------------------------
+    # Launch Flags — same "Actions only, entry-scoped" shape as
+    # Create Shortcut above.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "launch_flags" ]]; then
+
+        pick_launch_flags "$command"
+        restore_position="$(find_entry_position "$command")"
+        continue
+    fi
+
+    # --------------------------------------------------------
     # F6 / ⌥F = toggle Favorites membership for selected entry.
     # --------------------------------------------------------
 
@@ -7159,6 +7492,12 @@ while true; do
     mkdir -p "$CONFIG_DIR"
     printf '%s\n' "$command" >> "$LAUNCH_HISTORY_FILE"
     (( launch_counts[$command]++ ))
+
+    # Substitutes a flagged wrapper in place of the plain binary when
+    # Launch Flags has one configured for this command — see
+    # resolve_launch_path()'s own comment. A no-op (returns
+    # $command_path unchanged) for every command without one.
+    command_path="$(resolve_launch_path "$command" "$command_path")"
 
     if [[ "$TERMINAL" == "current" ]]; then
 
