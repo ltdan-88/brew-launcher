@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.56.0] — 2026-09-01
+
+### Added
+
+- **Custom color themes (`THEME=custom`)** — an 11th theme value alongside
+  the ten built-in palettes, reading its actual colors from a new
+  `CUSTOM_COLORS=` config-file line instead of a hardcoded one. Config-file
+  only: there's no `BREW_LAUNCHER_CUSTOM_COLORS` env var, and it isn't
+  offered as a row in Settings → Themes, since there's no fixed palette to
+  show a description for. The value is fzf's own comma-separated `--color`
+  format, the same 15 keys every built-in theme already sets — a
+  copy-pasteable template (catppuccin's own string) is in the README.
+  `THEME=custom` with no `CUSTOM_COLORS` line fails fast, matching the
+  existing unrecognized-theme-name convention, rather than silently falling
+  back to some default for a palette that's supposed to be yours.
+
+### Changed
+
+- **F1/Help now leads the footer** instead of trailing it, reading first the
+  same way it numbers first. It used to sit last on the theory that F1
+  meaning help is close to universal knowledge and cheapest to lose if a
+  narrow terminal truncates the footer string — that protection turned out
+  to be accidental rather than a real priority system (the footer has
+  always been one plain string, truncated from wherever fzf runs out of
+  room), so moving Help first just shifts that same truncation risk onto
+  Presets instead.
+
 ## [0.55.0] — 2026-09-01
 
 ### Added

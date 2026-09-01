@@ -80,12 +80,14 @@ footer_actions_block="$(sed -n '/^footer_actions() {/,/^}/p' "$LAUNCHER")"
 [[ "$footer_actions_block" == *"footer_key F1 '?'"* ]] ||
     fail "footer_actions() should show the F1 key itself via footer_key"
 
-# Last, not just present — lowest priority, first thing a narrower
-# terminal drops (see build_footer()'s fallback attempts). The [Help]
-# line should be the last parts+=(...) call in the function.
-last_parts_line="$(echo "$footer_actions_block" | grep 'parts+=' | tail -1)"
-[[ "$last_parts_line" == *'[Help]'* ]] ||
-    fail "[Help] should be the last item added to footer_actions()'s parts, got: $last_parts_line"
+# First, not just present — F1 reads first the same way it numbers
+# first. The [Help] line should be the first parts+=(...) call in the
+# function (which also means it's no longer what a narrow terminal
+# truncates first; see build_footer()'s fallback attempts — that cost
+# now falls on whatever's last instead, currently [Presets]).
+first_parts_line="$(echo "$footer_actions_block" | grep 'parts+=' | head -1)"
+[[ "$first_parts_line" == *'[Help]'* ]] ||
+    fail "[Help] should be the first item added to footer_actions()'s parts, got: $first_parts_line"
 
 # The click-word table (--internal-footer-click) and the main list's
 # own click-to-action mapping both need to recognize it too, or a

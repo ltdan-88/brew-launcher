@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.55.0"
+VERSION="0.56.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -116,6 +116,7 @@ CONFIG_FILE="$CONFIG_DIR/config"
 
 CONFIG_TERMINAL=""
 CONFIG_THEME=""
+CONFIG_CUSTOM_COLORS=""
 CONFIG_DEFAULT_CATEGORIES=""
 CONFIG_DEFAULT_HIDDEN=""
 CONFIG_OPEN_TO_CATEGORIES=""
@@ -139,6 +140,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
         case "$config_key" in
             TERMINAL)            CONFIG_TERMINAL="$config_value" ;;
             THEME)               CONFIG_THEME="$config_value" ;;
+            CUSTOM_COLORS)       CONFIG_CUSTOM_COLORS="$config_value" ;;
             DEFAULT_CATEGORIES)  CONFIG_DEFAULT_CATEGORIES="$config_value" ;;
             DEFAULT_HIDDEN)      CONFIG_DEFAULT_HIDDEN="$config_value" ;;
             OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
@@ -435,6 +437,9 @@ Theme:
   BREW_LAUNCHER_THEME=solarized-dark   Full color-wheel spread
   BREW_LAUNCHER_THEME=solarized-light  Same, on a cream background
   BREW_LAUNCHER_THEME=red-sands        Deep brick-red background
+  BREW_LAUNCHER_THEME=custom           Your own palette — needs a
+                                        CUSTOM_COLORS= config line too,
+                                        see README.md
 
   Both settings persist without exporting them every session via
   ~/.config/brew-launcher/config (TERMINAL=..., THEME=...) — an env
@@ -2007,6 +2012,18 @@ fi
 # Red Sands rounds it out with a genuinely red theme rather than a
 # theme that merely uses red as one accent among several — see its
 # own case block below for detail. 10 total.
+#
+# THEME=custom is the 11th value this case accepts, but it's config-
+# file-only on purpose — not in pick_theme()'s own list, so it never
+# shows up as a scrollable row, and count math like
+# theme_position_label() correctly treats it as not one of the named
+# 10. It reads its actual colors from a separate CUSTOM_COLORS= config
+# line instead of a hardcoded palette here, in the same comma-
+# separated fzf --color format shown in each case above (a copy-paste
+# template of catppuccin's own string is in the README). Fails fast,
+# same convention as an unrecognized theme name below, if THEME=custom
+# is set but CUSTOM_COLORS is empty — there's no sensible default to
+# silently fall back to for a palette that's supposed to be yours.
 # ------------------------------------------------------------
 
 THEME_NAME="${BREW_LAUNCHER_THEME:-${CONFIG_THEME:-catppuccin}}"
@@ -2245,9 +2262,18 @@ label:#e7b000,
 query:#ffffff
 '
         ;;
+    custom)
+        if [[ -z "$CONFIG_CUSTOM_COLORS" ]]; then
+            echo "Error: THEME=custom needs a CUSTOM_COLORS line too."
+            echo "Add one to $CONFIG_FILE, in fzf's own --color format, e.g.:"
+            echo "CUSTOM_COLORS=fg:#cdd6f4,bg:#1e1e2e,fg+:#f5e0e6,bg+:#313244,hl:#89b4fa,hl+:#89b4fa,info:#a6adc8,prompt:#89b4fa,pointer:#f38ba8,marker:#a6e3a1,spinner:#f5c2e7,header:#a6adc8,border:#45475a,label:#89b4fa,query:#f5e0e6"
+            exit 1
+        fi
+        FZF_COLORS="$CONFIG_CUSTOM_COLORS"
+        ;;
     *)
         echo "Error: unknown theme '$THEME_NAME'."
-        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber, solarized-dark, solarized-light, red-sands."
+        echo "Supported values: catppuccin, gruvbox, tokyonight, nord, dracula, green, amber, solarized-dark, solarized-light, red-sands, custom."
         exit 1
         ;;
 esac
@@ -3186,8 +3212,9 @@ rename_category() {
 # Used to be deliberately left off the footer on the theory that
 # F1=help is close to universal knowledge, not worth spending space
 # teaching. Not finding it in practice is direct evidence that
-# assumption doesn't hold for everyone; now the last (lowest-priority, first-dropped on a
-# narrow terminal) item in footer_actions(). Still not in the Actions
+# assumption doesn't hold for everyone; now the first item in
+# footer_actions(), reading first the same way it numbers first,
+# rather than trailing the very keys it explains. Still not in the Actions
 # menu's own listing — Actions already means "act on the highlighted
 # row," and Help isn't that. Purely informational: the same fzf list
 # idiom as every other screen here, every row inert, Enter/Esc both
@@ -7118,6 +7145,20 @@ footer_actions() {
     local with_alt="$1" gap="$2"
     local -a parts=()
 
+    # First, ahead of Views/Details/Actions/Presets below — F1 reads
+    # first the same way it numbers first, rather than trailing behind
+    # the very keys it's there to explain. Previously last, deliberately:
+    # the reasoning then was that F1=help is close to universal
+    # knowledge, not worth spending prime footer space teaching, and
+    # least costly to lose if a narrow terminal truncates the string
+    # from the end. That protection was accidental, though, not a real
+    # priority mechanism — this footer has always been one plain
+    # string, truncated by fzf from wherever it runs out of room, so
+    # whatever's last pays that cost regardless of which item it is.
+    # Moving Help first means Presets is what a narrow terminal
+    # sacrifices now instead.
+    parts+=("$(footer_key F1 '?' $with_alt)  [Help]")
+
     # Browsing/navigation, plus the one organizing action that's worth
     # reaching for repeatedly rather than tucked away in [Actions] —
     # Presets, since running one is a recurring thing, not a one-time
@@ -7142,17 +7183,6 @@ footer_actions() {
     # Actions-menu row carries the "needs tmux" indicator; the footer
     # stays terse like every other entry here.
     parts+=("$(footer_key F9 P $with_alt)  [Presets]")
-
-    # Last, not grouped up with the rest. It used to be deliberately
-    # left off
-    # everywhere on the theory that F1=help is close to universal
-    # knowledge, not worth spending footer space teaching; not finding
-    # it in practice is direct evidence that assumption doesn't hold
-    # for everyone. Placed last specifically so it's still the first
-    # thing dropped if a narrower terminal can't fit everything (see
-    # build_footer()'s three-attempt fallback) — worth showing when
-    # there's room, least costly of these five to lose when there isn't.
-    parts+=("$(footer_key F1 '?' $with_alt)  [Help]")
 
     local separator="${(l:$gap:: :)}"
     local out="" part
