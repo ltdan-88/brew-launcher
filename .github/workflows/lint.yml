@@ -714,6 +714,19 @@ jobs:
       - name: Compact View test
         run: zsh test/compact-view-fixtures.sh
 
+  header-click-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — --internal-header-click is
+      # pure string/column arithmetic, invoked directly on the real
+      # binary; run_fzf()'s bind and the main loop's dispatch are
+      # source-text assertions.
+      - name: Header click (sort) test
+        run: zsh test/header-click-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:

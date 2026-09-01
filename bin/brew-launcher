@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.56.0"
+VERSION="0.57.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -79,6 +79,10 @@ CACHE_FORMAT_VERSION=9
 # launcher is watching. Inheriting the parent's value keeps both ends
 # of the side-channel pointing at the same path.
 export FOOTER_CLICK_FILE="${FOOTER_CLICK_FILE:-$CACHE_DIR/footer-click.$$}"
+
+# Same idea as FOOTER_CLICK_FILE above, for a click on the main list's
+# own NAME/SIZE column header — see --internal-header-click below.
+export HEADER_CLICK_FILE="${HEADER_CLICK_FILE:-$CACHE_DIR/header-click.$$}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
 
@@ -630,6 +634,8 @@ Mouse:
   next to them does (e.g. clicking [Hide] is the same as pressing
   F2). Plain, unbracketed footer text — like the "+"/"*" legend or
   "Navigate" — isn't clickable; it's there to explain, not to act on.
+  Clicking NAME or SIZE in the column header sorts by it directly,
+  same as F4 → Actions → Settings → Sort.
 
 Launch Flags:
   F4 → Actions → Launch Flags on a highlighted entry sets extra
@@ -906,6 +912,73 @@ if [[ "$1" == "--internal-footer-click" ]]; then
             printf 'ignore'
             ;;
     esac
+
+    exit 0
+fi
+
+# ------------------------------------------------------------
+# Header mouse-click handler (internal use only)
+#
+# Same idea as --internal-footer-click above — invoked by run_fzf()'s
+# own click-header bind as a fresh subprocess, writing to a
+# side-channel file (HEADER_CLICK_FILE) the main loop reads after fzf
+# exits. Column math against FZF_HEADER (exported once it's built),
+# not FZF_CLICK_HEADER_WORD's own word detection — confirmed live that
+# --delimiter=$'\t' (needed for the list's own real/display split)
+# makes fzf stop splitting the header into words at all, reporting the
+# entire header line as one "word" instead. FZF_CLICK_HEADER_COLUMN
+# still works correctly in that situation and is all this needs:
+# NAME and SIZE are the only clickable columns, so finding where each
+# literally sits inside FZF_HEADER (a small, fixed vocabulary — never
+# containing "NAME" or "SIZE" anywhere outside the two real column
+# labels) and comparing the click's column against those ranges is
+# both simpler and more robust than re-deriving the same widths
+# build_fzf_header() already computed.
+#
+# Only NAME and SIZE are recognized — the two column names Actions ->
+# Sort's own SORT_ORDER=name/size already understands (see
+# toggle_sort). VERSION, DESCRIPTION and the blank space between
+# columns fall through to "ignore" — there's no third sort order to
+# switch to. In Compact View the header has no "SIZE" substring at all
+# (build_fzf_header() drops that column entirely), so a click there
+# can only ever match NAME — no separate guard needed.
+#
+# Unlike the footer's row of distinct actions, NAME and SIZE both mean
+# the same kind of thing (pick this column as the active sort) — the
+# actual answer is picked, not a blind toggle, so clicking NAME while
+# already sorted by name is a harmless no-op rather than switching to
+# size just because a toggle was clicked.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-header-click" ]]; then
+
+    clicked_column=""
+
+    name_prefix="${FZF_HEADER%%NAME*}"
+    if [[ "$name_prefix" != "$FZF_HEADER" ]]; then
+        name_start=$(( ${#name_prefix} + 1 ))
+        name_end=$(( name_start + 3 ))
+        (( FZF_CLICK_HEADER_COLUMN >= name_start && FZF_CLICK_HEADER_COLUMN <= name_end )) &&
+            clicked_column="NAME"
+    fi
+
+    if [[ -z "$clicked_column" ]]; then
+        size_prefix="${FZF_HEADER%%SIZE*}"
+        if [[ "$size_prefix" != "$FZF_HEADER" ]]; then
+            size_start=$(( ${#size_prefix} + 1 ))
+            size_end=$(( size_start + 3 ))
+            (( FZF_CLICK_HEADER_COLUMN >= size_start && FZF_CLICK_HEADER_COLUMN <= size_end )) &&
+                clicked_column="SIZE"
+        fi
+    fi
+
+    if [[ -n "$clicked_column" ]]; then
+        mkdir -p "$CACHE_DIR"
+        printf '%s\n' "$clicked_column" > "$HEADER_CLICK_FILE"
+        printf 'accept'
+    else
+        printf 'ignore'
+    fi
 
     exit 0
 fi
@@ -1266,7 +1339,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Open to Categories\n\nOn: brew-launcher opens straight to the view picker (F2)\ninstead of All. Off (default): starts on All, the familiar\nfull list. Worth turning on once you actually have\ncategories to jump between.\n'
             ;;
         toggle_sort)
-            printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used, Recently Launched, or Recently Added, which\nalready have their own meaningful order.\n'
+            printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used, Recently Launched, or Recently Added, which\nalready have their own meaningful order. Clicking the NAME or\nSIZE column header on the main list does the same thing\ndirectly, without opening Settings.\n'
             ;;
         toggle_compact_view)
             printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
@@ -3301,6 +3374,8 @@ pick_help() {
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
     rows+=("                    first) — not Most Used/Recently Launched/")
     rows+=("                    Recently Added, which already have their own order")
+    rows+=("                    Click NAME/SIZE in the main list's own header to")
+    rows+=("                    sort by it directly, without opening Settings")
     rows+=("       Compact View  Off (default): every column/marker shows.")
     rows+=("                    On: drops version/size and the +/#/* marks,")
     rows+=("                    leaving just name and description")
@@ -4830,6 +4905,14 @@ build_fzf_header() {
 }
 
 build_fzf_header
+
+# Exported so --internal-header-click's own fresh subprocess (see
+# above) can read the exact same header string this process is
+# currently showing, without redoing the cache walk that computed
+# max_name/max_version/max_size in the first place — a plain scalar
+# export, so it stays exported through every later reassignment
+# build_fzf_header() makes too (e.g. Compact View's own toggle).
+export FZF_HEADER
 
 # ------------------------------------------------------------
 # Launch application in the current terminal
@@ -7403,6 +7486,13 @@ run_fzf() {
     rm -f "$FOOTER_CLICK_FILE"
     options+=(--bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click")
 
+    # Same reasoning, for a click on the NAME/SIZE column header — see
+    # --internal-header-click above. Only run_fzf() itself needs this:
+    # it's the one screen with a NAME/VERSION/SIZE/DESCRIPTION header
+    # to click on at all.
+    rm -f "$HEADER_CLICK_FILE"
+    options+=(--bind "click-header:transform:$SCRIPT_PATH --internal-header-click")
+
     fzf "${options[@]}"
 }
 
@@ -7559,6 +7649,36 @@ while true; do
             '[Quit]'|Quit|'[Close]'|Close) action="esc" ;;
             Enter|'[Launch]'|Launch) action="enter" ;;
         esac
+    fi
+
+    # --------------------------------------------------------
+    # A click on the NAME or SIZE column header sets that column as
+    # the active sort — same SORT_ORDER/set_config_value plumbing
+    # Actions -> Sort already uses (see toggle_sort there), just
+    # picking the clicked answer directly instead of blindly flipping
+    # between the two. Handled here rather than through $action, since
+    # it isn't one of the footer's keys — it acts on this screen
+    # directly and loops right back with the list re-sorted.
+    # --------------------------------------------------------
+
+    if [[ -f "$HEADER_CLICK_FILE" ]]; then
+
+        clicked_header="$(sed -n '1p' "$HEADER_CLICK_FILE")"
+        rm -f "$HEADER_CLICK_FILE"
+
+        new_sort_order=""
+        case "$clicked_header" in
+            NAME) new_sort_order='name' ;;
+            SIZE) new_sort_order='size' ;;
+        esac
+
+        if [[ -n "$new_sort_order" ]]; then
+            set_config_value SORT "$new_sort_order"
+            SORT_ORDER="$new_sort_order"
+            build_entries
+            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+            continue
+        fi
     fi
 
     # --------------------------------------------------------
