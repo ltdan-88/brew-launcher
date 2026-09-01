@@ -73,7 +73,7 @@ finds tools that never mention it by name.
 `+` and `#` can appear together (`+#`). These just describe state — upgrading
 stays Homebrew's job.
 
-- **F4 → Actions → Settings → Sort** — alphabetical (default) or largest-first by size. Clicking the **NAME** or **SIZE** column header does the same thing directly, without opening Settings.
+- **F4 → Actions → Settings → Sort** — alphabetical or by size, each with its own ascending/descending direction (name ascending is the default). Clicking the **NAME** or **SIZE** column header does the same thing directly: picks that column, and clicking it again reverses direction — without opening Settings.
 - **F4 → Actions → Settings → Compact View** — hides version/size and the `+`/`#`/`*` markers, leaving just name and description.
 - The top border shows Homebrew's total disk usage and free space, and gets
   its own `*` once a newer brew-launcher is available (`brew upgrade brew-launcher` clears it).
@@ -247,12 +247,15 @@ to `~/.config/brew-launcher`.
 Click a row to select it, double-click to launch. Footer items in
 `[brackets]` are clickable and do exactly what the key beside them does.
 Clicking the **NAME** or **SIZE** column header sorts by it directly, same as
-Actions → Settings → Sort.
+Actions → Settings → Sort — click the same one again to reverse direction,
+shown as a small **↑**/**↓** right on the active column's own label.
 
 ## Reference
 
 **F1** (no alias needed — it means *help* nearly everywhere) opens the same
-reference below, from inside the launcher.
+reference below, from inside the launcher — split into a few short topics
+(Keys, Actions Menu, Settings Reference, Mouse & Good to Know) rather than
+one long scrolling list.
 
 | Key | Action | |
 |---|---|---|
@@ -289,8 +292,8 @@ reference below, from inside the launcher.
 | — | Switch color theme | Settings only |
 | — | Toggle Default Categories / Default Hidden | Settings only |
 | — | Toggle Open to Categories | Settings only |
-| — | Sort by name or size | Settings only |
-| — | Click the **NAME** or **SIZE** column header to sort by it directly | header |
+| — | Sort by name or size, each ascending or descending (Space cycles all four) | Settings only |
+| — | Click the **NAME** or **SIZE** column header to sort by it, click again to reverse | header |
 | — | Toggle Compact View (hide version/size columns and +/#/\* markers) | Settings only |
 | — | Toggle the details pane (mirrors F3) | Settings only |
 | — | Toggle where the details pane opens — top or bottom | Settings only |
