@@ -231,6 +231,14 @@ and relaunches afterward like any other launch.
 confirmation, since it's scoped to one tool. Shows the new version in its own
 row when one's available; already up to date just says so.
 
+### Launch history
+
+**F4 → Actions → Launch History** shows what's been recorded — each tool and
+how many times you've launched it — and can clear the whole thing (**Ctrl-D**,
+with a confirm). This is what Most Used and Recently Launched are built from,
+so clearing means both start over. The row itself shows the total, so you can
+see how much is recorded without opening it.
+
 ### Backup
 
 **F4 → Actions → Backup** writes one file, always
@@ -292,6 +300,7 @@ one long scrolling list.
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
+| — | View the launch history and how often each tool was used, or clear it | Actions only |
 | — | Switch color theme | Settings only |
 | — | Toggle Default Categories / Default Hidden | Settings only |
 | — | Toggle Open to Categories | Settings only |
