@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.59.0"
+VERSION="0.60.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -682,6 +682,14 @@ Update:
   that one formula, same real-terminal behavior as Update All. No
   confirm — already up to date just says so and does nothing. Shows
   the new version in its own row, if one's available.
+
+Launch History:
+  Actions → Launch History lists every tool you've launched and how
+  many times, highest first, and can clear the whole record (Ctrl-D
+  there, with a confirm). Most Used and Recently Launched are tallied
+  from that record, so clearing it means both start over. The Actions
+  row shows the total before you open it. Stored as a plain
+  append-only file at ~/.config/brew-launcher/launch-history.
 
 Backup:
   Actions → Backup writes one file, ~/brew-launcher-backup.tar.gz
@@ -1410,6 +1418,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             ;;
         backup)
             printf 'Backup\n\nExport your categories, presets, favorites, hidden entries\nand settings to a single file, for safekeeping or moving to\nanother machine.\n'
+            ;;
+        launch_history)
+            printf 'Launch History\n\nEvery launch is recorded, and Most Used and Recently\nLaunched are built from that record. This shows what is in\nit — each tool and how many times it has been launched —\nand can clear the whole thing (Ctrl-D there, with a\nconfirm). Clearing means both of those views start over.\n'
             ;;
         *)
             printf 'No description available.\n'
@@ -3553,6 +3564,9 @@ show_help_actions_menu() {
     rows+=("                    see Settings Reference")
     rows+=("            Backup  Brewfile + categories/presets/theme in one")
     rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
+    rows+=("    Launch History  What you've launched and how often. Ctrl-D")
+    rows+=("                    there clears it (asks first) — Most Used and")
+    rows+=("                    Recently Launched both start over if you do")
     rows+=("")
     rows+=("Theme, Create Preset and Backup return to whichever menu opened")
     rows+=("them once done — only Create Shortcut exits back to the list.")
@@ -3762,6 +3776,18 @@ pick_more_action() {
     # has_entry: nothing about it concerns one row.
     rows+=("backup"$'\t'"$(printf '%-20s%s' 'Backup' '')")
 
+    # Grouped with Backup rather than in Settings: both are about the
+    # data this app has accumulated about you, not a preference that
+    # changes how it behaves. Hint is the raw number of recorded
+    # launches, so the row itself says how much there is before it's
+    # opened. Not gated on has_entry — like Backup, nothing about it
+    # concerns any one row.
+    local history_hint=''
+    if [[ -f "$LAUNCH_HISTORY_FILE" ]]; then
+        history_hint="($(grep -c '' "$LAUNCH_HISTORY_FILE" 2>/dev/null || printf '0'))"
+    fi
+    rows+=("launch_history"$'\t'"$(printf '%-20s%s' 'Launch History' "$history_hint")")
+
     [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
 
     rm -f "$FOOTER_CLICK_FILE"
@@ -3852,6 +3878,10 @@ open_more_menu() {
                 ;;
             backup)
                 create_backup
+                continue
+                ;;
+            launch_history)
+                show_launch_history
                 continue
                 ;;
         esac
@@ -5403,6 +5433,126 @@ create_backup() {
     printf 'then copy brew-launcher-config back to\n'
     printf '  %s\n' "$CONFIG_DIR"
     sleep 2
+}
+
+# ------------------------------------------------------------
+# Launch History — Actions -> Launch History.
+#
+# Every successful launch appends a line to LAUNCH_HISTORY_FILE, and
+# Most Used / Recently Launched are tallied from it on demand (see
+# load_launch_counts). That file was the one thing this app
+# accumulates about you with no way to look at or clear it from
+# inside the app — deleting it by hand was the only option, which
+# means the two views built on it were effectively unmanageable.
+#
+# Shows the same tally Most Used already computes, highest first, and
+# offers to clear the whole file. Read-only otherwise: no per-entry
+# deletion, since the file is an append-only log rather than a list of
+# records worth editing individually, and "forget this one tool ever
+# ran" isn't a thing anyone has needed — clearing all of it is.
+# ------------------------------------------------------------
+
+confirm_clear_history() {
+
+    local total="$1"
+    local answer
+
+    answer="$(
+        printf '%s\n' "Cancel" "Clear all $total launches" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Clear history?')" \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            --header="Most Used and Recently Launched are built from this — both start over. Can't be undone." \
+            `# Cancel first, same convention as confirm_quit() and` \
+            `# confirm_delete_category(): this one genuinely destroys` \
+            `# data, so the safe choice is the one already highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == "Clear all $total launches" ]]
+}
+
+show_launch_history() {
+
+    local -a rows=()
+    local history_command history_total=0
+    local result
+
+    if [[ -f "$LAUNCH_HISTORY_FILE" ]]; then
+        history_total="$(grep -c '' "$LAUNCH_HISTORY_FILE" 2>/dev/null || printf '0')"
+    fi
+
+    if (( history_total == 0 )); then
+        printf '\n'
+        printf 'No launches recorded yet.\n'
+        printf 'Most Used and Recently Launched fill in as you launch things.\n'
+        sleep 2
+        return 1
+    fi
+
+    # Built from the same in-memory tally Most Used reads, not by
+    # re-parsing the file — load_launch_counts() has already done
+    # exactly this work, and re-doing it here would be a second
+    # implementation of the same count that could drift from it.
+    for history_command in "${(@k)launch_counts}"; do
+        rows+=("$(printf '%6d  %s' "${launch_counts[$history_command]}" "$history_command")")
+    done
+
+    # Highest count first. Numeric sort on the zero-padded-by-printf
+    # width above would work too, but (On) on the rendered string is
+    # enough here: every count is right-aligned to the same width, so
+    # plain reverse string order and numeric order agree.
+    rows=(${(On)rows})
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    result="$(
+        printf '%s\n' "${rows[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Launch History')" \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --expect=ctrl-d \
+            --header="$history_total launches recorded, across ${#launch_counts} tools. This is what Most Used and Recently Launched are built from." \
+            --footer='  ↑ ↓  Navigate    Type  Search    Ctrl-D  Clear all    Esc  [Back]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    # Only Ctrl-D does anything — every row is inert, same as the help
+    # screens. Enter on a row is a no-op rather than an error.
+    [[ "${result%%$'\n'*}" != "ctrl-d" ]] && return 0
+
+    confirm_clear_history "$history_total" || return 0
+
+    rm -f "$LAUNCH_HISTORY_FILE"
+
+    # Reloaded rather than assumed-empty: the two views read these
+    # tables directly, and leaving stale counts in memory would keep
+    # showing a Most Used built from a file that no longer exists.
+    load_launch_counts
+    build_entries
+
+    printf '\n'
+    printf 'Launch history cleared.\n'
+    sleep 1
 }
 
 # ------------------------------------------------------------

@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.60.0] — 2026-09-01
+
+### Added
+
+- **Launch History (Actions → Launch History)** — shows what's been recorded,
+  each tool and how many times it was launched, highest first, and can clear
+  the whole record (`Ctrl-D`, confirmed first). Every launch has always been
+  appended to `~/.config/brew-launcher/launch-history`, and Most Used and
+  Recently Launched are tallied from it, but there was no way to see or clear
+  that record from inside the app — deleting the file by hand was the only
+  option, which made both of those views effectively unmanageable. The Actions
+  row shows the total before it's opened. Clearing reloads the tally and
+  rebuilds the list immediately, so neither view is left showing counts from a
+  file that no longer exists.
+
 ## [0.59.0] — 2026-09-01
 
 ### Added

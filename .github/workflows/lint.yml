@@ -727,6 +727,18 @@ jobs:
       - name: Header click (sort) test
         run: zsh test/header-click-fixtures.sh
 
+  launch-history-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — load_launch_counts() is sourced
+      # and run against a fixture history file; the screen itself is
+      # source-text.
+      - name: Launch History test
+        run: zsh test/launch-history-fixtures.sh
+
   marked-selection-fixtures:
     runs-on: macos-latest
     steps:
@@ -896,6 +908,9 @@ jobs:
 
       - name: Mark-first multi-select test
         run: zsh test/marked-selection-fixtures.sh
+
+      - name: Launch History test
+        run: zsh test/launch-history-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would
