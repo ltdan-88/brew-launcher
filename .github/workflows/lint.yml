@@ -381,6 +381,18 @@ jobs:
       - name: Theme and config file test
         run: zsh test/theme-config-fixtures.sh
 
+  custom-colors-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf
+        run: brew install fzf
+
+      - name: Custom colors (THEME=custom) test
+        run: zsh test/custom-colors-fixtures.sh
+
   preset-fixtures:
     runs-on: macos-latest
     steps:
@@ -653,6 +665,29 @@ jobs:
       # against a fake stand-in launcher.
       - name: Update All test
         run: zsh test/update-all-fixtures.sh
+
+  update-tool-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — update_tool() is sourced and run
+      # directly, launch_in_current_terminal() stubbed as a plain
+      # recorder same as run-with-args-fixtures.sh's own approach.
+      - name: Update (per-entry) test
+        run: zsh test/update-tool-fixtures.sh
+
+  run-with-args-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # run_with_args() calls fzf, so it's driven for real by stubbing
+      # fzf itself on PATH rather than the real binary.
+      - name: Run With Args test
+        run: zsh test/run-with-args-fixtures.sh
 
   launch-flags-fixtures:
     runs-on: macos-latest
