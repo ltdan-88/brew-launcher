@@ -5,6 +5,37 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.59.0] — 2026-09-01
+
+### Added
+
+- **Tab marks rows on the main list, and every action acts on the marked
+  set** — falling back to the highlighted row when nothing is marked. Hiding,
+  favoriting or categorizing several tools is now the same key as doing one,
+  just with marks set first. A marked batch goes one direction rather than
+  toggling each entry independently, so a mixed batch ends up all the same way
+  instead of some on and some off. Marks show as `●`, the footer advertises
+  `Tab  Mark`, and fzf's own info line shows the count.
+- **Enter with several marked launches them all together**, one per tmux pane
+  — a preset without having to name and save one. Runs through the exact same
+  pane-building, layout and Launch Flags machinery `--preset` already uses
+  (commands handed in directly instead of read from a file), so it inherits
+  that behavior wholesale, including reattaching rather than duplicating when
+  the same set is launched again. Needs tmux, and says so in its own terms if
+  it's missing.
+- **Create Preset is seeded by whatever's marked**, arriving pre-numbered in
+  the order it was marked. Its own ordered picker stays — a preset's launch
+  order matters and marks carry no order — so marking gets the right tools in
+  front of you and that screen is still where the order is decided.
+
+### Removed
+
+- **Hide Multiple / Favorite Multiple / Categorize Multiple** as separate
+  Actions rows. Each used to open its own near-identical Tab-to-mark screen;
+  all three are now just their single-entry counterpart acting on marks. This
+  took the Actions menu from 15 rows to 12 and deleted the shared picker
+  behind them outright.
+
 ## [0.58.0] — 2026-09-01
 
 ### Added

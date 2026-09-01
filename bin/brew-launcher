@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.58.0"
+VERSION="0.59.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -507,6 +507,14 @@ Keyboard shortcuts:
             Shown in the footer too, first — Presets is what a narrow
             terminal drops first now instead.
 
+  Tab       Mark or unmark the highlighted row. Every action below
+            then acts on everything marked, or on the highlighted
+            row alone when nothing is — so a batch is the same key
+            as a single entry, just with marks set first. Enter with
+            several marked launches them all together, one per tmux
+            pane, the same way a preset does without having to name
+            and save one. Marks clear once an action runs.
+
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
             Recently Launched, Recently Added, Hidden)
@@ -536,18 +544,15 @@ Keyboard shortcuts:
   F8 / ⌥C   Categorize selected entry (adds or removes; instant while
             viewing a category, otherwise prompts for which one)
 
-  In the Actions menu only, right under the three above — Hide
-  Multiple, Favorite Multiple, Categorize Multiple. Each opens its own
-  Tab-to-mark picker over whatever's currently on screen and acts on
-  every marked entry at once (or just the highlighted one, if nothing
-  was marked) — same idea as Create Preset's own tool picker, just
-  without an order to track, since none of these three care about it.
-  Relabel to their inverse (Unhide/Unfavorite Multiple) while viewing
-  Hidden/Favorites, same as F6's own per-entry label. Categorize
-  Multiple prompts for a category once for the whole batch — unless
-  you're already viewing a real category, in which case every marked
-  entry is already a member, so it removes them instantly instead,
-  same as F8's own instant per-entry toggle in that same context.
+  There are no separate "... Multiple" rows for these three any more.
+  Marking rows with Tab and pressing F6/F7/F8 (or picking them from
+  Actions) does the same job: a marked batch is hidden/favorited in
+  one direction rather than toggled per entry, so a mixed batch ends
+  up all the same way instead of some on and some off. Categorize
+  prompts for a category once for the whole batch — unless you're
+  already viewing a real category, in which case every marked entry
+  is already a member, so it removes them instantly instead, same as
+  F8's own instant per-entry toggle in that same context.
 
   In the Actions menu only — Create Preset (from whatever view is
   currently on screen, not always the full list), Create a macOS or
@@ -638,7 +643,7 @@ Mouse:
   "Navigate" — isn't clickable; it's there to explain, not to act on.
   Clicking NAME or SIZE in the column header sorts by it directly,
   same as F4 → Actions → Settings → Sort — click the same one again
-  to reverse direction.
+  to reverse direction. Marked rows (Tab) show a ● next to them.
 
 Launch Flags:
   F4 → Actions → Launch Flags on a highlighted entry sets extra
@@ -1792,8 +1797,27 @@ EOF
 run_preset() {
 
     local name="$1"
+    shift
+
+    # Any commands passed after the name mean "launch exactly these,
+    # there is no file behind them" — the ad-hoc path used by marking
+    # rows on the main list (Tab) and pressing Enter, see run_fzf's
+    # own --multi comment. Everything past the argument handling below
+    # is then identical to a real preset: same pane-building loop,
+    # same layout/retile handling, same Launch Flags lookup, same
+    # skip-a-missing-command-with-a-warning behavior.
+    #
+    # Done as an optional trailing argument rather than by extracting
+    # the pane builder into its own function: that loop is the most
+    # carefully tuned code in this file (the 4-pane ceiling, retiling
+    # after every split, the alternate-screen fix), and moving it
+    # wholesale just to serve a second caller would risk far more than
+    # letting that caller hand its commands in.
+    local -a preset_commands=("$@")
+    local preset_adhoc=false
+    (( ${#preset_commands[@]} > 0 )) && preset_adhoc=true
+
     local preset_file="$PRESETS_DIR/$name"
-    local -a preset_commands=()
     local -a preset_warnings=()
     local preset_line preset_session preset_cmd preset_resolved
     local preset_started=false preset_running_count preset_no_room_count=0
@@ -1801,37 +1825,46 @@ run_preset() {
 
     if ! command -v tmux >/dev/null 2>&1; then
         printf '\n'
-        printf 'Error: tmux is required to use presets.\n'
+        if [[ "$preset_adhoc" == true ]]; then
+            printf 'Error: tmux is required to launch several tools at once.\n'
+            printf 'Install it with: brew install tmux\n'
+            printf 'Without tmux, Enter still launches one tool at a time.\n'
+        else
+            printf 'Error: tmux is required to use presets.\n'
+        fi
         sleep 2
         return 1
     fi
 
-    if [[ ! -f "$preset_file" ]]; then
-        printf '\n'
-        printf 'Error: preset "%s" not found.\n' "$name"
-        printf 'Expected a file at %s — one command per line.\n' "$preset_file"
-        sleep 2
-        return 1
-    fi
+    if [[ "$preset_adhoc" == false ]]; then
 
-    while IFS= read -r preset_line; do
+        if [[ ! -f "$preset_file" ]]; then
+            printf '\n'
+            printf 'Error: preset "%s" not found.\n' "$name"
+            printf 'Expected a file at %s — one command per line.\n' "$preset_file"
+            sleep 2
+            return 1
+        fi
 
-        preset_line="${preset_line#"${preset_line%%[![:space:]]*}"}"
-        preset_line="${preset_line%"${preset_line##*[![:space:]]}"}"
+        while IFS= read -r preset_line; do
 
-        [[ -z "$preset_line" ]] && continue
-        [[ "$preset_line" == \#* ]] && continue
+            preset_line="${preset_line#"${preset_line%%[![:space:]]*}"}"
+            preset_line="${preset_line%"${preset_line##*[![:space:]]}"}"
 
-        preset_commands+=("$preset_line")
+            [[ -z "$preset_line" ]] && continue
+            [[ "$preset_line" == \#* ]] && continue
 
-    done < "$preset_file"
+            preset_commands+=("$preset_line")
 
-    if (( ${#preset_commands[@]} == 0 )); then
-        printf '\n'
-        printf 'Error: preset "%s" has no commands in it.\n' "$name"
-        printf 'Add one command per line to %s\n' "$preset_file"
-        sleep 2
-        return 1
+        done < "$preset_file"
+
+        if (( ${#preset_commands[@]} == 0 )); then
+            printf '\n'
+            printf 'Error: preset "%s" has no commands in it.\n' "$name"
+            printf 'Add one command per line to %s\n' "$preset_file"
+            sleep 2
+            return 1
+        fi
     fi
 
     # Namespaced session name so this can't collide with an unrelated
@@ -1967,7 +2000,11 @@ run_preset() {
 
     if [[ "$preset_started" == false ]]; then
         printf '\n'
-        printf 'Error: none of the commands in preset "%s" were found on PATH.\n' "$name"
+        if [[ "$preset_adhoc" == true ]]; then
+            printf 'Error: none of the marked tools were found on PATH.\n'
+        else
+            printf 'Error: none of the commands in preset "%s" were found on PATH.\n' "$name"
+        fi
         sleep 2
         return 1
     fi
@@ -2909,6 +2946,26 @@ load_launch_counts() {
 
 load_launch_counts
 
+# Records a whole marked batch as launched, the same way a single
+# Enter-launch records one command. Every tool in a batch genuinely
+# was launched, so each one counts toward Most Used and Recently
+# Launched exactly as it would have if launched on its own —
+# otherwise marking several tools would quietly stop those two views
+# from noticing them at all.
+log_launch_batch() {
+
+    local batch_command
+
+    mkdir -p "$CONFIG_DIR"
+
+    for batch_command in "$@"; do
+        [[ -z "$batch_command" ]] && continue
+        printf '%s\n' "$batch_command" >> "$LAUNCH_HISTORY_FILE"
+        (( launch_counts[$batch_command]++ ))
+        last_launched_order[$batch_command]=$(( ++LAST_LAUNCHED_COUNTER ))
+    done
+}
+
 # Filled in by build_entries() as it reads the cache — every row
 # already carries this, so recording it costs nothing extra and gives
 # the Recently Added view a lookup that survives past the read loop
@@ -3413,6 +3470,13 @@ show_help_keys() {
 
     local -a rows=()
 
+    rows+=("Marking — Tab marks or unmarks the highlighted row")
+    rows+=("  Every action then acts on everything marked, or on the")
+    rows+=("  highlighted row alone when nothing is. Marks show as ● and")
+    rows+=("  clear once an action runs. Enter with several marked opens")
+    rows+=("  them all together, one per tmux pane — a preset without")
+    rows+=("  having to name and save one.")
+    rows+=("")
     rows+=("Markers — shown next to an entry, not things you press")
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
     rows+=("")
@@ -3457,13 +3521,12 @@ show_help_actions_menu() {
 
     local -a rows=()
 
-    rows+=("F4 only — bulk versions of Hide/Favorite/Categorize, no direct key")
-    rows+=("      Hide Multiple  Tab marks tools, Enter acts on everything")
-    rows+=("                    marked (or just the highlighted row, if")
-    rows+=("                    nothing's marked)")
-    rows+=("  Favorite Multiple  Same idea, for Favorites")
-    rows+=("Categorize Multiple  Same idea, for one category — prompts once")
-    rows+=("                    for the whole batch, not once per tool")
+    rows+=("Acting on several at once — no separate rows for it")
+    rows+=("  Mark rows with Tab on the main list, then use Hide,")
+    rows+=("  Favorite or Categorize exactly as you would for one entry.")
+    rows+=("  A marked batch goes one direction rather than toggling each")
+    rows+=("  entry, so a mixed batch ends up all the same way. Categorize")
+    rows+=("  asks for a category once for the whole batch.")
     rows+=("")
     rows+=("F4 only — no direct key")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
@@ -3543,6 +3606,7 @@ show_help_mouse_and_notes() {
     rows+=("  Click a [bracketed] footer word to run its action")
     rows+=("  Click NAME or SIZE in the main list's own column header to")
     rows+=("  sort by it — click the same one again to reverse direction")
+    rows+=("  Marked rows (Tab) show a ● beside them")
     rows+=("")
     rows+=("Good to know")
     rows+=("  A just-installed tool can take up to 60s to appear;")
@@ -3617,29 +3681,14 @@ pick_more_action() {
         rows+=("f7"$'\t'"$(printf '%-20s%s' 'Favorite' 'F7 / ⌥F')")
         rows+=("f8"$'\t'"$(printf '%-20s%s' 'Categorize' 'F8 / ⌥C')")
 
-        # Bulk counterparts of the three above, bringing the same
-        # Tab-to-mark idea Create Preset uses to these three actions.
-        # Each opens its own
-        # mark-then-act picker (see pick_multiple_entries()) over
-        # $entries rather than acting on the highlighted row directly.
-        # Grouped right under their single-entry counterpart rather
-        # than off with Create Preset/Create Shortcut below, since
-        # they're the same action, just batched. Relabel to their
-        # inverse while viewing Hidden/Favorites, same idea as F6's
-        # own hide_label — every entry on screen there is already
-        # hidden/favorited, so acting on a marked batch removes rather
-        # than adds. Categorize doesn't relabel: F8's own single-key
-        # row doesn't either, even though it's instant-remove in the
-        # exact same situation.
-        local bulk_hide_label='Hide Multiple'
-        [[ "$CURRENT_VIEW" == "Hidden" ]] && bulk_hide_label='Unhide Multiple'
-        rows+=("bulk_hide"$'\t'"$(printf '%-20s%s' "$bulk_hide_label" '')")
-
-        local bulk_favorite_label='Favorite Multiple'
-        [[ "$CURRENT_VIEW" == "Favorites" ]] && bulk_favorite_label='Unfavorite Multiple'
-        rows+=("bulk_favorite"$'\t'"$(printf '%-20s%s' "$bulk_favorite_label" '')")
-
-        rows+=("bulk_categorize"$'\t'"$(printf '%-20s%s' 'Categorize Multiple' '')")
+        # No separate "Hide Multiple"/"Favorite Multiple"/"Categorize
+        # Multiple" rows any more. The three above now act on whatever
+        # is marked on the main list (Tab), falling back to the
+        # highlighted row when nothing is — so a batched action is the
+        # same row as its single-entry counterpart, just with marks
+        # set first, rather than a parallel copy of it. Dropping the
+        # three took this menu from 15 rows to 12 and removed the
+        # near-identical marking screen each of them used to open.
 
         local create_preset_hint=''
         [[ "$TMUX_AVAILABLE" == false ]] && create_preset_hint='needs tmux'
@@ -3785,18 +3834,6 @@ open_more_menu() {
         [[ -z "$chosen_action" ]] && return 1
 
         case "$chosen_action" in
-            bulk_hide)
-                bulk_hide
-                continue
-                ;;
-            bulk_favorite)
-                bulk_favorite
-                continue
-                ;;
-            bulk_categorize)
-                bulk_categorize
-                continue
-                ;;
             refresh)
                 refresh_cache_and_state
                 continue
@@ -6486,59 +6523,23 @@ add_to_category() {
 }
 
 # ------------------------------------------------------------
-# Shared multi-select picker for the bulk Hide/Favorite/Categorize
-# actions below, bringing the same Tab-to-mark idea Create Preset uses
-# to these three actions.
+# Hide, Favorite and Categorize each used to open their own
+# near-identical Tab-to-mark picker here (one shared helper, three
+# callers). That whole screen is gone: marking moved onto the main
+# list itself via fzf's --multi (see run_fzf), so one set of marks now
+# feeds whichever action is chosen afterward, instead of each action
+# asking for its own selection.
 #
-# Deliberately NOT Create Preset's own custom ordered-badge mechanism
-# (--internal-preset-tab and its side-channel state file) — that exists
-# solely because a preset's *launch order* matters. None of Hide,
-# Favorite, or Categorize care about order, only membership, so fzf's
-# own built-in --multi does the whole job: Tab marks/unmarks, Enter
-# outputs every marked line (or just the highlighted one if nothing
-# was marked — the ordinary single-entry case, handled for free). No
-# state file, no subprocess transform, far less code than presets
-# needed for the ordering it actually requires.
+# The three functions below keep the part that was actually specific
+# to acting on several entries at once — one-direction add/hide rather
+# than per-entry toggling, and Categorize prompting once for the whole
+# batch — and take the already-marked commands as arguments.
 #
-# Operates on whatever's currently on screen ($entries, i.e. whatever
-# CURRENT_VIEW already filtered to) rather than always resetting to
-# "All" the way Create Preset does — a preset draws from the whole
-# toolset by design, but bulk-hiding/favoriting/categorizing only what
-# you're already looking at (e.g. a handful of entries in "Games")
-# reads as the more useful default, and "All" is always one F2 press
-# away if that's what's wanted instead.
-#
-# Prints each marked entry (still the full tab-delimited $entries line)
-# on its own line, or nothing at all if Esc was pressed.
+# Create Preset still has its own picker (--internal-preset-tab and
+# its side-channel state file), and deliberately so: a preset's launch
+# *order* matters, which fzf's --multi has no concept of. Marks seed
+# that screen now rather than replacing it.
 # ------------------------------------------------------------
-
-pick_multiple_entries() {
-
-    local border_label="$1" action_verb="$2"
-
-    rm -f "$FOOTER_CLICK_FILE"
-
-    printf '%s\n' "${entries[@]}" |
-    fzf \
-        --height=100% \
-        --no-clear \
-        --layout=reverse \
-        --border=rounded \
-        --border-label="$(screen_border_label "$border_label")" \
-        --border-label-pos=2 \
-        --prompt=' 󰣇  ' \
-        --pointer='▌' \
-        --delimiter=$'\t' \
-        --with-nth=2 \
-        --nth=1,2,3,4 \
-        --multi \
-        --header="Tab marks a tool. Enter acts on everything marked (or just this row, if nothing's marked)." \
-        --footer="  ↑ ↓  Navigate    Tab  Mark/unmark    Enter  [${action_verb}]    Esc  [Cancel]" \
-        --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
-        --color="$FZF_COLORS"
-
-    rm -f "$FOOTER_CLICK_FILE"
-}
 
 # ------------------------------------------------------------
 # Bulk Hide/Unhide — mark several entries, act on all of them at once.
@@ -6554,30 +6555,26 @@ pick_multiple_entries() {
 
 bulk_hide() {
 
-    local -a selected=()
-    local line command raw_selection
-    local border_label='Hide multiple' action_verb='Hide' unhiding=false
+    # Takes the already-marked commands as arguments. Used to open its
+    # own Tab-to-mark picker instead — one of three near-identical
+    # ones — until marking moved onto the main list itself (see
+    # run_fzf's --multi), where one set of marks now feeds whichever
+    # action is chosen afterward.
+    local -a selected=("$@")
+    local command
+    local unhiding=false
 
-    if [[ "$CURRENT_VIEW" == "Hidden" ]]; then
-        border_label='Unhide multiple'
-        action_verb='Unhide'
-        unhiding=true
-    fi
-
-    # Esc gives an empty string here — guarded before splitting, since
-    # "${(@f)$(...)}" on an empty string yields a one-element array
-    # (one empty string), not a zero-element one, in zsh. Skipping this
-    # check let bulk_categorize() below fall through to its
-    # pick_category_name() prompt even after Esc, opening the "new or
-    # existing" naming prompt instead of actually cancelling.
-    raw_selection="$(pick_multiple_entries "$border_label" "$action_verb")"
-    [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
+    [[ "$CURRENT_VIEW" == "Hidden" ]] && unhiding=true
 
     (( ${#selected[@]} == 0 )) && return 1
 
-    for line in "${selected[@]}"; do
-        [[ -z "$line" ]] && continue
-        command="${line%%$'\t'*}"
+    # Hide/unhide the whole set in one direction, decided by the view,
+    # rather than toggling each one independently: a mixed batch
+    # toggled per-entry would flip some on and some off, which is
+    # nobody's intent when marking several rows at once. The
+    # single-entry path in the main loop still toggles, unchanged.
+    for command in "${selected[@]}"; do
+        [[ -z "$command" ]] && continue
         if [[ "$unhiding" == true ]]; then
             unhide_entry "$command"
         else
@@ -6605,25 +6602,23 @@ bulk_hide() {
 
 bulk_favorite() {
 
-    local -a selected=()
-    local line command raw_selection
-    local border_label='Favorite multiple' action_verb='Favorite' unfavoriting=false
+    # See bulk_hide()'s own comment — same change, same reasoning.
+    local -a selected=("$@")
+    local command
+    local unfavoriting=false
 
-    if [[ "$CURRENT_VIEW" == "Favorites" ]]; then
-        border_label='Unfavorite multiple'
-        action_verb='Unfavorite'
-        unfavoriting=true
-    fi
-
-    # See bulk_hide()'s own comment on why this is split in two steps.
-    raw_selection="$(pick_multiple_entries "$border_label" "$action_verb")"
-    [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
+    [[ "$CURRENT_VIEW" == "Favorites" ]] && unfavoriting=true
 
     (( ${#selected[@]} == 0 )) && return 1
 
-    for line in "${selected[@]}"; do
-        [[ -z "$line" ]] && continue
-        command="${line%%$'\t'*}"
+    # add_to_favorites(), not toggle_favorite(), when adding: same
+    # one-direction reasoning as bulk_hide above — an already-
+    # favorited entry inside a marked batch would otherwise be
+    # silently un-favorited by an unlucky toggle. Removing is the
+    # exception that can safely toggle, since every row in the
+    # Favorites view is by definition already a member.
+    for command in "${selected[@]}"; do
+        [[ -z "$command" ]] && continue
         if [[ "$unfavoriting" == true ]]; then
             toggle_favorite "$command"
         else
@@ -6657,29 +6652,28 @@ bulk_favorite() {
 
 bulk_categorize() {
 
-    local -a selected=()
-    local line command category_name raw_selection
-
-    # See bulk_hide()'s own comment on why this is split in two steps.
-    raw_selection="$(pick_multiple_entries 'Categorize multiple' 'Categorize')"
-    [[ -n "$raw_selection" ]] && selected=("${(@f)raw_selection}")
+    # See bulk_hide()'s own comment — same change, same reasoning.
+    local -a selected=("$@")
+    local command category_name
 
     (( ${#selected[@]} == 0 )) && return 1
 
     if [[ "$CURRENT_VIEW" != "All" && "$CURRENT_VIEW" != "Hidden" && "$CURRENT_VIEW" != "Favorites" ]]; then
 
-        for line in "${selected[@]}"; do
-            [[ -z "$line" ]] && continue
-            toggle_category_direct "${line%%$'\t'*}" "$CURRENT_VIEW"
+        for command in "${selected[@]}"; do
+            [[ -z "$command" ]] && continue
+            toggle_category_direct "$command" "$CURRENT_VIEW"
         done
 
     else
 
+        # Prompted once for the whole batch, not once per tool — the
+        # single reason this can't just loop the single-entry path.
         category_name="$(pick_category_name)" || return 1
 
-        for line in "${selected[@]}"; do
-            [[ -z "$line" ]] && continue
-            add_to_category "${line%%$'\t'*}" "$category_name"
+        for command in "${selected[@]}"; do
+            [[ -z "$command" ]] && continue
+            add_to_category "$command" "$category_name"
         done
     fi
 
@@ -6750,6 +6744,23 @@ create_preset() {
     # path Tab itself uses to regenerate it, rather than formatting the
     # blank badge a second time here.
     "$SCRIPT_PATH" --internal-preset-tab "" >/dev/null
+
+    # Anything already marked on the main list (Tab) arrives here
+    # pre-numbered, in the order it was marked — one call per command
+    # through that same Tab handler, so the badges come out identical
+    # to having pressed Tab on each row on this screen instead.
+    #
+    # A seed, deliberately not a replacement for this screen: marks
+    # carry no order, and a preset's launch order is the whole reason
+    # this picker exists rather than a plain --multi one. Marking gets
+    # the right tools in front of you; this screen is still where the
+    # order is decided, and every tool stays free to be added or
+    # dropped here.
+    local seed_command
+    for seed_command in "${marked_commands[@]}"; do
+        [[ -z "$seed_command" ]] && continue
+        "$SCRIPT_PATH" --internal-preset-tab "$seed_command" >/dev/null
+    done
 
     while [[ "$pick_valid" == false ]]; do
 
@@ -7464,9 +7475,16 @@ build_footer() {
     local esc_hint="$1"
     local width=$(( $(terminal_width) - 6 ))   # border and padding — measured live, see comment above
 
-    local nav="  ↑ ↓  Navigate    Type  Search    Enter  [Launch]    Esc  [$esc_hint]"
+    # "Tab  Mark" sits with Navigate/Search rather than down among the
+    # bracketed [Actions]-style items, because it isn't an action —
+    # it's how you choose what the actions below will act on. Kept
+    # early in the line, ahead of the legend, so it survives the width
+    # degradation below: marking is invisible until someone knows the
+    # key exists, unlike every F-key, which the second footer line
+    # already advertises by name.
+    local nav="  ↑ ↓  Navigate    Type  Search    Tab  Mark    Enter  [Launch]    Esc  [$esc_hint]"
     local legend="    +  Favorited    #  Categorized    *  Outdated"
-    local nav_short="  ↑ ↓  Navigate    Enter  [Launch]    Esc  [$esc_hint]"
+    local nav_short="  ↑ ↓  Navigate    Tab  Mark    Enter  [Launch]    Esc  [$esc_hint]"
 
     # Compact View drops the +/#/* markers themselves (see
     # build_entries()'s own comment) — explaining marks that no longer
@@ -7623,6 +7641,23 @@ run_fzf() {
         --prompt=' 󰣇  '
         --pointer='▌'
         --marker='●'
+
+        # Tab marks a row (fzf's own default bind once --multi is on:
+        # Tab toggles and moves down, Shift-Tab toggles and moves up),
+        # and every action below then acts on the marked set — or on
+        # the highlighted row alone when nothing is marked. That one
+        # rule replaced three separate "... Multiple" Actions rows,
+        # each of which used to open its own near-identical
+        # Tab-to-mark screen; marking is context now, not a mode you
+        # enter per action. The '●' marker above only actually renders
+        # because of this — it was set but inert before --multi.
+        #
+        # Costs nothing when unused: with no marks, fzf returns just
+        # the cursor row, which is exactly what every action already
+        # expected, so the single-entry path is byte-for-byte what it
+        # always was.
+        --multi
+
         --header="$FZF_HEADER"
         --footer="$footer"
         --info=inline
@@ -7795,13 +7830,34 @@ while true; do
 
     # --------------------------------------------------------
     # First line = pressed key.
-    # Second line = selected entry.
+    # Every line after it = one selected entry.
+    #
+    # With --multi on (see run_fzf), fzf returns every marked row, or
+    # just the row under the cursor when nothing is marked — so
+    # $selection stays exactly what it always was (the first, and
+    # usually only, entry) for the many actions that are inherently
+    # about one tool, while marked_entries carries the full set for
+    # the handful that can act on several at once (Hide, Favorite,
+    # Categorize, Create Preset, and Enter itself).
+    #
+    # Deliberately not tracking "was anything actually marked" as a
+    # separate flag: acting on one marked row and acting on one
+    # unmarked cursor row are the same operation, so the distinction
+    # would only ever be used for wording, and every message here
+    # already reads correctly either way by counting the set.
     # --------------------------------------------------------
 
     result_lines=("${(@f)fzf_result}")
 
     action="${result_lines[1]}"
     selection="${result_lines[2]}"
+
+    marked_entries=("${result_lines[@]:1}")
+    marked_commands=()
+    for marked_line in "${marked_entries[@]}"; do
+        [[ -z "$marked_line" ]] && continue
+        marked_commands+=("${marked_line%%$'\t'*}")
+    done
 
     # --------------------------------------------------------
     # A footer click reports as a plain "enter" above (see
@@ -8071,13 +8127,20 @@ while true; do
 
     if [[ "$action" == "f6" || "$action" == "alt-h" ]]; then
 
-        # A toggle, like F6 and F7. Previously hiding was one-way and
-        # unhiding lived on a separate screen where Enter meant
-        # "restore" — the only place a familiar key changed meaning.
-        if [[ -n "${hidden_commands[$command]-}" ]]; then
-            unhide_entry "$command"
+        if (( ${#marked_commands[@]} > 1 )); then
+            # Several rows marked (Tab) — one direction for the whole
+            # batch, decided by the view, rather than toggling each
+            # independently. See bulk_hide()'s own comment.
+            bulk_hide "${marked_commands[@]}"
         else
-            hide_entry "$command"
+            # A toggle, like F7 and F8. Previously hiding was one-way and
+            # unhiding lived on a separate screen where Enter meant
+            # "restore" — the only place a familiar key changed meaning.
+            if [[ -n "${hidden_commands[$command]-}" ]]; then
+                unhide_entry "$command"
+            else
+                hide_entry "$command"
+            fi
         fi
 
         load_hidden_commands
@@ -8158,10 +8221,15 @@ while true; do
 
     if [[ "$action" == "f7" || "$action" == "alt-f" ]]; then
 
-        # No index bookkeeping needed: CURRENT_VIEW holds a name, so
-        # creating the Favorites file (which reorders CATEGORY_NAMES)
-        # can't shift what we're looking at.
-        toggle_favorite "$command"
+        if (( ${#marked_commands[@]} > 1 )); then
+            bulk_favorite "${marked_commands[@]}"
+        else
+            # No index bookkeeping needed: CURRENT_VIEW holds a name, so
+            # creating the Favorites file (which reorders CATEGORY_NAMES)
+            # can't shift what we're looking at.
+            toggle_favorite "$command"
+        fi
+
         refresh_category_state
         load_favorite_commands
         load_category_members
@@ -8187,14 +8255,20 @@ while true; do
 
     if [[ "$action" == "f8" || "$action" == "alt-c" ]]; then
 
-        # Instant toggle only when a real, non-Favorites category is
-        # the active view. "All", "Hidden" and "Favorites" all fall
-        # through to the prompt — Hidden isn't a category you can add
-        # to, and F6 owns Favorites.
-        if [[ "$CURRENT_VIEW" != "All" && "$CURRENT_VIEW" != "Hidden" && "$CURRENT_VIEW" != "Favorites" ]]; then
-            toggle_category_direct "$command" "$CURRENT_VIEW"
+        if (( ${#marked_commands[@]} > 1 )); then
+            # Prompts once for the whole batch rather than once per
+            # tool — see bulk_categorize()'s own comment.
+            bulk_categorize "${marked_commands[@]}"
         else
-            toggle_category "$command"
+            # Instant toggle only when a real, non-Favorites category is
+            # the active view. "All", "Hidden" and "Favorites" all fall
+            # through to the prompt — Hidden isn't a category you can add
+            # to, and F7 owns Favorites.
+            if [[ "$CURRENT_VIEW" != "All" && "$CURRENT_VIEW" != "Hidden" && "$CURRENT_VIEW" != "Favorites" ]]; then
+                toggle_category_direct "$command" "$CURRENT_VIEW"
+            else
+                toggle_category "$command"
+            fi
         fi
 
         refresh_category_state
@@ -8202,6 +8276,34 @@ while true; do
         load_category_members
 
         build_entries
+        restore_position="$(find_entry_position "$command")"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # Enter with several rows marked (Tab) launches all of them at
+    # once, one per tmux pane — the same thing a preset does, without
+    # having to name and save one first. Presets stay the answer for a
+    # grouping worth keeping; this is the same idea for a one-off.
+    #
+    # Handed to run_preset() with the commands passed directly rather
+    # than through a file (see its own comment), which means the
+    # marked set gets the identical pane layout, Launch Flags lookup
+    # and missing-command handling a real preset already gets, plus
+    # its reattach behavior for free: marking the same set again
+    # reattaches to the running session instead of building a
+    # duplicate.
+    #
+    # Falls through to the ordinary single-tool launch below whenever
+    # one or zero rows are marked, which is the overwhelmingly common
+    # case and is completely untouched by any of this.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "enter" ]] && (( ${#marked_commands[@]} > 1 )); then
+
+        log_launch_batch "${marked_commands[@]}"
+        run_preset "Selection" "${marked_commands[@]}"
+
         restore_position="$(find_entry_position "$command")"
         continue
     fi

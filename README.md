@@ -88,7 +88,7 @@ shortcut, back up, and every standing preference — lives behind
 **F4 / ⌥M → Actions**, named after whatever's highlighted (`Actions on fastfetch`).
 
 - **Hide / Favorite / Categorize** (F6/F7/F8) also work directly, without opening the menu.
-- **Hide Multiple / Favorite Multiple / Categorize Multiple** mark a batch with Tab and act on all of them at once. Relabel to their inverse while viewing Hidden/Favorites.
+- **Tab marks a row.** Every action then acts on whatever's marked, or on the highlighted row when nothing is — so hiding, favoriting or categorizing a batch is the same key as doing one, just with marks set first. Marks clear once the action runs.
 - **Create Preset**, **Create Shortcut**, and the bulk actions above only appear when there's an actual list of tools to act on — not from the view picker.
 - **Settings** is its own screen, one level down, holding every on/off preference: Theme, Default Categories, Default Hidden, Open to Categories, Sort, Details, Details Position, Alt Keybinds. Toggles flip with Space or Enter and reopen Settings right after.
 - **F4**, **F5**, and **F9** also work from inside the view picker (**F2**).
@@ -111,8 +111,8 @@ Every row shows a count.
 <p align="center"><img src="assets/favorites.gif" alt="Toggling a favorite with F7; the marker appears and the cursor stays put"></p>
 
 **F7** toggles a favorite instantly. **F8** does the same for any other
-category. For several tools at once: **F4 → Actions → Favorite Multiple** /
-**Categorize Multiple** — see [Two tiers of keys, plus Settings](#two-tiers-of-keys-plus-settings).
+category. For several at once, mark them with **Tab** first and press the same
+key — see [Two tiers of keys, plus Settings](#two-tiers-of-keys-plus-settings).
 
 Uninstalling a favorited or categorized tool removes it from that list on the
 next cache rebuild (`--refresh`, **F5**, or the periodic background one).
@@ -123,7 +123,7 @@ next cache rebuild (`--refresh`, **F5**, or the periodic background one).
 
 **F6** hides an entry — it stays installed, Homebrew is untouched. Hidden is
 just another view: **Enter** still launches, **F6** unhides.
-**F4 → Actions → Hide Multiple** does a Tab-marked batch at once.
+Mark several with **Tab** first to hide them all in one press.
 
 ### Already organized on day one
 
@@ -168,7 +168,11 @@ that, same as with any other terminal app.
 A preset is a named group of tools that all open together, one per tmux pane
 — your morning setup in one shot instead of launching each tool by hand.
 
-- **F4 → Actions → Create Preset** — Tab marks a tool and numbers the launch order; Enter saves it. Only offered when there's an actual list to build from.
+For a one-off, you don't need a preset at all: mark a few tools with **Tab**
+and press **Enter**, and they open together the same way. Presets are for a
+grouping worth keeping; marking is for right now.
+
+- **F4 → Actions → Create Preset** — Tab marks a tool and numbers the launch order; Enter saves it. Anything already marked on the main list arrives pre-numbered, ready to reorder. Only offered when there's an actual list to build from.
 - **F9** lists your presets and launches the one you pick, in its own window
   or reattaching if it's already running (see [Configuration](#configuration)). Its own always-on details pane previews a preset's numbered contents.
 - **Ctrl-E** on a highlighted preset rearranges it (same Tab-to-mark screen, seeded with its current members) — add or drop tools too, not just reorder.
@@ -277,9 +281,8 @@ one long scrolling list.
 | **F3** | Preview what's in the highlighted category — in the F2 picker | picker |
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
-| — | Hide/Unhide multiple entries (Tab to mark) | Actions only |
-| — | Favorite/Unfavorite multiple entries (Tab to mark) | Actions only |
-| — | Categorize multiple entries (Tab to mark) | Actions only |
+| **Tab** | Mark/unmark a row — actions then apply to everything marked | footer |
+| **Enter** | With several marked: launch them all together, one per tmux pane | footer |
 | — | Create a new preset | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) | Actions only |
 | — | Set custom launch flags for the highlighted entry | Actions only |

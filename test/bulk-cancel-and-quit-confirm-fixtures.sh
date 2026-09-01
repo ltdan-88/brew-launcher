@@ -76,12 +76,18 @@ source <(sed -n '/^bulk_favorite() {/,/^}/p' "$LAUNCHER")
 source <(sed -n '/^bulk_categorize() {/,/^}/p' "$LAUNCHER")
 
 # ------------------------------------------------------------
-# 1. Esc (pick_multiple_entries prints nothing) cancels cleanly — no
-#    action function called, and (the actual bug) bulk_categorize does
-#    NOT fall through to pick_category_name.
+# 1. An empty marked set cancels cleanly — no action function called,
+#    and (the actual bug this guards) bulk_categorize does NOT fall
+#    through to pick_category_name.
+#
+#    These used to open their own picker and get an empty string back
+#    from Esc; they take the marked commands as arguments now, so the
+#    same "nothing to act on" case is simply being called with none.
+#    The guard being tested is identical either way, and the bug it
+#    caught (a zsh quirk where splitting an empty string yields a
+#    one-element array, not a zero-element one) is exactly the kind
+#    that would come back if this were ever rewritten.
 # ------------------------------------------------------------
-
-pick_multiple_entries() { :; }
 
 CURRENT_VIEW="All"
 
@@ -103,17 +109,24 @@ bulk_categorize
     fail "bulk_categorize should not touch any category membership after Esc"
 
 # ------------------------------------------------------------
-# 2. The legitimate "nothing marked, Enter accepts the highlighted
-#    row" case still works — pick_multiple_entries returning exactly
-#    one real line is not the same as returning nothing.
+# 2. Exactly one command is not the same as none — a single-element
+#    set still acts, it doesn't get mistaken for the cancelled case.
+#    (The main loop only routes here above one marked row, but the
+#    function itself must not treat one as empty regardless.)
 # ------------------------------------------------------------
 
 HIDE_CALLS=0
-pick_multiple_entries() { printf 'fastfetch\tfastfetch (fastfetch)\tfastfetch\tdesc\n'; }
 
-bulk_hide
+bulk_hide fastfetch
 (( HIDE_CALLS == 1 )) ||
-    fail "bulk_hide should still act on a single accepted row (nothing marked, just Enter) — got $HIDE_CALLS calls"
+    fail "bulk_hide should act once on a single-command set — got $HIDE_CALLS calls"
+
+# ...and a real multi-command batch hides every one of them.
+HIDE_CALLS=0
+
+bulk_hide fastfetch btop cmatrix
+(( HIDE_CALLS == 3 )) ||
+    fail "bulk_hide should act once per command in a marked batch — got $HIDE_CALLS calls"
 
 # ------------------------------------------------------------
 # 3. confirm_quit(): exists, Cancel-first idiom matching
@@ -134,4 +147,4 @@ esc_handler="$(grep -A20 '\[\[ "\$action" == "esc" \]\]; then' "$LAUNCHER" | hea
 [[ "$esc_handler" == *'if confirm_quit; then'$'\n''            break'* ]] ||
     fail "the main list should only break (quit) when confirm_quit returns true, got: $esc_handler"
 
-printf 'PASS: bulk_hide()/bulk_favorite()/bulk_categorize() correctly do nothing on Esc (previously bulk_categorize fell through to its category prompt due to a zsh empty-array-splitting quirk), still act on a single accepted row with nothing marked, and Esc on the main list now confirms before quitting\n'
+printf 'PASS: bulk_hide()/bulk_favorite()/bulk_categorize() correctly do nothing when handed an empty marked set (previously bulk_categorize fell through to its category prompt due to a zsh empty-array-splitting quirk), act once per command on a real batch without mistaking a single-command set for an empty one, and Esc on the main list still confirms before quitting\n'
