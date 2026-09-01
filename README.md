@@ -73,7 +73,7 @@ finds tools that never mention it by name.
 `+` and `#` can appear together (`+#`). These just describe state — upgrading
 stays Homebrew's job.
 
-- **F4 → Actions → Settings → Sort** — alphabetical (default) or largest-first by size.
+- **F4 → Actions → Settings → Sort** — alphabetical (default) or largest-first by size. Clicking the **NAME** or **SIZE** column header does the same thing directly, without opening Settings.
 - **F4 → Actions → Settings → Compact View** — hides version/size and the `+`/`#`/`*` markers, leaving just name and description.
 - The top border shows Homebrew's total disk usage and free space, and gets
   its own `*` once a newer brew-launcher is available (`brew upgrade brew-launcher` clears it).
@@ -246,6 +246,8 @@ to `~/.config/brew-launcher`.
 
 Click a row to select it, double-click to launch. Footer items in
 `[brackets]` are clickable and do exactly what the key beside them does.
+Clicking the **NAME** or **SIZE** column header sorts by it directly, same as
+Actions → Settings → Sort.
 
 ## Reference
 
@@ -288,6 +290,7 @@ reference below, from inside the launcher.
 | — | Toggle Default Categories / Default Hidden | Settings only |
 | — | Toggle Open to Categories | Settings only |
 | — | Sort by name or size | Settings only |
+| — | Click the **NAME** or **SIZE** column header to sort by it directly | header |
 | — | Toggle Compact View (hide version/size columns and +/#/\* markers) | Settings only |
 | — | Toggle the details pane (mirrors F3) | Settings only |
 | — | Toggle where the details pane opens — top or bottom | Settings only |

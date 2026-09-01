@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.57.0] — 2026-09-01
+
+### Added
+
+- **Click the NAME or SIZE column header to sort by it** — the same
+  alphabetical/largest-first toggle Actions → Settings → Sort already offers,
+  now reachable directly from the main list without opening a menu. Clicking
+  NAME picks name order, clicking SIZE picks size order — not a blind toggle,
+  since the two clickable targets already say which answer you want. Compact
+  View's header has no SIZE column to click at all, so it only ever responds
+  to NAME there. Uses the same self-invoking-subprocess side-channel pattern
+  as the existing footer clicks, but does its own column arithmetic against
+  the rendered header string rather than relying on fzf's own word detection
+  — that detection turns out to stop splitting on whitespace once
+  `--delimiter` is set to something else, which the list already needs for
+  its own real/display split.
+
 ## [0.56.0] — 2026-09-01
 
 ### Added
