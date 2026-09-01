@@ -200,12 +200,14 @@ animations) might launch straight into their own full-screen mode instead.
 
 Ten built-in palettes: `catppuccin` (default), `gruvbox`, `tokyonight`,
 `nord`, `dracula`, `solarized-dark`, `solarized-light`, `red-sands`, and two
-monochrome CRT themes, `green` and `amber`.
+monochrome CRT themes, `green` and `amber`. There's also `custom`, for your
+own palette — config-file-only, not one of the ten scrollable rows below.
 
 **F4 → Actions → Settings → Themes** shows a description next to each name
 and where the current one sits (`3 of 10`), picks instantly with no terminal
 needed, and offers to relaunch. Env var and config-file syntax are in
-[Configuration](#configuration).
+[Configuration](#configuration), including `custom`'s own `CUSTOM_COLORS=`
+line.
 
 ### Desktop shortcuts
 
@@ -253,6 +255,7 @@ reference below, from inside the launcher.
 | Key | Action | |
 |---|---|---|
 | **Enter** | Launch selected application | footer |
+| **F1** / **⌥?** | Open this reference in the launcher — also in the footer, first | footer |
 | **F2** / **⌥V** | Switch view (All · Favorites · categories · Hidden) | footer |
 | **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
@@ -269,7 +272,6 @@ reference below, from inside the launcher.
 | **F3** | Preview what's in the highlighted category — in the F2 picker | picker |
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
-| **F1** / **⌥?** | Open this reference in the launcher — also in the footer, last | footer |
 | — | Hide/Unhide multiple entries (Tab to mark) | Actions only |
 | — | Favorite/Unfavorite multiple entries (Tab to mark) | Actions only |
 | — | Categorize multiple entries (Tab to mark) | Actions only |
@@ -300,8 +302,8 @@ of the box.
 <details>
 <summary>Why the keys are split this way</summary>
 
-**F1** is deliberately unassigned — it means *help* nearly everywhere. The
-footer keys sit on **F2**–**F4** plus **F9** because those are the ones you
+**F1** means *help* nearly everywhere, so it leads the footer — same order it
+numbers in. **F2**–**F4** plus **F9** follow because those are the ones you
 press constantly, and they're the easiest to reach on a laptop that needs
 **Fn**.
 
@@ -341,7 +343,7 @@ plain text if you'd rather edit them directly, one setting or command per
 line, `#` comments and blank lines ignored:
 
 ```
-~/.config/brew-launcher/config              # TERMINAL=, THEME=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, OPEN_TO_CATEGORIES=, SORT=, ALT_KEYBINDS= — see below
+~/.config/brew-launcher/config              # TERMINAL=, THEME=, CUSTOM_COLORS=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, OPEN_TO_CATEGORIES=, SORT=, ALT_KEYBINDS= — see below
 ~/.config/brew-launcher/ignore               # hidden entries
 ~/.config/brew-launcher/shown                # bundled-hidden commands you F6'd back visible
 ~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8
@@ -393,9 +395,26 @@ THEME=nord
 ```
 
 Valid names: `catppuccin`, `gruvbox`, `tokyonight`, `nord`, `dracula`,
-`solarized-dark`, `solarized-light`, `red-sands`, `green`, `amber`. An
-unrecognized name fails fast rather than silently falling back, matching
+`solarized-dark`, `solarized-light`, `red-sands`, `green`, `amber`, `custom`.
+An unrecognized name fails fast rather than silently falling back, matching
 `BREW_LAUNCHER_TERMINAL`'s own convention.
+
+`custom` reads its palette from a `CUSTOM_COLORS=` config-file line instead
+of a built-in one — there's no `BREW_LAUNCHER_CUSTOM_COLORS` env var, and it
+isn't offered as a row in Settings → Themes, since there's nothing to show a
+description for. The value is fzf's own `--color` format, comma-separated,
+same 15 keys every built-in theme above sets:
+
+```
+# ~/.config/brew-launcher/config
+THEME=custom
+CUSTOM_COLORS=fg:#cdd6f4,bg:#1e1e2e,fg+:#f5e0e6,bg+:#313244,hl:#89b4fa,hl+:#89b4fa,info:#a6adc8,prompt:#89b4fa,pointer:#f38ba8,marker:#a6e3a1,spinner:#f5c2e7,header:#a6adc8,border:#45475a,label:#89b4fa,query:#f5e0e6
+```
+
+(That template is `catppuccin`'s own palette — copy it and swap in your own
+hex values.) `THEME=custom` with no `CUSTOM_COLORS` line fails fast too,
+same reasoning as an unrecognized theme name: there's no sensible default to
+fall back to for a palette that's supposed to be yours.
 
 ### Bundled defaults
 
