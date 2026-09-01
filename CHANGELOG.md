@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.58.0] — 2026-09-01
+
+### Added
+
+- **Ascending/descending sort direction, both for Name and Size** — Actions →
+  Settings → Sort now cycles Name ↑ → Name ↓ → Size ↑ → Size ↓ and back,
+  instead of a plain two-way Name/Size toggle. Clicking the NAME or SIZE
+  column header picks that column directly, and clicking the same one again
+  reverses direction — spreadsheet-style, rather than a blind toggle
+  regardless of which column is clicked. The active column/direction shows
+  as a small ↑/↓ right on its own header label, doubling as a hint that the
+  header is clickable at all.
+- **Custom theme discoverability** — `THEME=custom` (config-file only, no
+  in-app picker row) is now mentioned in both the Theme screen's own header
+  and the Settings row's own preview text, so browsing themes in-app
+  surfaces that the option exists instead of it being README-only knowledge.
+
+### Changed
+
+- **F1 Help is now a topic menu** instead of one long scrolling list — Keys,
+  Actions Menu, Settings Reference, and Mouse & Good to Know, each its own
+  short screen. The single-list version had grown past 100 rows as features
+  accumulated; this is the same "one level down, its own screen"
+  restructuring Settings itself already went through for the same reason.
+  Esc from a topic returns to the topic menu; Esc from there returns
+  wherever F1 was opened from, same as before the split.
+
 ## [0.57.0] — 2026-09-01
 
 ### Added

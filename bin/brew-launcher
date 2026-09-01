@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.57.0"
+VERSION="0.58.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -635,7 +635,8 @@ Mouse:
   F2). Plain, unbracketed footer text — like the "+"/"*" legend or
   "Navigate" — isn't clickable; it's there to explain, not to act on.
   Clicking NAME or SIZE in the column header sorts by it directly,
-  same as F4 → Actions → Settings → Sort.
+  same as F4 → Actions → Settings → Sort — click the same one again
+  to reverse direction.
 
 Launch Flags:
   F4 → Actions → Launch Flags on a highlighted entry sets extra
@@ -927,37 +928,56 @@ fi
 # --delimiter=$'\t' (needed for the list's own real/display split)
 # makes fzf stop splitting the header into words at all, reporting the
 # entire header line as one "word" instead. FZF_CLICK_HEADER_COLUMN
-# still works correctly in that situation and is all this needs:
-# NAME and SIZE are the only clickable columns, so finding where each
-# literally sits inside FZF_HEADER (a small, fixed vocabulary — never
-# containing "NAME" or "SIZE" anywhere outside the two real column
-# labels) and comparing the click's column against those ranges is
-# both simpler and more robust than re-deriving the same widths
-# build_fzf_header() already computed.
+# still works correctly in that situation and is all this needs.
 #
-# Only NAME and SIZE are recognized — the two column names Actions ->
-# Sort's own SORT_ORDER=name/size already understands (see
-# toggle_sort). VERSION, DESCRIPTION and the blank space between
-# columns fall through to "ignore" — there's no third sort order to
-# switch to. In Compact View the header has no "SIZE" substring at all
-# (build_fzf_header() drops that column entirely), so a click there
-# can only ever match NAME — no separate guard needed.
+# Each column's own clickable range runs from where its label starts
+# to right before the next label — the whole padded field, not just
+# the bare word's own 4 letters, so build_fzf_header()'s own sort
+# arrow (" ↑"/" ↓", appended right after the word) falls inside the
+# same range and is just as clickable as the word itself, without this
+# handler needing to know an arrow is even there.
+#
+# Only NAME and SIZE are recognized — the two columns Actions -> Sort
+# already understands (see toggle_sort). VERSION, DESCRIPTION and the
+# blank space between columns fall through to "ignore" — there's no
+# third column to sort by. In Compact View the header has no "SIZE"
+# substring at all (build_fzf_header() drops that column entirely), so
+# a click there can only ever match NAME — no separate guard needed.
 #
 # Unlike the footer's row of distinct actions, NAME and SIZE both mean
 # the same kind of thing (pick this column as the active sort) — the
-# actual answer is picked, not a blind toggle, so clicking NAME while
-# already sorted by name is a harmless no-op rather than switching to
-# size just because a toggle was clicked.
+# main loop below picks the actual column, then flips direction if
+# it's the one already active rather than switching columns, matching
+# a spreadsheet's own "click again to reverse" convention.
 # ------------------------------------------------------------
 
 if [[ "$1" == "--internal-header-click" ]]; then
 
     clicked_column=""
 
+    # Each column's clickable range runs from where its own label
+    # starts to right before the next column's label — the whole
+    # padded field, arrow indicator included, not just the bare word's
+    # own 4 letters. A build_fzf_header() sort arrow (" ↑"/" ↓") sits
+    # right after the word, inside this same range, so clicking the
+    # arrow itself works exactly like clicking the word.
     name_prefix="${FZF_HEADER%%NAME*}"
     if [[ "$name_prefix" != "$FZF_HEADER" ]]; then
         name_start=$(( ${#name_prefix} + 1 ))
-        name_end=$(( name_start + 3 ))
+        after_name="${FZF_HEADER#*NAME}"
+
+        # NAME's next neighbor is VERSION in the normal layout, or
+        # DESCRIPTION directly in Compact View (no VERSION/SIZE at
+        # all) — checked in that order since VERSION only exists in
+        # the layout where it'd actually appear after NAME.
+        version_prefix="${after_name%%VERSION*}"
+        if [[ "$version_prefix" != "$after_name" ]]; then
+            name_end=$(( name_start + 3 + ${#version_prefix} ))
+        else
+            description_prefix="${after_name%%DESCRIPTION*}"
+            name_end=$(( name_start + 3 + ${#description_prefix} ))
+        fi
+
         (( FZF_CLICK_HEADER_COLUMN >= name_start && FZF_CLICK_HEADER_COLUMN <= name_end )) &&
             clicked_column="NAME"
     fi
@@ -966,7 +986,14 @@ if [[ "$1" == "--internal-header-click" ]]; then
         size_prefix="${FZF_HEADER%%SIZE*}"
         if [[ "$size_prefix" != "$FZF_HEADER" ]]; then
             size_start=$(( ${#size_prefix} + 1 ))
-            size_end=$(( size_start + 3 ))
+
+            # SIZE only ever appears in the layout where DESCRIPTION
+            # follows it directly — no Compact-View equivalent to
+            # branch on, unlike NAME above.
+            after_size="${FZF_HEADER#*SIZE}"
+            description_prefix="${after_size%%DESCRIPTION*}"
+            size_end=$(( size_start + 3 + ${#description_prefix} ))
+
             (( FZF_CLICK_HEADER_COLUMN >= size_start && FZF_CLICK_HEADER_COLUMN <= size_end )) &&
                 clicked_column="SIZE"
         fi
@@ -1327,7 +1354,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Categorize\n\nFile the highlighted entry into a category, typed or\npicked from existing ones. Picking a category it is\nalready in removes it instead — same key adds and removes.\nMarked with a # in every list.\n'
             ;;
         theme)
-            printf 'Theme\n\nSwitch the color theme used throughout the picker.\n'
+            printf 'Theme\n\nSwitch the color theme used throughout the picker. 10 to\nchoose from here — a custom one of your own is also\npossible, via a CUSTOM_COLORS line in the config file (see\nREADME.md), but isn'"'"'t offered as a row here since there'"'"'s no\nfixed palette to describe.\n'
             ;;
         toggle_default_categories)
             printf 'Default Categories\n\nOn: uncategorized formulae are auto-filed into bundled\ncategories (Reading & Reference, System Info, and so on),\nso the view picker has useful groupings from the start.\nOff: only categories you have filed something into by hand\n(F8) exist — a blank slate. Either way, your own F8 choice\non any one entry always wins over the bundled default.\n'
@@ -1339,7 +1366,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Open to Categories\n\nOn: brew-launcher opens straight to the view picker (F2)\ninstead of All. Off (default): starts on All, the familiar\nfull list. Worth turning on once you actually have\ncategories to jump between.\n'
             ;;
         toggle_sort)
-            printf 'Sort\n\nName: alphabetical — the default, same order the cache is\nalready written in. Size: largest install first. Doesn'"'"'t\naffect Most Used, Recently Launched, or Recently Added, which\nalready have their own meaningful order. Clicking the NAME or\nSIZE column header on the main list does the same thing\ndirectly, without opening Settings.\n'
+            printf 'Sort\n\nCycles Name ↑ -> Name ↓ -> Size ↑ -> Size ↓. Name ↑ is the\ndefault — alphabetical, same order the cache is already\nwritten in. Size ↓ is largest install first. Doesn'"'"'t affect\nMost Used, Recently Launched, or Recently Added, which\nalready have their own meaningful order.\n\nClicking NAME or SIZE in the main list'"'"'s own header does the\nsame thing directly: picks that column, and clicking it again\nflips the direction — without opening Settings.\n'
             ;;
         toggle_compact_view)
             printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
@@ -3292,9 +3319,95 @@ rename_category() {
 # row," and Help isn't that. Purely informational: the same fzf list
 # idiom as every other screen here, every row inert, Enter/Esc both
 # just go back.
+#
+# Split across a topic picker plus four short screens rather than one
+# long scrolling list — the single-list version had grown past 100
+# rows as features accumulated, which read as a wall of text rather
+# than something organized. Same "one level down, its own screen"
+# restructuring Settings itself already went through for the same
+# reason. pick_help() is the topic picker (kept as the function every
+# existing call site already calls, so nothing above it needed to
+# change); each show_help_*() below is one topic, same flat-list idiom
+# the single screen used to be, just scoped smaller. Esc from a topic
+# returns to this picker; Esc from here returns to whatever screen
+# opened it, exactly as the old single screen already did.
 # ------------------------------------------------------------
 
 pick_help() {
+
+    local -a topics=(
+        "keys"$'\t'"$(printf '%-22s%s' 'Keys' 'Markers, F-keys, and the details pane')"
+        "actions"$'\t'"$(printf '%-22s%s' 'Actions Menu' 'Bulk actions and everything else under F4')"
+        "settings"$'\t'"$(printf '%-22s%s' 'Settings Reference' 'What each toggle in F4 -> Settings does')"
+        "mouse"$'\t'"$(printf '%-22s%s' 'Mouse & Good to Know' 'Clicking, timing, and how Esc behaves')"
+    )
+    local result chosen
+
+    while true; do
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        result="$(
+            printf '%s\n' "${topics[@]}" |
+            fzf \
+                --height=100% \
+                --no-clear \
+                --layout=reverse \
+                --border=rounded \
+                --border-label="$(screen_border_label 'Help')" \
+                --border-label-pos=2 \
+                --prompt=' 󰣇  ' \
+                --pointer='▌' \
+                --delimiter=$'\t' \
+                --with-nth=2 \
+                --footer='  ↑ ↓  Navigate    Enter  [Open]    Esc  [Back]' \
+                --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+                --color="$FZF_COLORS"
+        )"
+
+        rm -f "$FOOTER_CLICK_FILE"
+
+        [[ -z "$result" ]] && return 0
+
+        chosen="${result%%$'\t'*}"
+
+        case "$chosen" in
+            keys)     show_help_keys ;;
+            actions)  show_help_actions_menu ;;
+            settings) show_help_settings_reference ;;
+            mouse)    show_help_mouse_and_notes ;;
+        esac
+    done
+}
+
+# Shared by all four show_help_*() screens below — same flat-list
+# idiom the single pre-split screen already used, every row inert,
+# Enter/Esc both just return to pick_help()'s own topic list.
+show_help_screen() {
+
+    local -a rows=("$@")
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    printf '%s\n' "${rows[@]}" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Help')" \
+            --border-label-pos=2 \
+            --prompt=' 󰣇  ' \
+            --pointer='▌' \
+            --footer='  ↑ ↓  Navigate    Enter/Esc  [Back]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS" \
+            > /dev/null
+
+    rm -f "$FOOTER_CLICK_FILE"
+}
+
+show_help_keys() {
 
     local -a rows=()
 
@@ -3311,7 +3424,7 @@ pick_help() {
     rows+=("            previews what's in the highlighted category, Ctrl-R")
     rows+=("            renames it, Ctrl-D deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
-    rows+=("  F4 / ⌥M   Open the Actions menu — the second tier below")
+    rows+=("  F4 / ⌥M   Open the Actions menu — see Actions Menu")
     rows+=("            F4 and F9 also work from inside the view picker (F2)")
     if [[ "$TMUX_AVAILABLE" == true ]]; then
         rows+=("  F9 / ⌥P   Launch a preset — new window if there's one to open,")
@@ -3331,7 +3444,18 @@ pick_help() {
     rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
     rows+=("  F8 / ⌥C   Categorize the selected entry")
     rows+=("")
-    rows+=("F4 only — bulk versions of the three above, no direct key")
+    rows+=("Details pane, once open")
+    rows+=("  Shift-Up / Shift-Down   Scroll it")
+    rows+=("  Esc                     Closes it first — back/quit on the next press")
+
+    show_help_screen "${rows[@]}"
+}
+
+show_help_actions_menu() {
+
+    local -a rows=()
+
+    rows+=("F4 only — bulk versions of Hide/Favorite/Categorize, no direct key")
     rows+=("      Hide Multiple  Tab marks tools, Enter acts on everything")
     rows+=("                    marked (or just the highlighted row, if")
     rows+=("                    nothing's marked)")
@@ -3361,21 +3485,35 @@ pick_help() {
     rows+=("                    real terminal. Asks first; shows the count")
     rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
     rows+=("                    Sort, Compact View, Details, Alt Keybinds —")
-    rows+=("                    see below")
+    rows+=("                    see Settings Reference")
     rows+=("            Backup  Brewfile + categories/presets/theme in one")
     rows+=("                    file, at ~/brew-launcher-backup.tar.gz")
     rows+=("")
+    rows+=("Theme, Create Preset and Backup return to whichever menu opened")
+    rows+=("them once done — only Create Shortcut exits back to the list.")
+
+    show_help_screen "${rows[@]}"
+}
+
+show_help_settings_reference() {
+
+    local -a rows=()
+
     rows+=("F4 -> Settings — one level down, its own screen")
     rows+=("      Themes (10)  Switch color theme — opening it shows where")
-    rows+=("                    the current one sits, e.g. \"3 of 10\"")
+    rows+=("                    the current one sits, e.g. \"3 of 10\". A")
+    rows+=("                    custom palette of your own is also possible,")
+    rows+=("                    via config only — see the Theme screen itself")
     rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
     rows+=("Open to Categories  Start on the view picker instead of All")
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
-    rows+=("                    first) — not Most Used/Recently Launched/")
-    rows+=("                    Recently Added, which already have their own order")
-    rows+=("                    Click NAME/SIZE in the main list's own header to")
-    rows+=("                    sort by it directly, without opening Settings")
+    rows+=("                    first), each with its own ascending/")
+    rows+=("                    descending direction — not Most Used/Recently")
+    rows+=("                    Launched/Recently Added, which already have")
+    rows+=("                    their own order. Clicking NAME/SIZE in the")
+    rows+=("                    main list's own header does the same thing")
+    rows+=("                    directly — see Mouse & Good to Know")
     rows+=("       Compact View  Off (default): every column/marker shows.")
     rows+=("                    On: drops version/size and the +/#/* marks,")
     rows+=("                    leaving just name and description")
@@ -3388,18 +3526,21 @@ pick_help() {
     rows+=("                    where it fits. Off: F-keys only. F-keys work")
     rows+=("                    either way, this only changes the footer text")
     rows+=("")
-    rows+=("Every toggle in Settings flips with Space, not just Enter, and")
-    rows+=("stays on that screen afterward. Theme, Create Preset and Backup")
-    rows+=("return to whichever menu opened them once done — only Create")
-    rows+=("Shortcut exits back to the list.")
-    rows+=("")
-    rows+=("Details pane, once open")
-    rows+=("  Shift-Up / Shift-Down   Scroll it")
-    rows+=("  Esc                     Closes it first — back/quit on the next press")
-    rows+=("")
+    rows+=("Every toggle here flips with Space, not just Enter, and stays on")
+    rows+=("this screen afterward.")
+
+    show_help_screen "${rows[@]}"
+}
+
+show_help_mouse_and_notes() {
+
+    local -a rows=()
+
     rows+=("Mouse")
     rows+=("  Click a row to select, double-click to launch")
     rows+=("  Click a [bracketed] footer word to run its action")
+    rows+=("  Click NAME or SIZE in the main list's own column header to")
+    rows+=("  sort by it — click the same one again to reverse direction")
     rows+=("")
     rows+=("Good to know")
     rows+=("  A just-installed tool can take up to 60s to appear;")
@@ -3407,26 +3548,7 @@ pick_help() {
     rows+=("  Esc goes back one level at a time rather than quitting —")
     rows+=("  on All, with nowhere further back to go, it asks first")
 
-    rm -f "$FOOTER_CLICK_FILE"
-
-    printf '%s\n' "${rows[@]}" |
-        fzf \
-            --height=100% \
-            --no-clear \
-            --layout=reverse \
-            --border=rounded \
-            --border-label="$(screen_border_label 'Help')" \
-            --border-label-pos=2 \
-            --prompt=' 󰣇  ' \
-            --pointer='▌' \
-            --footer='  ↑ ↓  Navigate    Enter/Esc  [Back]' \
-            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
-            --color="$FZF_COLORS" \
-            > /dev/null
-
-    rm -f "$FOOTER_CLICK_FILE"
-
-    return 0
+    show_help_screen "${rows[@]}"
 }
 
 # Builds the --preview-window value shared by every screen with a
@@ -3758,13 +3880,19 @@ pick_settings_action() {
     [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
     rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
 
-    # A two-way toggle rather than an on/off one, unlike the three
-    # above — "Name" is just what every view already shows for free
-    # (the cache is written alphabetically), "Size" reorders it
-    # largest-first. Doesn't affect Most Used, Recently Launched, or
-    # Recently Added, which already have their own meaningful order.
-    local sort_state='Name'
-    [[ "$SORT_ORDER" == size ]] && sort_state='Size'
+    # A four-way cycle rather than a plain on/off toggle, unlike the
+    # three above — Name and Size each have their own ascending/
+    # descending direction now too. "Name ↑" is just what every view
+    # already shows for free (the cache is written alphabetically);
+    # the other three all reorder it. Doesn't affect Most Used,
+    # Recently Launched, or Recently Added, which already have their
+    # own meaningful order regardless of this setting.
+    local sort_state='Name ↑'
+    case "$SORT_ORDER" in
+        name-desc) sort_state='Name ↓' ;;
+        size-asc)  sort_state='Size ↑' ;;
+        size)      sort_state='Size ↓' ;;
+    esac
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
 
     # Controls the main list's VERSION/SIZE columns specifically.
@@ -3881,8 +4009,13 @@ open_settings_menu() {
                 continue
                 ;;
             toggle_sort)
-                new_value='name'
-                [[ "$SORT_ORDER" == name ]] && new_value='size'
+                # Name ↑ -> Name ↓ -> Size ↑ -> Size ↓ -> back to Name ↑.
+                case "$SORT_ORDER" in
+                    name)      new_value='name-desc' ;;
+                    name-desc) new_value='size-asc' ;;
+                    size-asc)  new_value='size' ;;
+                    *)         new_value='name' ;;
+                esac
                 set_config_value SORT "$new_value"
                 SORT_ORDER="$new_value"
 
@@ -3892,6 +4025,10 @@ open_settings_menu() {
                 # see the reordered list right away, so leaving the
                 # stale order on screen until something else refreshes
                 # it would look exactly like the toggle did nothing.
+                # build_fzf_header() too, so the main list's own sort
+                # arrow (see build_fzf_header()'s own comment) reflects
+                # whichever column/direction Settings just picked.
+                build_fzf_header
                 build_entries
                 continue
                 ;;
@@ -4025,7 +4162,7 @@ pick_theme() {
             --pointer='▌' \
             --delimiter=$'\t' \
             --with-nth=2 \
-            --header="$theme_header"$'\n'"Takes effect after a relaunch, not live." \
+            --header="$theme_header"$'\n'"Takes effect after a relaunch, not live."$'\n'"Want your own colors? See CUSTOM_COLORS in README.md — config-file only." \
             --footer='  ↑ ↓  Navigate    Type  Search    Enter  [Choose]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --color="$FZF_COLORS"
@@ -4749,12 +4886,15 @@ build_entries() {
     # default, so the rank only matters for these three, applied after
     # the fact and only to whatever already survived the filter above.
     #
-    # SORT_ORDER=size (Actions → Sort) rides the same mechanism —
-    # name is just the alphabetical order already there for free, so
-    # the only real work is size, largest first, same "biggest number
-    # first" convention the other three already use. Doesn't apply to
-    # any of them, though — each already has a more meaningful order of
-    # its own that Sort shouldn't override.
+    # SORT_ORDER=size/size-asc (Actions → Sort, or a SIZE header click)
+    # rides the same mechanism — name is just the alphabetical order
+    # already there for free (see the name-desc branch below for its
+    # own, simpler handling), so the only real work here is size,
+    # largest or smallest first depending on direction. Doesn't apply
+    # to Most Used/Recently Launched/Recently Added, though — each
+    # already has a more meaningful order of its own that Sort
+    # shouldn't override; they always sort descending (most first),
+    # not affected by SORT_ORDER's own direction at all.
     #
     # The sort key is zero-padded to a fixed width and placed ahead of
     # a real tab-delimited entry, sorted as one string, then stripped
@@ -4763,7 +4903,7 @@ build_entries() {
     # since a zero-padded prefix sorts correctly as plain text too.
     if [[ "$CURRENT_VIEW" == "Most Used" || "$CURRENT_VIEW" == "Recently Launched" \
           || "$CURRENT_VIEW" == "Recently Added" \
-          || "${SORT_ORDER:-name}" == "size" ]]; then
+          || "${SORT_ORDER:-name}" == "size" || "${SORT_ORDER:-name}" == "size-asc" ]]; then
 
         sort_prep=()
 
@@ -4790,7 +4930,18 @@ build_entries() {
         # vanishes. Caught by an isolated test that showed 3 array
         # elements shrink to 1 after sorting; confirmed the unquoted
         # form is what actually produces a real 3-element array.
-        sort_prep=(${(On)sort_prep})
+        #
+        # (On) = descending (largest/most-recent/highest-count first),
+        # the only direction Most Used/Recently Launched/Recently
+        # Added ever want. SORT_ORDER=size-asc is the one case that
+        # wants the other way — smallest first — hence (on) there
+        # instead; everything else keeps the existing (On).
+        if [[ "${SORT_ORDER:-name}" == "size-asc" && "$CURRENT_VIEW" != "Most Used" \
+              && "$CURRENT_VIEW" != "Recently Launched" && "$CURRENT_VIEW" != "Recently Added" ]]; then
+            sort_prep=(${(on)sort_prep})
+        else
+            sort_prep=(${(On)sort_prep})
+        fi
 
         entries=()
         sort_index=0
@@ -4807,6 +4958,17 @@ build_entries() {
             entries+=("${sort_entry#*$'\t'}")
             (( sort_index++ ))
         done
+
+    elif [[ "${SORT_ORDER:-name}" == "name-desc" ]]; then
+
+        # No sort_prep/key needed here, unlike size above — entries is
+        # already in alphabetical order for free (see the big comment
+        # above), so descending is just that same order reversed.
+        # (Oa) reverses element order outright rather than re-sorting
+        # by some default string comparison, which could subtly
+        # disagree with the cache's own existing alphabetical order
+        # (case-folding, punctuation) if used instead.
+        entries=(${(Oa)entries})
     fi
 }
 
@@ -4882,6 +5044,23 @@ find_entry_position() {
 # ------------------------------------------------------------
 
 build_fzf_header() {
+
+    # Which column is the active sort, and which way — shown as an
+    # arrow right on its label, doubling as both a "here's the current
+    # order" indicator and a hint that NAME/SIZE are themselves
+    # clickable (see --internal-header-click below). Silently omitted
+    # if SORT_ORDER names a column this header doesn't currently show
+    # at all (a size-based sort while Compact View is on, which has no
+    # SIZE column to attach an arrow to) — same "don't guess" precedent
+    # theme_position_label() already sets elsewhere.
+    local name_label="NAME" size_label="SIZE"
+    case "${SORT_ORDER:-name}" in
+        name)      name_label="NAME ↑" ;;
+        name-desc) name_label="NAME ↓" ;;
+        size)      size_label="SIZE ↓" ;;
+        size-asc)  size_label="SIZE ↑" ;;
+    esac
+
     if [[ "$COMPACT_VIEW" == on ]]; then
         # No leading LEFT_MARKER_WIDTH field here — the row data has
         # no marker column to align under either now (see
@@ -4889,16 +5068,16 @@ build_fzf_header() {
         # would just push NAME out of alignment with it.
         FZF_HEADER="$(
             printf "%-${max_name}s%s" \
-                "NAME" \
+                "$name_label" \
                 "DESCRIPTION"
         )"
     else
         FZF_HEADER="$(
             printf "%-${LEFT_MARKER_WIDTH}s%-${max_name}s%-${max_version}s%-${max_size}s%s" \
                 "" \
-                "NAME" \
+                "$name_label" \
                 "VERSION" \
-                "SIZE" \
+                "$size_label" \
                 "DESCRIPTION"
         )"
     fi
@@ -7653,12 +7832,16 @@ while true; do
 
     # --------------------------------------------------------
     # A click on the NAME or SIZE column header sets that column as
-    # the active sort — same SORT_ORDER/set_config_value plumbing
-    # Actions -> Sort already uses (see toggle_sort there), just
-    # picking the clicked answer directly instead of blindly flipping
-    # between the two. Handled here rather than through $action, since
-    # it isn't one of the footer's keys — it acts on this screen
-    # directly and loops right back with the list re-sorted.
+    # the active sort, same SORT_ORDER/set_config_value plumbing
+    # Actions -> Sort's own toggle_sort uses — but picks a direction
+    # too, spreadsheet-style: clicking the column that's already active
+    # flips it (ascending <-> descending), clicking the other one
+    # switches to it at its own default direction (name defaults
+    # ascending, size defaults descending — the same defaults each one
+    # already had before direction existed at all). Handled here rather
+    # than through $action, since it isn't one of the footer's keys —
+    # it acts on this screen directly and loops right back with the
+    # list re-sorted.
     # --------------------------------------------------------
 
     if [[ -f "$HEADER_CLICK_FILE" ]]; then
@@ -7668,13 +7851,26 @@ while true; do
 
         new_sort_order=""
         case "$clicked_header" in
-            NAME) new_sort_order='name' ;;
-            SIZE) new_sort_order='size' ;;
+            NAME)
+                case "$SORT_ORDER" in
+                    name)      new_sort_order='name-desc' ;;
+                    name-desc) new_sort_order='name' ;;
+                    *)         new_sort_order='name' ;;
+                esac
+                ;;
+            SIZE)
+                case "$SORT_ORDER" in
+                    size)     new_sort_order='size-asc' ;;
+                    size-asc) new_sort_order='size' ;;
+                    *)        new_sort_order='size' ;;
+                esac
+                ;;
         esac
 
         if [[ -n "$new_sort_order" ]]; then
             set_config_value SORT "$new_sort_order"
             SORT_ORDER="$new_sort_order"
+            build_fzf_header
             build_entries
             restore_position="$(find_entry_position "${selection%%$'\t'*}")"
             continue

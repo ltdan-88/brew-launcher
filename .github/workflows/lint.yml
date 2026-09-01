@@ -727,6 +727,17 @@ jobs:
       - name: Header click (sort) test
         run: zsh test/header-click-fixtures.sh
 
+  help-topics-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — every check is source text or a
+      # content-preservation spot check against the raw file.
+      - name: F1 Help topic split test
+        run: zsh test/help-topics-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:

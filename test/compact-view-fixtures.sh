@@ -128,8 +128,14 @@ header_block="$(sed -n '/^build_fzf_header() {/,/^}/p' "$LAUNCHER")"
 
 [[ "$header_block" == *'COMPACT_VIEW" == on'* ]] ||
     fail "the column header should branch on COMPACT_VIEW, same as build_entries()"
-[[ "$header_block" == *'"NAME" \'*'"DESCRIPTION"'* ]] ||
-    fail "the compact branch should still print NAME and DESCRIPTION"
+
+# Isolated to just the compact branch (up to the "else") — checking
+# the whole function body would also match the non-compact branch's
+# own identical "$name_label" \ ... "DESCRIPTION" text and pass even
+# if the compact branch itself had been reverted to a bare "NAME".
+compact_branch="$(printf '%s\n' "$header_block" | sed -n '/COMPACT_VIEW" == on/,/else$/p')"
+[[ "$compact_branch" == *'"$name_label" \'*'"DESCRIPTION"'* ]] ||
+    fail "the compact branch should still print the NAME label and DESCRIPTION"
 
 # ------------------------------------------------------------
 # 4. Footer legend (+/#/* explanation): also suppressed when compact —

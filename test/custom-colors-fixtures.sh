@@ -130,6 +130,18 @@ pick_theme_block="$(sed -n '/^pick_theme() {/,/^}/p' "$LAUNCHER")"
 [[ "$pick_theme_block" != *'"custom"$'"'"'\t'"'"''* ]] ||
     fail "custom should not be offered as a row in pick_theme()'s own list"
 
+# Not a selectable row, but not invisible either — mentioned in the
+# Theme screen's own header and the Settings row's own F3 preview, so
+# someone actually browsing themes in-app has a way to discover it
+# exists at all without having read the README first.
+[[ "$pick_theme_block" == *'CUSTOM_COLORS'* ]] ||
+    fail "pick_theme()'s own header should mention CUSTOM_COLORS as a config-file option"
+
+preview_action_block="$(sed -n '/--internal-preview-action/,/^fi$/p' "$LAUNCHER")"
+theme_preview="$(printf '%s\n' "$preview_action_block" | sed -n '/^        theme)$/,/^            ;;$/p')"
+[[ "$theme_preview" == *'CUSTOM_COLORS'* ]] ||
+    fail "the Settings row's own Theme preview should mention CUSTOM_COLORS too"
+
 # ------------------------------------------------------------
 # 6. The unrecognized-theme error message's supported-values list
 #    mentions custom now that it's a real accepted value.
@@ -138,4 +150,4 @@ pick_theme_block="$(sed -n '/^pick_theme() {/,/^}/p' "$LAUNCHER")"
 [[ "$theme_case_block" == *'red-sands, custom.'* ]] ||
     fail "the unknown-theme error's supported-values list should mention custom"
 
-printf 'PASS: THEME=custom reads its palette from a CUSTOM_COLORS config line (config-file-only, no BREW_LAUNCHER_ env var and no pick_theme() row), fails fast with a CUSTOM_COLORS-specific message when that line is missing, wires FZF_COLORS from CONFIG_CUSTOM_COLORS, and the unknown-theme error mentions custom as a supported value\n'
+printf 'PASS: THEME=custom reads its palette from a CUSTOM_COLORS config line (config-file-only, no BREW_LAUNCHER_ env var and no pick_theme() row, but mentioned in both the Theme screen'"'"'s own header and the Settings row'"'"'s preview so it'"'"'s discoverable in-app), fails fast with a CUSTOM_COLORS-specific message when that line is missing, wires FZF_COLORS from CONFIG_CUSTOM_COLORS, and the unknown-theme error mentions custom as a supported value\n'

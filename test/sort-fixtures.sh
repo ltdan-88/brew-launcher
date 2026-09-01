@@ -146,4 +146,75 @@ for expected in "${expected_order[@]}"; do
     (( i++ ))
 done
 
-printf 'PASS: size_sort_key() parses display sizes into bytes correctly, SORT_ORDER=size reorders All/categories largest-first without capping them, and leaves Most Used/Recently Added untouched\n'
+# ------------------------------------------------------------
+# 5. SORT_ORDER=size-asc — the reverse direction added alongside
+#    header-click sorting: same sizes, smallest first instead of
+#    largest, and still doesn't cap the list the way the
+#    launch-history-backed views do.
+# ------------------------------------------------------------
+
+CURRENT_VIEW="All"
+SORT_ORDER="size-asc"
+build_entries
+
+if (( ${#entries[@]} != 5 )); then
+    fail "SORT_ORDER=size-asc on All: expected all 5 fixture entries, got ${#entries[@]}"
+fi
+
+expected_order=(elderberry banana apple date cherry)
+i=1
+
+for expected in "${expected_order[@]}"; do
+    got="${entries[$i]%%$'\t'*}"
+    if [[ "$got" != "$expected" ]]; then
+        fail "SORT_ORDER=size-asc: position $i expected '$expected', got '$got' — full order: $(for e in "${entries[@]}"; do print -n "${e%%$'\t'*} "; done)"
+    fi
+    (( i++ ))
+done
+
+# ------------------------------------------------------------
+# 6. SORT_ORDER=name-desc — the reverse direction for name, exactly
+#    the alphabetical order from section 3 above, flipped. Doesn't
+#    need size_sort_key() at all — just a plain reversal of the
+#    cache's own already-alphabetical order (see build_entries()'s own
+#    comment on why (Oa), not a fresh sort, is what does this).
+# ------------------------------------------------------------
+
+SORT_ORDER="name-desc"
+build_entries
+
+expected_order=(elderberry date cherry banana apple)
+i=1
+
+for expected in "${expected_order[@]}"; do
+    got="${entries[$i]%%$'\t'*}"
+    if [[ "$got" != "$expected" ]]; then
+        fail "SORT_ORDER=name-desc: position $i expected '$expected', got '$got'"
+    fi
+    (( i++ ))
+done
+
+# ------------------------------------------------------------
+# 7. Neither new direction leaks into Recently Added either — same
+#    guard as section 4, extended to both.
+# ------------------------------------------------------------
+
+CURRENT_VIEW="Recently Added"
+
+for leak_order in size-asc name-desc; do
+    SORT_ORDER="$leak_order"
+    build_entries
+
+    expected_order=(date banana cherry elderberry apple)
+    i=1
+
+    for expected in "${expected_order[@]}"; do
+        got="${entries[$i]%%$'\t'*}"
+        if [[ "$got" != "$expected" ]]; then
+            fail "SORT_ORDER=$leak_order should not affect Recently Added: position $i expected '$expected' (by install_time), got '$got'"
+        fi
+        (( i++ ))
+    done
+done
+
+printf 'PASS: size_sort_key() parses display sizes into bytes correctly, SORT_ORDER name/name-desc/size/size-asc all reorder All/categories correctly in both directions without capping them, and none of the four leak into Most Used/Recently Added\n'
