@@ -503,9 +503,9 @@ Bundled defaults:
 Keyboard shortcuts:
 
   F1 / ⌥?   Help — the same reference shown below, from inside the
-            launcher. Shown in the footer too now, last — lowest
-            priority, so it's the first thing dropped on a narrow
-            terminal, but visible whenever there's room.
+            launcher (as a short topic menu there, not one long list).
+            Shown in the footer too, first — Presets is what a narrow
+            terminal drops first now instead.
 
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
@@ -519,7 +519,7 @@ Keyboard shortcuts:
             "Actions on fastfetch"), so it's never ambiguous which
             entry it's about to act on. Its own details pane, always
             on, explains what each row actually does.
-  F9 / ⌥P   Launch a preset — see Presets below. Its own details pane,
+  F9 / ⌥P   Launch a preset — see Presets above. Its own details pane,
             always on like F4's, previews what's actually in the
             highlighted preset. Ctrl-R renames it, Ctrl-D deletes it.
 
@@ -561,11 +561,13 @@ Keyboard shortcuts:
 
   Actions → Settings holds everything that's a standing preference
   rather than a one-off action: switch color theme, the two toggles
-  under "Bundled defaults" below, Open to Categories, Sort by name or
-  size, toggle the details pane (same toggle as F3 itself, mirrored
-  here so its state is visible before opening it), toggle Alt
-  Keybinds (see above). Its own always-on details pane explains each
-  one. Esc from Settings returns to Actions, not out to the main list.
+  under "Bundled defaults" above, Open to Categories, Sort by name or
+  size (each with its own ascending/descending direction — Space
+  cycles through all four), toggle the details pane (same toggle as
+  F3 itself, mirrored here so its state is visible before opening it),
+  toggle Alt Keybinds (see above). Its own always-on details pane
+  explains each one. Esc from Settings returns to Actions, not out to
+  the main list.
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the

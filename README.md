@@ -82,8 +82,8 @@ stays Homebrew's job.
 
 <p align="center"><img src="assets/more.gif" alt="Opening the Actions menu with F4 and favoriting an entry from it"></p>
 
-The footer covers browsing: **Views**, **Details**, **Actions**, **Presets**,
-**Help**. Everything else — hide, favorite, categorize, create a preset or
+The footer covers browsing: **Help**, **Views**, **Details**, **Actions**,
+**Presets**. Everything else — hide, favorite, categorize, create a preset or
 shortcut, back up, and every standing preference — lives behind
 **F4 / ⌥M → Actions**, named after whatever's highlighted (`Actions on fastfetch`).
 

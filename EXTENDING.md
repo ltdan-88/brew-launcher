@@ -52,9 +52,10 @@ invocation.
 
 `~/.config/brew-launcher/config` (or `$XDG_CONFIG_HOME/brew-launcher/config`)
 — plain `KEY=value` lines, one per line, `#` comments and blank lines
-ignored. Recognized keys: `TERMINAL`, `THEME`, `DEFAULT_CATEGORIES`,
-`DEFAULT_HIDDEN`, `OPEN_TO_CATEGORIES`, `SORT`, `ALT_KEYBINDS` — see the
-README's Configuration section for each one's values. An unrecognized key is
+ignored. Recognized keys: `TERMINAL`, `THEME`, `CUSTOM_COLORS`,
+`DEFAULT_CATEGORIES`, `DEFAULT_HIDDEN`, `OPEN_TO_CATEGORIES`, `SORT`,
+`ALT_KEYBINDS`, `DETAILS_POSITION`, `COMPACT_VIEW` — see the README's
+Configuration section for each one's values. An unrecognized key is
 silently ignored, not an error, so this file stays forward-compatible with
 older launcher versions reading a config written by a newer one.
 
@@ -87,8 +88,9 @@ including a patch release — they're implementation detail, not interface.
   changing as features are added. Use `--list` instead if you need
   brew-launcher's data from another script.
 - **`--internal-*` flags** (`--internal-footer-click`,
-  `--internal-preview`, `--internal-preview-category`,
-  `--internal-preview-preset`, `--internal-preview-action`,
+  `--internal-header-click`, `--internal-preview`,
+  `--internal-preview-category`, `--internal-preview-preset`,
+  `--internal-preview-usage`, `--internal-preview-action`,
   `--internal-preset-tab`) — these exist purely so fzf's own mouse-click
   and preview-pane binds can re-invoke this script as a subprocess. Their
   arguments, output format, and existence at all are not a public API and
@@ -100,9 +102,9 @@ including a patch release — they're implementation detail, not interface.
   file itself is already covered above, and this is just what produces
   it.
 - **Everything else under the cache directory** — `state`, `outdated`,
-  `previews/`, `homebrew-usage`, `footer-click.<pid>` — all internal,
-  disposable, and safe to delete by hand at any time (the launcher rebuilds
-  what it needs).
+  `previews/`, `homebrew-usage`, `footer-click.<pid>`,
+  `header-click.<pid>` — all internal, disposable, and safe to delete by
+  hand at any time (the launcher rebuilds what it needs).
 - **`~/.config/brew-launcher/launch-history`** — an internal append-only
   log the Most Used view tallies on demand. Format not guaranteed.
 - **Function names and internal script structure** — this is one zsh
