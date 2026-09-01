@@ -221,6 +221,10 @@ readable either way: the window drops to a live shell after, instead of closing.
 a real terminal so you see its output. Shows the outdated count, asks first,
 and relaunches afterward like any other launch.
 
+**F4 → Actions → Update** does the same for just the highlighted entry — no
+confirmation, since it's scoped to one tool. Shows the new version in its own
+row when one's available; already up to date just says so.
+
 ### Backup
 
 **F4 → Actions → Backup** writes one file, always
@@ -274,6 +278,7 @@ reference below, from inside the launcher.
 | — | Set custom launch flags for the highlighted entry | Actions only |
 | — | Run the highlighted entry with one-off extra arguments | Actions only |
 | **F3** / **⌥D** | Preview that entry's own `--help` output | Run With Args only |
+| — | Update the highlighted entry (brew upgrade for just that formula) | Actions only |
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
