@@ -759,11 +759,128 @@ jobs:
       - name: Set up Homebrew
         uses: Homebrew/actions/setup-homebrew@master
 
-      - name: Install fzf
-        run: brew install fzf
+      - name: Install fzf and tmux
+        run: brew install fzf tmux
 
       - name: --list fixture test
         run: zsh test/list-fixtures.sh
+
+      # Everything below runs the exact same test file its macOS-only
+      # counterpart above does — added in one batch rather than 33 new
+      # separate jobs, since almost every test here is pure zsh logic,
+      # a stubbed/fake dependency, or (for the handful that touch a
+      # real fzf/tmux/brew) already has its own graceful skip if
+      # something's unavailable, the same convention already relied on
+      # throughout this file. One shared Linux runner/Homebrew setup,
+      # reused across all of them, costs far less CI time than 33
+      # separate checkouts would. Confirms behavior this project had
+      # previously only verified on macOS actually holds on Linux too,
+      # not just "should, by code review" — the real bug that
+      # originally justified this job at all (stat -f vs -c, see
+      # file_mtime()'s own comment) was exactly this kind of gap.
+
+      - name: Category loading test
+        run: zsh test/category-fixtures.sh
+
+      - name: Hide/unhide test
+        run: zsh test/ignore-fixtures.sh
+
+      - name: Duplicate command name test
+        run: zsh test/dedup-fixtures.sh
+
+      - name: Most Used / Recently Added ranking test
+        run: zsh test/computed-view-fixtures.sh
+
+      - name: Theme and config file test
+        run: zsh test/theme-config-fixtures.sh
+
+      - name: Custom colors (THEME=custom) test
+        run: zsh test/custom-colors-fixtures.sh
+
+      - name: Preset (--preset) test
+        run: zsh test/preset-fixtures.sh
+
+      - name: Create Preset's Tab-order handler test
+        run: zsh test/preset-order-fixtures.sh
+
+      # The one test most worth having here specifically — it drives
+      # the actual "not Darwin, no Ghostty" branches for real, rather
+      # than those only ever being exercised on a macOS runner that
+      # takes the opposite branch every time.
+      - name: Auto terminal-backend detection test
+        run: zsh test/terminal-auto-fixtures.sh
+
+      - name: Relaunch-after-quit test
+        run: zsh test/relaunch-fixtures.sh
+
+      - name: Rename category/preset test
+        run: zsh test/rename-fixtures.sh
+
+      - name: Command-in-which-presets test
+        run: zsh test/preset-in-details-fixtures.sh
+
+      - name: Sort-by-size test
+        run: zsh test/sort-fixtures.sh
+
+      - name: F1/F9/Details wiring test
+        run: zsh test/actions-menu-fixtures.sh
+
+      - name: Stale category-member pruning test
+        run: zsh test/prune-stale-favorites-fixtures.sh
+
+      - name: Backup test
+        run: zsh test/backup-fixtures.sh
+
+      - name: Version-marker test
+        run: zsh test/version-marker-fixtures.sh
+
+      - name: F2/F9 details-pane test
+        run: zsh test/picker-details-fixtures.sh
+
+      - name: F2/F9 footer width test
+        run: zsh test/picker-footer-fixtures.sh
+
+      - name: Function-definition-order test
+        run: zsh test/function-order-fixtures.sh
+
+      - name: Bulk Hide/Favorite/Categorize test
+        run: zsh test/bulk-actions-fixtures.sh
+
+      - name: Bulk-action Esc / quit-confirm test
+        run: zsh test/bulk-cancel-and-quit-confirm-fixtures.sh
+
+      - name: --diagnose test
+        run: zsh test/diagnose-fixtures.sh
+
+      - name: Security regression test
+        run: zsh test/security-fixtures.sh
+
+      - name: Details Position test
+        run: zsh test/details-position-fixtures.sh
+
+      - name: Edit Preset test
+        run: zsh test/edit-preset-fixtures.sh
+
+      - name: Update All test
+        run: zsh test/update-all-fixtures.sh
+
+      - name: Update (per-entry) test
+        run: zsh test/update-tool-fixtures.sh
+
+      - name: Run With Args test
+        run: zsh test/run-with-args-fixtures.sh
+
+      - name: Launch Flags test
+        run: zsh test/launch-flags-fixtures.sh
+
+      - name: Compact View test
+        run: zsh test/compact-view-fixtures.sh
+
+      - name: Header click (sort) test
+        run: zsh test/header-click-fixtures.sh
+
+      - name: F1 Help topic split test
+        run: zsh test/help-topics-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would
