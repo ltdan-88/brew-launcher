@@ -167,17 +167,25 @@ bulk_categorize_block="$(sed -n '/^bulk_categorize() {/,/^}/p' "$LAUNCHER")"
     fail "bulk_categorize should branch on the same All/Hidden/Favorites check F8's own dispatch uses"
 
 # ------------------------------------------------------------
-# 8. pick_multiple_entries() is a plain fzf --multi picker, not Create
-#    Preset's custom ordered-badge mechanism — order doesn't matter for
-#    any of Hide/Favorite/Categorize, only membership does.
+# 8. Marking lives on the main list itself now, via fzf's own --multi
+#    in run_fzf() — the three separate near-identical Tab-to-mark
+#    pickers (one shared helper, three callers) are gone entirely, so
+#    one set of marks feeds whichever action is chosen afterward.
+#
+#    Create Preset deliberately keeps its own ordered picker: a
+#    preset's launch order matters and --multi has no concept of
+#    order, only "is this marked" (see section 12).
 # ------------------------------------------------------------
 
-pick_multiple_block="$(sed -n '/^pick_multiple_entries() {/,/^}/p' "$LAUNCHER")"
-[[ -n "$pick_multiple_block" ]] || fail "pick_multiple_entries() not found"
-[[ "$pick_multiple_block" == *'--multi'* ]] ||
-    fail "pick_multiple_entries should use fzf's own --multi"
-[[ "$pick_multiple_block" != *'--internal-preset-tab'* ]] ||
-    fail "pick_multiple_entries should not reuse Create Preset's ordered-badge mechanism — order doesn't matter here"
+grep -q '^pick_multiple_entries() {' "$LAUNCHER" &&
+    fail "pick_multiple_entries() should be gone — marking moved onto the main list via run_fzf's --multi"
+
+run_fzf_block="$(sed -n '/^run_fzf() {/,/^}/p' "$LAUNCHER")"
+[[ -n "$run_fzf_block" ]] || fail "run_fzf() not found"
+[[ "$run_fzf_block" == *'--multi'* ]] ||
+    fail "run_fzf should enable --multi so Tab marks rows on the main list"
+[[ "$run_fzf_block" != *'--internal-preset-tab'* ]] ||
+    fail "the main list should not reuse Create Preset's ordered-badge mechanism — order doesn't matter for marking"
 
 # ------------------------------------------------------------
 # 9. bulk_hide()/bulk_favorite() relabel to their inverse while
@@ -189,14 +197,24 @@ pick_multiple_block="$(sed -n '/^pick_multiple_entries() {/,/^}/p' "$LAUNCHER")"
 bulk_hide_block="$(sed -n '/^bulk_hide() {/,/^}/p' "$LAUNCHER")"
 [[ -n "$bulk_hide_block" ]] || fail "bulk_hide() not found"
 [[ "$bulk_hide_block" == *'CURRENT_VIEW" == "Hidden"'* ]] ||
-    fail "bulk_hide should check CURRENT_VIEW for the Unhide-multiple relabel"
+    fail "bulk_hide should still decide its direction from CURRENT_VIEW"
 [[ "$bulk_hide_block" == *'unhide_entry'* && "$bulk_hide_block" == *'hide_entry'* ]] ||
     fail "bulk_hide should call both hide_entry and unhide_entry depending on direction"
+
+# Takes the marked set as arguments now instead of opening its own
+# picker — the whole point of the restructure.
+for bulk_fn in bulk_hide bulk_favorite bulk_categorize; do
+    fn_block="$(sed -n "/^${bulk_fn}() {/,/^}/p" "$LAUNCHER")"
+    [[ "$fn_block" == *'selected=("$@")'* ]] ||
+        fail "$bulk_fn should take the already-marked commands as arguments"
+    [[ "$fn_block" != *'pick_multiple_entries'* ]] ||
+        fail "$bulk_fn should no longer open its own marking picker"
+done
 
 bulk_favorite_block="$(sed -n '/^bulk_favorite() {/,/^}/p' "$LAUNCHER")"
 [[ -n "$bulk_favorite_block" ]] || fail "bulk_favorite() not found"
 [[ "$bulk_favorite_block" == *'CURRENT_VIEW" == "Favorites"'* ]] ||
-    fail "bulk_favorite should check CURRENT_VIEW for the Unfavorite-multiple relabel"
+    fail "bulk_favorite should still decide its direction from CURRENT_VIEW"
 [[ "$bulk_favorite_block" == *'add_to_favorites'* ]] ||
     fail "bulk_favorite should add via add_to_favorites (ensure-added), not a toggle, outside the Favorites view"
 [[ "$bulk_favorite_block" == *'toggle_favorite'* ]] ||
@@ -217,12 +235,26 @@ bulk_favorite_block="$(sed -n '/^bulk_favorite() {/,/^}/p' "$LAUNCHER")"
 more_action_block="$(sed -n '/^pick_more_action() {/,/^}/p' "$LAUNCHER")"
 open_menu_block="$(sed -n '/^open_more_menu() {/,/^}/p' "$LAUNCHER")"
 
+# The three "... Multiple" rows are gone: Hide/Favorite/Categorize
+# each act on the marked set now, so a batched action is the same row
+# as its single-entry counterpart rather than a parallel copy of it.
 for row_id in bulk_hide bulk_favorite bulk_categorize; do
-    [[ "$more_action_block" == *"rows+=(\"$row_id\""* ]] ||
-        fail "pick_more_action should offer a $row_id row"
-    [[ "$open_menu_block" == *"            $row_id)"* ]] ||
-        fail "open_more_menu should dispatch $row_id"
+    [[ "$more_action_block" != *"rows+=(\"$row_id\""* ]] ||
+        fail "pick_more_action should no longer offer a separate $row_id row — F6/F7/F8 handle the marked set themselves"
+    [[ "$open_menu_block" != *"            $row_id)"* ]] ||
+        fail "open_more_menu should no longer dispatch $row_id — nothing produces that action any more"
 done
+
+# ...and the main loop's own f6/f7/f8 handlers are what call them,
+# switching on how many rows came back marked.
+full_source="$(cat "$LAUNCHER")"
+for bulk_fn in bulk_hide bulk_favorite bulk_categorize; do
+    [[ "$full_source" == *"$bulk_fn \"\${marked_commands[@]}\""* ]] ||
+        fail "the main loop should call $bulk_fn with the marked commands"
+done
+[[ "$full_source" == *'(( ${#marked_commands[@]} > 1 ))'* ]] ||
+    fail "the main loop should branch on the marked count, so one marked row still takes the single-entry path"
+
 
 # Gated on has_entry, same as f6/f7/f8 — checked by confirming the
 # row-producing lines sit INSIDE the "if has_entry" block, same
@@ -233,7 +265,7 @@ done
 # has_entry=false call site is the view picker (F2), which has no
 # $entries of its own to act on — see pick_more_action()'s own comment.
 has_entry_block="$(printf '%s\n' "$more_action_block" | sed -n '/if \[\[ "\$has_entry" == true \]\]; then/,/^    fi$/p')"
-for row_id in bulk_hide bulk_favorite bulk_categorize create_preset; do
+for row_id in create_preset; do
     [[ "$has_entry_block" == *"rows+=(\"$row_id\""* ]] ||
         fail "$row_id's row should be inside the has_entry-gated block — it needs \$entries to mean something, which the view picker doesn't have"
 done
@@ -250,4 +282,4 @@ create_preset_block="$(sed -n '/^create_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$create_preset_block" != *'CURRENT_VIEW='* ]] ||
     fail "create_preset should no longer assign CURRENT_VIEW at all — it should build from whatever's already on screen, not force a switch to All"
 
-printf 'PASS: add_to_favorites()/add_to_category() ensure membership without ever removing (including the bundled-default/excluded edge cases), pick_category_name() is shared between toggle_category() and bulk_categorize() for a single per-batch prompt, pick_multiple_entries() is a plain fzf --multi picker, all three bulk actions (plus Create Preset) are gated on has_entry — hidden from the view picker, which has no real entries to act on — and Create Preset builds from whatever view is actually on screen instead of forcing All\n'
+printf 'PASS: add_to_favorites()/add_to_category() ensure membership without ever removing (including the bundled-default/excluded edge cases), pick_category_name() is shared for a single per-batch prompt, marking now lives on the main list via run_fzf --multi (the three separate marking pickers are gone), each bulk_* takes the marked commands as arguments and is called from the main loop only when more than one row is marked, Create Preset stays has_entry-gated and builds from whatever view is on screen\n'

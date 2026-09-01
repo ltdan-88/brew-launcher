@@ -727,6 +727,18 @@ jobs:
       - name: Header click (sort) test
         run: zsh test/header-click-fixtures.sh
 
+  marked-selection-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — the key/selection split is
+      # extracted from the main loop and run directly; the wiring
+      # around it is source-text.
+      - name: Mark-first multi-select test
+        run: zsh test/marked-selection-fixtures.sh
+
   help-topics-fixtures:
     runs-on: macos-latest
     steps:
@@ -881,6 +893,9 @@ jobs:
 
       - name: F1 Help topic split test
         run: zsh test/help-topics-fixtures.sh
+
+      - name: Mark-first multi-select test
+        run: zsh test/marked-selection-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would
