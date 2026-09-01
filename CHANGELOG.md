@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.55.0] — 2026-09-01
+
+### Added
+
+- **Update the highlighted entry (Actions → Update)** — Update All's own
+  per-entry sibling: `brew upgrade` for just that one formula, through
+  the same self-deleting-wrapper/three-way launch-path trick. No
+  confirmation prompt — scoped to one formula rather than everything
+  outdated, it's a smaller, quicker action, instant like Hide/Favorite
+  rather than something worth pausing on. Shows the new version in its
+  own row when one's actually available (the same `outdated_formulas`
+  data the `*` marker and F3 details pane already read), and already
+  up to date just says so and does nothing.
+
 ## [0.54.1] — 2026-08-31
 
 ### Added

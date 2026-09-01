@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.54.1"
+VERSION="0.55.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -657,6 +657,12 @@ Update All:
   the * marker and F3 details pane already read) and asks first, since
   this can take a while. Relaunches afterward same as any other
   launch; F5 picks up the new versions right away.
+
+Update:
+  Actions → Update on a highlighted entry runs 'brew upgrade' for just
+  that one formula, same real-terminal behavior as Update All. No
+  confirm — already up to date just says so and does nothing. Shows
+  the new version in its own row, if one's available.
 
 Backup:
   Actions → Backup writes one file, ~/brew-launcher-backup.tar.gz
@@ -1286,6 +1292,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             ;;
         run_with_args)
             printf 'Run With Args\n\nLaunch the highlighted entry right now with extra\narguments, just this once — nothing is saved. Prefilled\nwith its Launch Flags, if any, as a starting point. Blank\nruns it plain, same as Enter. F3 / ⌥D there previews its\nown --help, on demand.\n'
+            ;;
+        update_tool)
+            printf 'Update\n\nRun brew upgrade for just the highlighted entry, in a\nreal terminal so you see its actual output. No confirm —\nalready up to date just says so and does nothing.\n'
             ;;
         backup)
             printf 'Backup\n\nExport your categories, presets, favorites, hidden entries\nand settings to a single file, for safekeeping or moving to\nanother machine.\n'
@@ -3246,6 +3255,8 @@ pick_help() {
     rows+=("     Run With Args  Launch this entry now with extra arguments,")
     rows+=("                    just once. Prefilled with its Launch Flags.")
     rows+=("                    F3 / ⌥D there previews its own --help, on demand")
+    rows+=("            Update  brew upgrade for just this entry. No confirm —")
+    rows+=("                    already up to date just says so")
     rows+=("        Update All  brew upgrade for everything outdated, in a")
     rows+=("                    real terminal. Asks first; shows the count")
     rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
@@ -3358,6 +3369,11 @@ pick_more_action() {
     # whatever you clicked. Empty when has_entry is false (nothing to
     # name), or for a caller that hasn't been updated to pass it.
     local entry_name="${3:-}"
+    # The formula behind entry_name, when they differ (e.g.
+    # midnight-commander -> mc) — needed to key outdated_formulas[]
+    # below, which is keyed by formula, not command. See this
+    # function's own call sites for where it comes from.
+    local entry_formula="${4:-}"
     local -a rows=()
     local result chosen clicked_word more_label='Actions'
 
@@ -3423,6 +3439,17 @@ pick_more_action() {
         # sibling of Launch Flags right above it, not a variant — see
         # run_with_args()'s own comment for why they're kept separate.
         rows+=("run_with_args"$'\t'"$(printf '%-20s%s' 'Run With Args' '')")
+
+        # Update — Actions -> Update All's own per-entry sibling. Hint
+        # shows the new version when one's actually available, same
+        # style as Launch Flags showing its own current value; blank
+        # otherwise. Shown regardless of outdated status, same as
+        # every other row here — update_tool() itself explains when
+        # there's nothing to do, rather than the row disappearing.
+        local update_hint=''
+        [[ -n "${outdated_formulas[$entry_formula]-}" ]] &&
+            update_hint="(${outdated_formulas[$entry_formula]})"
+        rows+=("update_tool"$'\t'"$(printf '%-20s%s' 'Update' "$update_hint")")
     fi
 
     # Refresh, not gated on has_entry — rebuilding the cache doesn't
@@ -3509,7 +3536,8 @@ pick_more_action() {
 # Returns 1 if Esc was pressed with nothing left to do — the caller
 # just redraws whatever it was already showing. Returns 2 only when
 # has_entry is true and one of the entry-scoped rows (Hide/Favorite/
-# Categorize/Create Shortcut) was picked; MORE_MENU_FALLTHROUGH_ACTION
+# Categorize/Create Shortcut/Launch Flags/Run With Args/Update) was
+# picked; MORE_MENU_FALLTHROUGH_ACTION
 # holds which one, since only the caller has the entry context (the
 # selected command/formula) needed to actually run it. With
 # has_entry=false those rows are never offered in the first place, so
@@ -3521,12 +3549,12 @@ MORE_MENU_FALLTHROUGH_ACTION=""
 
 open_more_menu() {
 
-    local hide_label="$1" has_entry="$2" entry_name="$3"
+    local hide_label="$1" has_entry="$2" entry_name="$3" entry_formula="${4:-}"
     local chosen_action
 
     while true; do
 
-        chosen_action="$(pick_more_action "$hide_label" "$has_entry" "$entry_name")"
+        chosen_action="$(pick_more_action "$hide_label" "$has_entry" "$entry_name" "$entry_formula")"
 
         [[ -z "$chosen_action" ]] && return 1
 
@@ -5839,6 +5867,74 @@ EOF
 }
 
 # ------------------------------------------------------------
+# Update — Actions -> Update, for the highlighted entry. Same idea as
+# Update All just above, scoped to one formula instead of everything
+# outdated: `brew upgrade <formula>` through the same self-deleting-
+# wrapper/three-way launch-path trick (see update_all()'s own comment
+# for why — generalizing the three launch functions themselves to
+# accept a full command line would mean touching three carefully-
+# tuned, security-reviewed functions for these two callers).
+#
+# No confirmation prompt, unlike Update All: scoped to one formula
+# rather than everything outdated, this is a smaller, quicker action —
+# instant, same as Hide/Favorite, not something worth pausing on.
+# Already-up-to-date is a real, expected answer here (the row shows
+# regardless of status, same as every other Actions row), not an
+# error — just says so and does nothing, same shape as Update All's
+# own "nothing to update" case.
+# ------------------------------------------------------------
+
+update_tool() {
+
+    local command="$1" formula="$2"
+
+    if [[ -z "${outdated_formulas[$formula]-}" ]]; then
+        printf '\n'
+        printf '%s is already up to date.\n' "$command"
+        sleep 1
+        return 1
+    fi
+
+    local update_script
+    update_script="$(mktemp "$CACHE_DIR/update-tool.XXXXXX")" || return 1
+
+    cat > "$update_script" <<EOF
+#!/bin/zsh
+brew upgrade ${(q)formula}
+printf '\nDone — press F5 (or reopen) to refresh the list with the new version.\n'
+rm -f -- "\$0"
+EOF
+
+    chmod +x "$update_script"
+
+    if [[ "$TERMINAL" == "current" ]]; then
+
+        launch_in_current_terminal "$update_script"
+
+    elif [[ "$TERMINAL" == "ghostty" ]]; then
+
+        if ! launch_in_ghostty "$update_script"; then
+            printf '\n'
+            printf 'Unable to launch Update.\n'
+            printf 'Make sure Ghostty is installed and macOS allows\n'
+            printf 'brew-launcher to control Ghostty.\n'
+            rm -f "$update_script"
+            sleep 2
+        fi
+
+    elif [[ "$TERMINAL" == "tmux" ]]; then
+
+        if ! launch_in_tmux "$update_script"; then
+            printf '\n'
+            printf 'Unable to launch Update.\n'
+            rm -f "$update_script"
+            sleep 2
+        fi
+
+    fi
+}
+
+# ------------------------------------------------------------
 # Toggle an entry's Favorites membership
 #
 # Favorites is an ordinary category file (see load_category_names),
@@ -7461,15 +7557,24 @@ while true; do
     # the toggle-and-reopen loop for the settings rows — see its own
     # comment. It only ever returns here for two reasons: Esc with
     # nothing left to do (return 1), or one of the entry-scoped rows
-    # (Hide/Favorite/Categorize/Create Shortcut) that needs this
-    # screen's own $command/$formula to run (return 2) — so those four
-    # still fall through to their normal handler below exactly as
-    # before, and this block still has to sit above them.
+    # that needs this screen's own $command/$formula to run (return
+    # 2) — so those still fall through to their normal handler below
+    # exactly as before, and this block still has to sit above them.
+    #
+    # $formula isn't parsed from $selection until further down (see
+    # "Extract fields from the selected entry" below) — extracted
+    # here too, just for Update's own outdated_formulas[] lookup,
+    # since pick_more_action() needs it to build that row's hint
+    # before this screen's own parse ever runs.
     # --------------------------------------------------------
 
     if [[ "$action" == "f4" || "$action" == "alt-m" ]]; then
 
-        open_more_menu "$hide_label" true "${selection%%$'\t'*}"
+        local action_formula="${selection#*$'\t'}"
+        action_formula="${action_formula#*$'\t'}"
+        action_formula="${action_formula%%$'\t'*}"
+
+        open_more_menu "$hide_label" true "${selection%%$'\t'*}" "$action_formula"
         more_menu_status=$?
 
         if (( more_menu_status != 2 )); then
@@ -7681,6 +7786,20 @@ while true; do
             run_with_args "$command" "$command_path"
         fi
 
+        restore_position="$(find_entry_position "$command")"
+        continue
+    fi
+
+    # --------------------------------------------------------
+    # Update — Update All's own per-entry sibling. $formula is
+    # correct here regardless of whether it came fresh from this
+    # screen's own parse or the F4 handler's own early extraction
+    # above — both read the same field from the same $selection.
+    # --------------------------------------------------------
+
+    if [[ "$action" == "update_tool" ]]; then
+
+        update_tool "$command" "$formula"
         restore_position="$(find_entry_position "$command")"
         continue
     fi
