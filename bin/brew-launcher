@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.67.0"
+VERSION="0.68.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -524,7 +524,9 @@ Keyboard shortcuts:
             row and say so when several are marked. Enter with
             several marked launches them all together, one per tmux
             pane, the same way a preset does without having to name
-            and save one. Marks clear once an action runs.
+            and save one. Marks clear once an action runs. The footer
+            updates the instant something is marked — how many, and
+            that Enter now launches them together.
 
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Most Used, Recently Launched, Recently
@@ -892,6 +894,213 @@ if [[ "$1" == "--diagnose" ]]; then
         echo "No problems found."
         exit 0
     fi
+fi
+
+# ------------------------------------------------------------
+# Footer text, sized to the terminal.
+#
+# Moved up here (was much further down, right after the main list's
+# own functions) specifically so the live-marking footer handler below
+# can call it — that handler is invoked mid-keystroke, from inside a
+# still-running fzf session (see run_fzf()'s own tab/shift-tab binds),
+# and needs to run instantly the same way the footer/header click
+# handlers already do. zsh doesn't hoist function definitions — a
+# top-level call can only reach a function whose own "name() {" line
+# the interpreter has already passed on its top-to-bottom read of the
+# file (see test/function-order-fixtures.sh, which exists precisely to
+# catch this class of bug generally, not just re-verify this one spot).
+#
+# fzf truncates a footer that doesn't fit, and does it silently — a
+# beginner would just lose keys off the end with no sign anything was
+# cut. build_footer() tries progressively narrower renderings instead
+# of ever handing fzf something that might get chopped:
+#
+#   1. every item, with ⌥ aliases, widest gap   (needs ~102 cols)
+#   2. every item, F-keys only, widest gap      (needs ~87 cols)
+#   3. every item, F-keys only, narrowest gap   (needs ~79 cols)
+#
+# The ⌥ aliases go first since the F-keys alone already work without
+# the "Option as Meta" terminal setting — losing them costs nothing
+# a plain F-key press can't already do. No item is ever dropped
+# outright; (3) is the floor, so anything narrower than it is the one
+# case this still hands fzf a line that can get silently truncated —
+# just above the ~80-column terminal width this project otherwise
+# assumes as a baseline, so a plain 80-column terminal already sits in
+# that one gap; there's no narrower tier below it to fall back to.
+#
+# The border/padding overhead below is a real measured constant, not
+# an estimate — found after the [Actions] rename (3 characters
+# wider than the old [More]) pushed tier 1's line to exactly the old
+# budget's ceiling with zero margin, which turned out to still overflow
+# in practice: rendering it at every width from 96 to 106 columns found
+# the true cutover at 102, six wider than the string itself, not four.
+# ------------------------------------------------------------
+
+terminal_width() {
+
+    local width
+
+    # $COLUMNS is 0 in a non-interactive zsh, so ask the terminal.
+    width="$(stty size < /dev/tty 2>/dev/null | cut -d' ' -f2)"
+    [[ -z "$width" || "$width" == 0 ]] && width="$(tput cols 2>/dev/null)"
+    [[ -z "$width" || "$width" == 0 ]] && width=80
+
+    print -r -- "$width"
+}
+
+footer_key() {
+
+    # $1 = F-key, $2 = Option letter, $3 = 1 to include the ⌥ alias
+    if (( $3 )); then
+        printf '%s/⌥%s' "$1" "$2"
+    else
+        printf '%s' "$1"
+    fi
+}
+
+footer_actions() {
+
+    local with_alt="$1" gap="$2"
+    local -a parts=()
+
+    # First, ahead of Views/Details/Actions/Presets below — F1 reads
+    # first the same way it numbers first, rather than trailing behind
+    # the very keys it's there to explain. Previously last, deliberately:
+    # the reasoning then was that F1=help is close to universal
+    # knowledge, not worth spending prime footer space teaching, and
+    # least costly to lose if a narrow terminal truncates the string
+    # from the end. That protection was accidental, though, not a real
+    # priority mechanism — this footer has always been one plain
+    # string, truncated by fzf from wherever it runs out of room, so
+    # whatever's last pays that cost regardless of which item it is.
+    # Moving Help first means Presets is what a narrow terminal
+    # sacrifices now instead.
+    parts+=("$(footer_key F1 '?' $with_alt)  [Help]")
+
+    # Browsing/navigation, plus the one organizing action that's worth
+    # reaching for repeatedly rather than tucked away in [Actions] —
+    # Presets, since running one is a recurring thing, not a one-time
+    # setup step. Everything else still lives behind [Actions] — named
+    # that, not "More", specifically so it reads as "what can I do to
+    # the highlighted row" the way a GUI right-click menu would,
+    # rather than something vaguer like "more info" or "more results."
+    parts+=("$(footer_key F2 V $with_alt)  [Views]")
+    parts+=("$(footer_key F3 D $with_alt)  [Details]")
+    parts+=("$(footer_key F4 M $with_alt)  [Actions]")
+
+    # Refresh dropped from here. It's now Actions -> Refresh
+    # (see pick_more_action()); F5/⌥R still work as a direct keypress
+    # exactly as before, this only stops spending a permanent footer
+    # slot on something reached for far less often than the four above.
+
+    # Always shown, even without tmux — unlike Create Shortcut on an
+    # unsupported platform, this isn't a dead end: pressing it without
+    # tmux explains exactly what to install rather than failing
+    # silently, and hiding it entirely turned out to mean someone who
+    # never had tmux would never learn Presets exist at all. The
+    # Actions-menu row carries the "needs tmux" indicator; the footer
+    # stays terse like every other entry here.
+    parts+=("$(footer_key F9 P $with_alt)  [Presets]")
+
+    local separator="${(l:$gap:: :)}"
+    local out="" part
+
+    for part in "${parts[@]}"; do
+        [[ -n "$out" ]] && out+="$separator"
+        out+="$part"
+    done
+
+    printf '  %s' "$out"
+}
+
+build_footer() {
+
+    local esc_hint="$1"
+    local marked_count="${2:-0}"
+    local width=$(( $(terminal_width) - 6 ))   # border and padding — measured live, see comment above
+
+    # "Tab  Mark" sits with Navigate/Search rather than down among the
+    # bracketed [Actions]-style items, because it isn't an action —
+    # it's how you choose what the actions below will act on. Kept
+    # early in the line, ahead of the legend, so it survives the width
+    # degradation below: marking is invisible until someone knows the
+    # key exists, unlike every F-key, which the second footer line
+    # already advertises by name.
+    local nav="  ↑ ↓  Navigate    Type  Search    Tab  Mark    Enter  [Launch]    Esc  [$esc_hint]"
+    local legend="    +  Favorited    #  Categorized    *  Outdated"
+    local nav_short="  ↑ ↓  Navigate    Tab  Mark    Enter  [Launch]    Esc  [$esc_hint]"
+
+    # Raised live: marking a row used to give zero feedback beyond the
+    # small marker dot on the row itself — someone who marked one out
+    # of curiosity had no way to discover what happens next without
+    # already knowing to go check F4. Once anything is marked, this
+    # line says so directly and spells out the very next step, updated
+    # the instant Tab is pressed rather than waiting for fzf to hand
+    # control back — see run_fzf()'s own tab/shift-tab binds for how
+    # that works without this script regaining control first. The
+    # legend is dropped in favor of this: it's a static reference,
+    # less useful right at the moment something actionable is being
+    # said instead.
+    if (( marked_count > 0 )); then
+        nav="  ↑ ↓  Navigate    Tab  Mark/Unmark    Enter  [Launch $marked_count marked]    Esc  [$esc_hint]"
+        legend=""
+        nav_short="  ↑ ↓  Navigate    Tab  Mark/Unmark    Enter  [Launch $marked_count]    Esc  [$esc_hint]"
+    fi
+
+    # Compact View drops the +/#/* markers themselves (see
+    # build_entries()'s own comment) — explaining marks that no longer
+    # appear anywhere would just be confusing, not merely redundant.
+    local line1="$nav$legend"
+    [[ "$COMPACT_VIEW" == on ]] && line1="$nav"
+    (( ${#line1} > width )) && line1="$nav"
+    (( ${#line1} > width )) && line1="$nav_short"
+
+    # Tried in order; the last one stands if nothing fits, which is
+    # still better than letting fzf cut an item off mid-word. Fields
+    # are: ⌥ aliases, gap between items. Fits at 100 columns and up on
+    # the first attempt; see the comment above footer_actions() for
+    # the three widths this actually degrades through.
+    #
+    # The "1 4" (⌥-alias) rung is only tried at all when Alt Keybinds
+    # (Actions -> Alt Keybinds) is on. Before that toggle existed,
+    # whether an alias showed was decided purely by whether it
+    # happened to fit — never a real choice, and never consistent with
+    # F2/F9's own footer (see build_picker_footer()) not offering
+    # aliases at all. Off skips straight to the F-key-only rungs.
+    local -a attempts=("1 4" "0 4" "0 2")
+    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && attempts=("0 4" "0 2")
+
+    local line2 attempt
+    for attempt in "${attempts[@]}"; do
+        line2="$(footer_actions ${=attempt})"
+        (( ${#line2} <= width )) && break
+    done
+
+    printf '%s\n%s' "$line1" "$line2"
+}
+
+# ------------------------------------------------------------
+# Live-marking footer handler (internal use only)
+#
+# Invoked by run_fzf()'s own tab/shift-tab binds, chained onto fzf's
+# default toggle+down/toggle+up, as a fresh subprocess of this same
+# script — same technique as the footer/header click handlers right
+# below, and placed just as early for the same reason: this needs to
+# feel instant, mid-keystroke, not pay for a full launch's startup
+# cost. $FZF_SELECT_COUNT is fzf's own env var, exported into this
+# subprocess automatically, already updated to reflect the toggle that
+# just happened before this command ever runs.
+#
+# $1 is esc_hint, threaded through from the main loop the same way it
+# already reaches build_footer() there — needed here too since the
+# marked-state footer still ends in "Esc [Quit/Views/Close]" same as
+# the normal one.
+# ------------------------------------------------------------
+
+if [[ "$1" == "--internal-marked-footer" ]]; then
+
+    build_footer "$2" "${FZF_SELECT_COUNT:-0}"
+    exit 0
 fi
 
 # ------------------------------------------------------------
@@ -3554,7 +3763,9 @@ show_help_keys() {
     rows+=("  entry and say so. Marks show as ● and")
     rows+=("  clear once an action runs. Enter with several marked opens")
     rows+=("  them all together, one per tmux pane — a preset without")
-    rows+=("  having to name and save one.")
+    rows+=("  having to name and save one. The footer updates the")
+    rows+=("  instant something is marked, saying how many and what")
+    rows+=("  Enter now does.")
     rows+=("")
     rows+=("Markers — shown next to an entry, not things you press")
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
@@ -7713,160 +7924,6 @@ launch_preset() {
 # ------------------------------------------------------------
 
 # ------------------------------------------------------------
-# Footer text, sized to the terminal.
-#
-# fzf truncates a footer that doesn't fit, and does it silently — a
-# beginner would just lose keys off the end with no sign anything was
-# cut. build_footer() tries progressively narrower renderings instead
-# of ever handing fzf something that might get chopped:
-#
-#   1. every item, with ⌥ aliases, widest gap   (needs ~102 cols)
-#   2. every item, F-keys only, widest gap      (needs ~87 cols)
-#   3. every item, F-keys only, narrowest gap   (needs ~79 cols)
-#
-# The ⌥ aliases go first since the F-keys alone already work without
-# the "Option as Meta" terminal setting — losing them costs nothing
-# a plain F-key press can't already do. No item is ever dropped
-# outright; (3) is the floor, so anything narrower than it is the one
-# case this still hands fzf a line that can get silently truncated —
-# just above the ~80-column terminal width this project otherwise
-# assumes as a baseline, so a plain 80-column terminal already sits in
-# that one gap; there's no narrower tier below it to fall back to.
-#
-# The border/padding overhead below is a real measured constant, not
-# an estimate — found after the [Actions] rename (3 characters
-# wider than the old [More]) pushed tier 1's line to exactly the old
-# budget's ceiling with zero margin, which turned out to still overflow
-# in practice: rendering it at every width from 96 to 106 columns found
-# the true cutover at 102, six wider than the string itself, not four.
-# ------------------------------------------------------------
-
-terminal_width() {
-
-    local width
-
-    # $COLUMNS is 0 in a non-interactive zsh, so ask the terminal.
-    width="$(stty size < /dev/tty 2>/dev/null | cut -d' ' -f2)"
-    [[ -z "$width" || "$width" == 0 ]] && width="$(tput cols 2>/dev/null)"
-    [[ -z "$width" || "$width" == 0 ]] && width=80
-
-    print -r -- "$width"
-}
-
-footer_key() {
-
-    # $1 = F-key, $2 = Option letter, $3 = 1 to include the ⌥ alias
-    if (( $3 )); then
-        printf '%s/⌥%s' "$1" "$2"
-    else
-        printf '%s' "$1"
-    fi
-}
-
-footer_actions() {
-
-    local with_alt="$1" gap="$2"
-    local -a parts=()
-
-    # First, ahead of Views/Details/Actions/Presets below — F1 reads
-    # first the same way it numbers first, rather than trailing behind
-    # the very keys it's there to explain. Previously last, deliberately:
-    # the reasoning then was that F1=help is close to universal
-    # knowledge, not worth spending prime footer space teaching, and
-    # least costly to lose if a narrow terminal truncates the string
-    # from the end. That protection was accidental, though, not a real
-    # priority mechanism — this footer has always been one plain
-    # string, truncated by fzf from wherever it runs out of room, so
-    # whatever's last pays that cost regardless of which item it is.
-    # Moving Help first means Presets is what a narrow terminal
-    # sacrifices now instead.
-    parts+=("$(footer_key F1 '?' $with_alt)  [Help]")
-
-    # Browsing/navigation, plus the one organizing action that's worth
-    # reaching for repeatedly rather than tucked away in [Actions] —
-    # Presets, since running one is a recurring thing, not a one-time
-    # setup step. Everything else still lives behind [Actions] — named
-    # that, not "More", specifically so it reads as "what can I do to
-    # the highlighted row" the way a GUI right-click menu would,
-    # rather than something vaguer like "more info" or "more results."
-    parts+=("$(footer_key F2 V $with_alt)  [Views]")
-    parts+=("$(footer_key F3 D $with_alt)  [Details]")
-    parts+=("$(footer_key F4 M $with_alt)  [Actions]")
-
-    # Refresh dropped from here. It's now Actions -> Refresh
-    # (see pick_more_action()); F5/⌥R still work as a direct keypress
-    # exactly as before, this only stops spending a permanent footer
-    # slot on something reached for far less often than the four above.
-
-    # Always shown, even without tmux — unlike Create Shortcut on an
-    # unsupported platform, this isn't a dead end: pressing it without
-    # tmux explains exactly what to install rather than failing
-    # silently, and hiding it entirely turned out to mean someone who
-    # never had tmux would never learn Presets exist at all. The
-    # Actions-menu row carries the "needs tmux" indicator; the footer
-    # stays terse like every other entry here.
-    parts+=("$(footer_key F9 P $with_alt)  [Presets]")
-
-    local separator="${(l:$gap:: :)}"
-    local out="" part
-
-    for part in "${parts[@]}"; do
-        [[ -n "$out" ]] && out+="$separator"
-        out+="$part"
-    done
-
-    printf '  %s' "$out"
-}
-
-build_footer() {
-
-    local esc_hint="$1"
-    local width=$(( $(terminal_width) - 6 ))   # border and padding — measured live, see comment above
-
-    # "Tab  Mark" sits with Navigate/Search rather than down among the
-    # bracketed [Actions]-style items, because it isn't an action —
-    # it's how you choose what the actions below will act on. Kept
-    # early in the line, ahead of the legend, so it survives the width
-    # degradation below: marking is invisible until someone knows the
-    # key exists, unlike every F-key, which the second footer line
-    # already advertises by name.
-    local nav="  ↑ ↓  Navigate    Type  Search    Tab  Mark    Enter  [Launch]    Esc  [$esc_hint]"
-    local legend="    +  Favorited    #  Categorized    *  Outdated"
-    local nav_short="  ↑ ↓  Navigate    Tab  Mark    Enter  [Launch]    Esc  [$esc_hint]"
-
-    # Compact View drops the +/#/* markers themselves (see
-    # build_entries()'s own comment) — explaining marks that no longer
-    # appear anywhere would just be confusing, not merely redundant.
-    local line1="$nav$legend"
-    [[ "$COMPACT_VIEW" == on ]] && line1="$nav"
-    (( ${#line1} > width )) && line1="$nav"
-    (( ${#line1} > width )) && line1="$nav_short"
-
-    # Tried in order; the last one stands if nothing fits, which is
-    # still better than letting fzf cut an item off mid-word. Fields
-    # are: ⌥ aliases, gap between items. Fits at 100 columns and up on
-    # the first attempt; see the comment above footer_actions() for
-    # the three widths this actually degrades through.
-    #
-    # The "1 4" (⌥-alias) rung is only tried at all when Alt Keybinds
-    # (Actions -> Alt Keybinds) is on. Before that toggle existed,
-    # whether an alias showed was decided purely by whether it
-    # happened to fit — never a real choice, and never consistent with
-    # F2/F9's own footer (see build_picker_footer()) not offering
-    # aliases at all. Off skips straight to the F-key-only rungs.
-    local -a attempts=("1 4" "0 4" "0 2")
-    [[ "$CONFIG_ALT_KEYBINDS" == off ]] && attempts=("0 4" "0 2")
-
-    local line2 attempt
-    for attempt in "${attempts[@]}"; do
-        line2="$(footer_actions ${=attempt})"
-        (( ${#line2} <= width )) && break
-    done
-
-    printf '%s\n%s' "$line1" "$line2"
-}
-
-# ------------------------------------------------------------
 # Same two-line, width-aware idea as build_footer()/footer_actions()
 # above, generalized for the F2 and F9 pickers' own footers.
 # Both had grown past what a single static
@@ -7978,6 +8035,7 @@ run_fzf() {
     local footer="$2"
     local expected_keys="$3"
     local initial_position="$4"
+    local esc_hint="$5"
 
     local options=(
         --height=100%
@@ -8005,6 +8063,21 @@ run_fzf() {
         # expected, so the single-entry path is byte-for-byte what it
         # always was.
         --multi
+
+        # Explicit tab/shift-tab binds below replicate fzf's own
+        # defaults for --multi (toggle+down / toggle+up — confirmed in
+        # its own man page) and chain a live footer update onto them.
+        # Raised live: marking used to give no feedback until fzf
+        # handed control back to this script, which for marking
+        # specifically doesn't happen until Enter/Esc/an F-key —
+        # someone marking several rows in one sitting would see
+        # nothing change the whole time. transform-footer runs
+        # instantly, inside the still-open fzf session, using fzf's
+        # own $FZF_SELECT_COUNT (always current the moment this fires,
+        # already reflecting the toggle that just happened) — see
+        # --internal-marked-footer above for what it actually prints.
+        --bind "tab:toggle+down+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
+        --bind "shift-tab:toggle+up+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
 
         --header="$FZF_HEADER"
         --footer="$footer"
@@ -8162,7 +8235,8 @@ while true; do
             "$border_label" \
             "$(build_footer "$esc_hint")" \
             'enter,f1,f2,f3,f4,f5,f6,f7,f8,f9,alt-h,alt-v,alt-p,alt-r,alt-f,alt-c,alt-d,alt-m,alt-?,esc' \
-            "$restore_position"
+            "$restore_position" \
+            "$esc_hint"
     )"
 
     # Only applies to the run_fzf call just made — actions below that
