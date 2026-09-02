@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.65.0"
+VERSION="0.66.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -415,15 +415,21 @@ Presets:
   connected — a multi-pane preset earns its own window rather than
   swallowing whatever's already open, whenever there's somewhere to
   put one. Either way, quitting/detaching brings the launcher back
-  rather than leaving a dead pane or a bare shell behind:
+  rather than leaving a dead pane or a bare shell behind, except for
+  an ad-hoc Tab-and-Enter launch's own window (see below):
     - Local Mac with Ghostty: opens a brand new Ghostty window (not a
       tab) attached to the session. The launcher you ran it from
-      keeps running untouched; closing that window later relaunches
-      the launcher right there.
+      keeps running untouched. For a saved preset, closing that window
+      later relaunches the launcher right there, ready to reattach via
+      F9. For a one-off Tab-and-Enter launch (no saved preset), there's
+      no F9 entry to come back to, so detaching instead closes the
+      window and ends the session — same as quitting a single tool.
     - Over SSH (or no Ghostty), already inside a tmux session: your
       client switches to the preset's session. Detaching (prefix+d)
       later, or the preset ending, relaunches the launcher in the
-      window you switched from.
+      window you switched from — for both a saved preset and a
+      one-off, since this reuses that same window rather than opening
+      a separate one.
     - Over SSH (or no Ghostty), not inside tmux: takes over the
       current window — there's no other screen to put it in. Says so
       first. Detaching or the preset ending relaunches the launcher
@@ -1668,6 +1674,25 @@ preset_show_session() {
 
     local session="$1"
 
+    # Only relevant to the Ghostty branch immediately below: a real,
+    # named preset is meant to persist and be reattachable later via
+    # F9, so relaunching the picker into that new window on detach is
+    # the deliberate payoff for detaching rather than quitting. An
+    # ad-hoc "Selection" session (mark rows, hit Enter) has no F9 entry
+    # to come back to — raised live: detaching from one left its
+    # session running invisibly in the background with no discoverable
+    # way back, plus a second live picker in the new window that's
+    # exactly the kind of redundant-instance clutter already fixed for
+    # single-tool Ghostty launches. Detaching from an ad-hoc session
+    # now kills it and lets the window close itself instead.
+    #
+    # The two paths below this one (already inside $TMUX; not in tmux
+    # at all) don't get this treatment — neither ever opens a separate
+    # window to begin with, so relaunching back into the same one is
+    # already non-redundant for both named and ad-hoc alike, exactly
+    # like launch_in_current_terminal()'s own precedent.
+    local adhoc="${2:-false}"
+
     if ! is_ssh_session &&
        [[ "$(uname -s)" == "Darwin" ]] &&
        command -v osascript >/dev/null 2>&1 &&
@@ -1697,16 +1722,29 @@ preset_show_session() {
         # getting back a terminal that's synchronously guaranteed to
         # belong to the window just created — no window-server focus
         # race, no delay needed.
-        if osascript - "$session" "$SCRIPT_PATH" <<'APPLESCRIPT' >/dev/null 2>&1
+        if osascript - "$session" "$SCRIPT_PATH" "$adhoc" <<'APPLESCRIPT' >/dev/null 2>&1
 on run argv
     set sessionName to item 1 of argv
     set launcherPath to item 2 of argv
+    set isAdhoc to item 3 of argv
     tell application "Ghostty"
         activate
         set newWindow to new window
         set newTab to selected tab of newWindow
         set newTerminal to focused terminal of newTab
-        input text ("exec zsh -c 'tmux attach-session -t \"$1\" && exec \"$2\"' -- " & quoted form of sessionName & " " & quoted form of launcherPath) to newTerminal
+        if isAdhoc is "true" then
+            -- No "&& exec launcherPath": there's nothing to return
+            -- to in this window once you detach — the picker you
+            -- marked these from is still running, untouched, in
+            -- whichever window you started from. Killing the session
+            -- here (rather than leaving it alive with no way back to
+            -- it) and then simply not execing into anything else lets
+            -- this window close itself on its own, the exact same way
+            -- a plain tool launch already does.
+            input text ("exec zsh -c 'tmux attach-session -t \"$1\"; tmux kill-session -t \"$1\" 2>/dev/null' -- " & quoted form of sessionName) to newTerminal
+        else
+            input text ("exec zsh -c 'tmux attach-session -t \"$1\" && exec \"$2\"' -- " & quoted form of sessionName & " " & quoted form of launcherPath) to newTerminal
+        end if
         send key "enter" to newTerminal
     end tell
 end run
@@ -1927,7 +1965,7 @@ run_preset() {
         preset_stored_hash="${preset_stored_hash#BL_PRESET_HASH=}"
 
         if [[ "$preset_stored_hash" == "$preset_hash" ]]; then
-            preset_show_session "$preset_session"
+            preset_show_session "$preset_session" "$preset_adhoc"
             return 0
         fi
 
@@ -2074,7 +2112,7 @@ run_preset() {
         sleep 2
     fi
 
-    preset_show_session "$preset_session"
+    preset_show_session "$preset_session" "$preset_adhoc"
     return 0
 }
 

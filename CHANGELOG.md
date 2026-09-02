@@ -5,6 +5,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.66.0] — 2026-09-02
+
+### Changed
+
+- **Detaching from an ad-hoc Tab-and-Enter launch (mark rows on the main
+  list, no saved preset involved) now closes its Ghostty window and ends the
+  session, instead of relaunching a second picker there.** A saved preset
+  keeps relaunching the picker into its new window on detach — that's the
+  deliberate payoff for detaching rather than quitting, since the session
+  stays reattachable later via F9. A one-off launch has no F9 entry to come
+  back to, so the same relaunch just left its session running invisibly in
+  the background with no way back to it, plus a second live picker in the
+  new window — exactly the redundant-instance clutter already fixed for
+  single-tool Ghostty launches. Detaching now behaves the same way quitting
+  a single tool already does: the window closes, nothing lingers.
+
 ## [0.65.0] — 2026-09-02
 
 ### Fixed
