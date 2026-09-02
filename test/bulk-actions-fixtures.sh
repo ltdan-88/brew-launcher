@@ -213,12 +213,73 @@ done
 
 bulk_favorite_block="$(sed -n '/^bulk_favorite() {/,/^}/p' "$LAUNCHER")"
 [[ -n "$bulk_favorite_block" ]] || fail "bulk_favorite() not found"
-[[ "$bulk_favorite_block" == *'CURRENT_VIEW" == "Favorites"'* ]] ||
-    fail "bulk_favorite should still decide its direction from CURRENT_VIEW"
+[[ "$bulk_favorite_block" != *'CURRENT_VIEW" == "Favorites"'* ]] ||
+    fail "bulk_favorite should no longer decide its direction from CURRENT_VIEW — see the real-execution check below for why"
 [[ "$bulk_favorite_block" == *'add_to_favorites'* ]] ||
-    fail "bulk_favorite should add via add_to_favorites (ensure-added), not a toggle, outside the Favorites view"
+    fail "bulk_favorite should add via add_to_favorites (ensure-added) when the batch isn't already all favorited"
 [[ "$bulk_favorite_block" == *'toggle_favorite'* ]] ||
-    fail "bulk_favorite should remove via toggle_favorite while viewing Favorites (every marked entry is already a member there)"
+    fail "bulk_favorite should remove via toggle_favorite when the whole marked batch is already favorited"
+
+# Raised live: marking already-favorited entries from "All" (favoriting,
+# unlike hiding, never filters a row out of other views — a favorited
+# entry stays visible everywhere) and pressing F7 kept re-adding them, a
+# silent no-op, with no way to unfavorite except from the Favorites view
+# itself. The old check ([[ "$CURRENT_VIEW" == "Favorites" ]]) was never
+# wrong there — the Hidden equivalent still is, since a hidden entry
+# really is only ever visible/markable from the Hidden view — it was
+# just incomplete. The fix decides direction from whether the marked
+# batch is *already* all favorited instead, checked for real below
+# (not just source text) since this is a genuine logic bug, not a
+# wiring one: add_to_favorites/toggle_favorite/the three refresh calls
+# at the end are stubbed to record what they're called with, so this
+# runs bulk_favorite() itself rather than reimplementing its decision.
+typeset -A favorite_commands
+recorded_calls=()
+
+add_to_favorites() { recorded_calls+=("add:$1"); }
+toggle_favorite() { recorded_calls+=("toggle:$1"); }
+refresh_category_state() { :; }
+load_favorite_commands() { :; }
+load_category_members() { :; }
+build_entries() { :; }
+
+source <(sed -n '/^bulk_favorite() {/,/^}/p' "$LAUNCHER")
+
+# Whole batch already favorited, marked from "All" (not the Favorites
+# view) — the exact regression: should unfavorite both, not re-add.
+favorite_commands=([tool-a]=1 [tool-b]=1)
+CURRENT_VIEW="All"
+recorded_calls=()
+bulk_favorite tool-a tool-b
+
+[[ "${recorded_calls[*]}" == *"toggle:tool-a"* ]] ||
+    fail "bulk_favorite should unfavorite an already-favorited marked entry even from a non-Favorites view, got: ${recorded_calls[*]}"
+[[ "${recorded_calls[*]}" == *"toggle:tool-b"* ]] ||
+    fail "bulk_favorite should unfavorite every already-favorited marked entry, got: ${recorded_calls[*]}"
+[[ "${recorded_calls[*]}" != *"add:"* ]] ||
+    fail "bulk_favorite should not re-add anything when the whole batch is already favorited, got: ${recorded_calls[*]}"
+
+# Mixed batch (one already favorited, one not) from "All" — should
+# still ensure-add both, unaffected by the fix above.
+favorite_commands=([tool-a]=1)
+CURRENT_VIEW="All"
+recorded_calls=()
+bulk_favorite tool-a tool-b
+
+[[ "${recorded_calls[*]}" == *"add:tool-a"* && "${recorded_calls[*]}" == *"add:tool-b"* ]] ||
+    fail "bulk_favorite should ensure-add a mixed batch (not all already favorited), got: ${recorded_calls[*]}"
+[[ "${recorded_calls[*]}" != *"toggle:"* ]] ||
+    fail "bulk_favorite should not toggle anything for a mixed batch, got: ${recorded_calls[*]}"
+
+# Whole batch already favorited, marked from the Favorites view itself
+# — the pre-existing case, unaffected by the fix.
+favorite_commands=([tool-a]=1 [tool-b]=1)
+CURRENT_VIEW="Favorites"
+recorded_calls=()
+bulk_favorite tool-a tool-b
+
+[[ "${recorded_calls[*]}" == *"toggle:tool-a"* && "${recorded_calls[*]}" == *"toggle:tool-b"* ]] ||
+    fail "bulk_favorite should still unfavorite correctly from the Favorites view itself, got: ${recorded_calls[*]}"
 
 # ------------------------------------------------------------
 # 10. Wiring: all three bulk rows (plus Create Preset) are gated on
