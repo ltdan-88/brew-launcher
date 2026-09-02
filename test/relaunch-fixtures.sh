@@ -48,10 +48,15 @@
 # a source-text check alone could prove.
 #
 # launch_in_ghostty() and preset_show_session() also both get checked
-# for a `delay 0.3` positioned right after creating a new Ghostty
-# window/tab and before asking it for its "focused terminal" — a guard
-# against a silent focus race raised live (see section 3 below), same
-# dependency limitation as above.
+# for going through a window's "selected tab" before asking for
+# "focused terminal", rather than asking a window for that property
+# directly — Ghostty's own scripting dictionary source (checked
+# directly: macos/Ghostty.sdef) never gives `window` a "focused
+# terminal" property at all, only `tab` does, so asking a window for it
+# was quietly resolving through some undefined fallback instead of a
+# real, window-scoped lookup (see section 3 below). Same dependency
+# limitation as above: source-text only, no real Ghostty.app on the
+# runner.
 
 set -u
 
@@ -333,35 +338,46 @@ osascript_call="$(printf '%s\n' "$ghostty_block" | grep -m1 'osascript -')"
     fail "launch_in_ghostty should call osascript with just \$command_path now, got: $osascript_call"
 
 # ------------------------------------------------------------
-# 3. The just-created-window focus race: raised live — marking several
-#    TUIs and hitting Enter could open a genuinely new Ghostty window
-#    with nothing but a bare shell in it, while the actual session
-#    ended up attached in a tab on the already-open launcher window
-#    instead. Not a caught AppleScript error (ruled out live — no
-#    "Could not open a new Ghostty window" fallback message appeared,
-#    meaning osascript itself reported success) and not the system-wide
-#    "prefer tabs" preference (also ruled out live). What's left is a
-#    silent one: "focused terminal of newWindow"/"newTab" isn't
-#    guaranteed to mean the window/tab just created — without a beat
-#    for window-server focus to catch up, it can resolve to whatever
-#    already held focus, so the command meant for the new window lands
-#    in the old one instead. `delay 0.3` immediately after creation, and
-#    before that "focused terminal" line asks anything, is the fix; this
-#    checks it's actually positioned there (not just present somewhere
-#    in the block, which wouldn't prove it's guarding the right line) in
-#    both launch_in_ghostty()'s branches and preset_show_session()'s
-#    single one. None of this can be proven behaviorally without a real
-#    Ghostty.app on the runner, so it's a source-text position check,
-#    same as the rest of this section.
+# 3. The window-vs-tab "focused terminal" bug: raised live — marking
+#    several TUIs and hitting Enter could open a genuinely new Ghostty
+#    window with nothing but a bare shell in it, while the actual
+#    session ended up attached in a tab on the already-open launcher
+#    window instead. Not a caught AppleScript error (ruled out live —
+#    no "Could not open a new Ghostty window" fallback message
+#    appeared, meaning osascript itself reported success) and not the
+#    system-wide "prefer tabs" preference (also ruled out live). A first
+#    attempt added a `delay 0.3` on the theory that window-server focus
+#    just hadn't caught up yet — that didn't fix it, and changed the
+#    symptom (the fallback message started firing), which is what
+#    prompted actually reading Ghostty's own scripting dictionary
+#    source (macos/Ghostty.sdef) instead of guessing further.
+#
+#    That source settles it: `window` never has a "focused terminal"
+#    property at all — only `tab` does. `focused terminal of newWindow`
+#    was never a real, window-scoped lookup; it was quietly resolving
+#    through some undefined fallback the whole time; no delay could
+#    have fixed a wrong property path. The fix goes through the
+#    window's own "selected tab" first (a freshly created window always
+#    has exactly one, so this is never ambiguous) before asking that
+#    tab for its "focused terminal", which really does exist on `tab`
+#    and is guaranteed synchronous — checked directly in the app's
+#    Swift source too (ScriptWindow.selectedTab / ScriptTab.
+#    focusedTerminal), neither depends on anything that needs time to
+#    settle. launch_in_ghostty()'s new-tab branch never had this bug —
+#    "new tab" already returns a `tab` object directly — so it's
+#    checked here too, as a control, to confirm nothing changed there.
+#    None of this can be proven behaviorally without a real Ghostty.app
+#    on the runner, so it's a source-text position check, same as the
+#    rest of this section.
 # ------------------------------------------------------------
 
-[[ "$(printf '%s\n' "$ghostty_block" | grep -A1 'set newWindow to new window' | tail -1 | tr -d '[:space:]')" == "delay0.3" ]] ||
-    fail "launch_in_ghostty's new-window branch should delay right after creating the window and before asking for its focused terminal"
-[[ "$(printf '%s\n' "$ghostty_block" | grep -A1 'set newTab to new tab in front window' | tail -1 | tr -d '[:space:]')" == "delay0.3" ]] ||
-    fail "launch_in_ghostty's new-tab branch should delay right after creating the tab and before asking for its focused terminal"
+[[ "$(printf '%s\n' "$ghostty_block" | grep -A1 'set newWindow to new window' | tail -1 | tr -d '[:space:]')" == "setnewTabtoselectedtabofnewWindow" ]] ||
+    fail "launch_in_ghostty's new-window branch should go through the window's own selected tab before asking for a focused terminal, since window has no such property of its own"
+[[ "$(printf '%s\n' "$ghostty_block" | grep -A1 'set newTab to new tab in front window' | tail -1 | tr -d '[:space:]')" == "setnewTerminaltofocusedterminalofnewTab" ]] ||
+    fail "launch_in_ghostty's new-tab branch should still ask its (already correctly typed) tab directly for a focused terminal, unchanged"
 
 preset_show_block="$(sed -n '/^preset_show_session() {/,/^}/p' "$LAUNCHER")"
-[[ "$(printf '%s\n' "$preset_show_block" | grep -A1 'set newWindow to new window' | tail -1 | tr -d '[:space:]')" == "delay0.3" ]] ||
-    fail "preset_show_session's Ghostty path should delay right after creating the window and before asking for its focused terminal"
+[[ "$(printf '%s\n' "$preset_show_block" | grep -A1 'set newWindow to new window' | tail -1 | tr -d '[:space:]')" == "setnewTabtoselectedtabofnewWindow" ]] ||
+    fail "preset_show_session's Ghostty path should go through the window's own selected tab before asking for a focused terminal, since window has no such property of its own"
 
-printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both let the window/tab close on its own after a keypress pause, instead of relaunching into it or falling back to a plain shell that would need a manual exit; both launch_in_ghostty() and preset_show_session() give a newly created Ghostty window/tab a beat before asking it for its focused terminal, guarding against a silent focus race\n'
+printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both let the window/tab close on its own after a keypress pause, instead of relaunching into it or falling back to a plain shell that would need a manual exit; launch_in_ghostty() and preset_show_session() both reach a newly created window'\''s terminal through its selected tab rather than a nonexistent "focused terminal of window" property\n'
