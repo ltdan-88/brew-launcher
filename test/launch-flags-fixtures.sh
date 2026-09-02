@@ -278,7 +278,85 @@ has_entry_block="$(printf '%s\n' "$more_action_block" | sed -n '/if \[\[ "\$has_
     fail "the Launch Flags row should show the current flags (keyed by entry_name, the real command) as its hint"
 
 full_source="$(cat "$LAUNCHER")"
-[[ "$full_source" == *'"$action" == "launch_flags"'* && "$full_source" == *'pick_launch_flags "$command"'* ]] ||
-    fail "the main loop should dispatch the launch_flags fallthrough action to pick_launch_flags with the real command"
+[[ "$full_source" == *'"$MORE_MENU_FALLTHROUGH_ACTION" == "launch_flags"'* ]] ||
+    fail "the F4 block's own loop should dispatch the launch_flags fallthrough action, not a plain \$action check further down"
+[[ "$full_source" == *'pick_launch_flags "${selection%%$'"'"'\t'"'"'*}"'* ]] ||
+    fail "launch_flags should be dispatched to pick_launch_flags with the real (freshly re-derived) command"
 
-printf 'PASS: resolve_launch_path() passes an unflagged command through unchanged and, when flags are configured, returns a self-deleting wrapper that actually runs the target with them; set_launch_flags() adds/updates/clears correctly (both on disk and in the in-memory table); a real --preset run actually launches a configured member with its flags applied; pick_launch_flags() correctly distinguishes Esc from an empty-but-confirmed answer; and Actions/the main loop wire it end to end\n'
+# ------------------------------------------------------------
+# 7. Raised live: Esc from Launch Flags used to skip straight past
+#    Actions to the main list, even though Actions is the only way to
+#    reach Launch Flags at all (no direct key of its own). Moved
+#    inside the F4 block's own loop specifically so a "no" answer
+#    (Esc, or an unchanged value) loops back to Actions instead of
+#    falling through — checked as source text (the loop structure
+#    itself), and confirmed for real below via a live tmux session,
+#    since this is exactly the kind of thing a source-text check alone
+#    could describe correctly while the real key wiring is still wrong.
+# ------------------------------------------------------------
+
+f4_block="$(sed -n '/if \[\[ "\$action" == "f4" || "\$action" == "alt-m" \]\]; then/,/^    fi$/p' "$LAUNCHER")"
+launch_flags_branch="$(printf '%s\n' "$f4_block" | sed -n '/MORE_MENU_FALLTHROUGH_ACTION" == "launch_flags"/,/elif/p')"
+
+[[ "$launch_flags_branch" == *'! pick_launch_flags'*$'\n'*'continue'* ]] ||
+    fail "a 'no' from pick_launch_flags should loop back to Actions (continue, the inner loop) rather than fall through"
+[[ "$launch_flags_branch" == *'continue 2'* ]] ||
+    fail "a real save from pick_launch_flags should still return to the main list (continue 2, the outer loop)"
+
+if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
+
+    LF_HOME="$TEST_HOME/lf-live"
+    mkdir -p "$LF_HOME"
+
+    LF_SESSION="blf-launch-flags-esc-$$"
+    tmux kill-session -t "$LF_SESSION" 2>/dev/null
+
+    tmux new-session -d -s "$LF_SESSION" -x 100 -y 30 "HOME='$LF_HOME' zsh '$LAUNCHER'"
+
+    lf_ready=false
+    for _ in {1..30}; do
+        tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Tab  Mark" && { lf_ready=true; break; }
+        sleep 0.5
+    done
+
+    if [[ "$lf_ready" == true ]]; then
+
+        tmux send-keys -t "$LF_SESSION" F4
+        for _ in {1..20}; do
+            tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Actions on" && break
+            sleep 0.3
+        done
+
+        # "Flags" alone, not "Launch Flags" — Actions binds space to
+        # accept (space:accept), so a query containing a literal space
+        # accepts whatever's highlighted the instant the space is
+        # typed rather than continuing to filter. "Flags" alone
+        # matches only this one row.
+        tmux send-keys -t "$LF_SESSION" -l "Flags"
+        sleep 0.4
+        tmux send-keys -t "$LF_SESSION" Enter
+        for _ in {1..20}; do
+            tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Launch flags —" && break
+            sleep 0.3
+        done
+        tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Launch flags —" ||
+            fail "expected to reach the Launch flags prompt via F4 -> Launch Flags"
+
+        tmux send-keys -t "$LF_SESSION" Escape
+        for _ in {1..20}; do
+            tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Actions on" && break
+            sleep 0.3
+        done
+
+        tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Actions on" ||
+            fail "Esc from Launch Flags should return to Actions, not the main list"
+
+        tmux kill-session -t "$LF_SESSION" 2>/dev/null
+    else
+        printf 'SKIP: launcher never became interactive, skipping the live Esc check\n' >&2
+    fi
+else
+    printf 'SKIP: tmux or fzf not available, skipping the live Esc check\n' >&2
+fi
+
+printf 'PASS: resolve_launch_path() passes an unflagged command through unchanged and, when flags are configured, returns a self-deleting wrapper that actually runs the target with them; set_launch_flags() adds/updates/clears correctly (both on disk and in the in-memory table); a real --preset run actually launches a configured member with its flags applied; pick_launch_flags() correctly distinguishes Esc from an empty-but-confirmed answer; Actions/the main loop wire it end to end; and Esc from Launch Flags returns to Actions rather than skipping past it to the main list\n'
