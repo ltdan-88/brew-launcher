@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.70.0] — 2026-09-02
+
+### Fixed
+
+- **Marking several already-favorited tools from "All" (or a category) and
+  pressing F7 silently did nothing, with no way to unfavorite them except
+  from the Favorites view itself.** Favoriting, unlike hiding, doesn't
+  filter a row out of other views — a favorited entry stays visible
+  everywhere — so deciding the batch direction by which view you were
+  looking at only worked from the Favorites view; from anywhere else it
+  always re-added (a no-op on an already-favorited entry) and never
+  removed. Direction is now decided by whether the marked batch is
+  already all favorited instead, which works correctly from any view.
+
 ## [0.69.0] — 2026-09-02
 
 ### Changed
