@@ -513,9 +513,11 @@ Keyboard shortcuts:
             Shown in the footer too, first — Presets is what a narrow
             terminal drops first now instead.
 
-  Tab       Mark or unmark the highlighted row. Every action below
-            then acts on everything marked, or on the highlighted
-            row alone when nothing is — so a batch is the same key
+  Tab       Mark or unmark the highlighted row (right-click, or
+            Control-click on a Mac trackpad, does the same thing
+            with a mouse). Every action below then acts on
+            everything marked, or on the highlighted row alone when
+            nothing is — so a batch is the same key
             as a single entry, just with marks set first. Update
             upgrades every marked formula in one brew run, and
             Create Shortcut makes one shortcut per marked entry.
@@ -3896,10 +3898,12 @@ show_help_mouse_and_notes() {
 
     rows+=("Mouse")
     rows+=("  Click a row to select, double-click to launch")
+    rows+=("  Right-click marks a row, same as Tab (Control-click on a")
+    rows+=("  Mac trackpad works too — the traditional right-click there)")
     rows+=("  Click a [bracketed] footer word to run its action")
     rows+=("  Click NAME or SIZE in the main list's own column header to")
     rows+=("  sort by it — click the same one again to reverse direction")
-    rows+=("  Marked rows (Tab) show a ● beside them")
+    rows+=("  Marked rows show a ● beside them")
     rows+=("")
     rows+=("Good to know")
     rows+=("  A just-installed tool can take up to 60s to appear;")
