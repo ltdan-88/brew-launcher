@@ -304,4 +304,56 @@ notmux_output="$(<"$TEST_HOME/notmux-output.txt")"
 
 tmux kill-session -t "$NOTMUX_SESSION" 2>/dev/null
 
-printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there, launching a preset outside tmux warns before taking over the window and fails fast rather than hanging when there is no real terminal to relaunch into\n'
+# ------------------------------------------------------------
+# 9. Detaching from the Ghostty branch's window: raised live — a real,
+#    named preset relaunches the picker into its new window on detach
+#    on purpose (the payoff for detaching rather than quitting: the
+#    session stays alive, reattachable later via F9, and you get the
+#    picker back to do something else meanwhile in that same window).
+#    An ad-hoc "Selection" session (mark rows, hit Enter) has no F9
+#    entry to come back to, so the same relaunch just left it running
+#    invisibly in the background with no way back to it, plus a second
+#    live picker in the new window — exactly the redundant-instance
+#    clutter already fixed for single-tool Ghostty launches. Detaching
+#    from an ad-hoc session should instead kill it and let the window
+#    close on its own, same as a plain tool launch.
+#
+#    Can't drive the Ghostty branch itself without a real Ghostty.app
+#    (is_ssh_session forces it off for the section above, on purpose),
+#    so this checks run_preset() passes its adhoc-ness through to both
+#    of its preset_show_session() call sites, and that the AppleScript
+#    source text's two branches do the right thing: the named branch
+#    still relaunches unchanged; the ad-hoc branch kills the session
+#    and does NOT reference launcherPath/exec into it at all.
+# ------------------------------------------------------------
+
+run_preset_body="$(sed -n '/^run_preset() {/,/^}/p' "$LAUNCHER")"
+run_preset_calls="$(printf '%s\n' "$run_preset_body" | grep 'preset_show_session "\$preset_session"')"
+
+[[ "$(printf '%s\n' "$run_preset_calls" | wc -l | tr -d ' ')" == "2" ]] ||
+    fail "expected exactly 2 preset_show_session call sites in run_preset(), got: $run_preset_calls"
+
+while IFS= read -r call_line; do
+    [[ "$call_line" == *'"$preset_adhoc"'* ]] ||
+        fail "run_preset() should pass \$preset_adhoc through to preset_show_session(), got: $call_line"
+done <<< "$run_preset_calls"
+
+preset_show_body="$(sed -n '/^preset_show_session() {/,/^}/p' "$LAUNCHER")"
+# Comments stripped first — one of them explains the ad-hoc branch in
+# prose that itself contains the word "else", which would otherwise
+# fool a plain-text search for the AppleScript "else" keyword below.
+preset_show_code="$(printf '%s\n' "$preset_show_body" | grep -v '^[[:space:]]*--')"
+adhoc_branch="$(printf '%s\n' "$preset_show_code" | awk '/if isAdhoc is "true" then/,/else/')"
+named_branch="$(printf '%s\n' "$preset_show_code" | awk '/^        else$/,/end if/')"
+
+[[ "$adhoc_branch" == *'tmux kill-session -t \"$1\"'* ]] ||
+    fail "the ad-hoc Ghostty branch should kill its own session once attach-session returns, instead of leaving it running with no way back to it"
+[[ "$adhoc_branch" != *'launcherPath'* ]] ||
+    fail "the ad-hoc Ghostty branch should not reference launcherPath at all — there's nothing to relaunch into, the window should just close"
+[[ "$adhoc_branch" != *'exec \"$2\"'* ]] ||
+    fail "the ad-hoc Ghostty branch should not exec back into the launcher — that would recreate the exact redundant-instance problem this exists to fix"
+
+[[ "$named_branch" == *'&& exec \"$2\"'* ]] ||
+    fail "a real named preset should still relaunch the picker into its new window on detach, unchanged — that persistence is the point of a named, F9-reattachable preset"
+
+printf 'PASS: missing name / unknown preset / no-commands preset all rejected, tmux session gets the right pane count even well past the old ~4-pane ceiling, re-invoking reattaches instead of duplicating, mouse mode and the status bar are forced on, editing a running preset rebuilds instead of staying stale, a tool that dies mid-alternate-screen does not leave the pane stuck there, launching a preset outside tmux warns before taking over the window and fails fast rather than hanging when there is no real terminal to relaunch into, and detaching from an ad-hoc Ghostty-window session kills it and lets the window close instead of relaunching a redundant second picker\n'

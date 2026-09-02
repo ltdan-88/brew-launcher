@@ -174,7 +174,9 @@ A preset is a named group of tools that all open together, one per tmux pane
 
 For a one-off, you don't need a preset at all: mark a few tools with **Tab**
 and press **Enter**, and they open together the same way. Presets are for a
-grouping worth keeping; marking is for right now.
+grouping worth keeping; marking is for right now — detaching (`prefix+d`)
+from a one-off closes it out rather than keeping it running in the
+background, since unlike a saved preset there's no F9 entry to bring it back.
 
 - **F4 → Actions → Create Preset** — Tab marks a tool and numbers the launch order; Enter saves it. Anything already marked on the main list arrives pre-numbered, ready to reorder. Only offered when there's an actual list to build from.
 - **F9** lists your presets and launches the one you pick, in its own window
@@ -499,13 +501,17 @@ Default prefix is Ctrl-b unless your tmux config remaps it.
 already open, whenever there's somewhere to put one:
 
 - **Local Mac with Ghostty** — opens a brand new Ghostty **window** (never a
-  tab). The launcher you ran it from keeps running exactly as it was.
-  Closing or detaching from that window later relaunches the launcher right
-  there.
+  tab). The launcher you ran it from keeps running exactly as it was. For a
+  saved preset, closing or detaching from that window later relaunches the
+  launcher right there, ready to reattach again via F9. For a one-off
+  Tab-and-Enter launch there's no F9 entry to reattach to, so detaching
+  instead closes the window and ends the session — same as quitting a
+  single tool.
 - **Over SSH (or no Ghostty), already inside a tmux session** — your client
   switches to the preset's session instead. Detaching (**prefix + d**) later,
   or the preset session ending, relaunches the launcher in the window you
-  switched from.
+  switched from — for both a saved preset and a one-off, since this reuses
+  that same window rather than opening a separate one.
 - **Over SSH (or no Ghostty), not inside tmux** — takes over the current
   window, since there's no GUI to open a window in and no existing tmux
   session to switch within. Says so before doing it. Detaching or the preset
