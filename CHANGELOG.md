@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.65.0] — 2026-09-02
+
+### Fixed
+
+- **The v0.64.0 fix for the wrong-Ghostty-window bug below didn't actually fix
+  it** — a short pause was the wrong remedy for the wrong diagnosis. Reading
+  Ghostty's own scripting dictionary source directly (`macos/Ghostty.sdef` in
+  its GitHub repo) settled it: a Ghostty `window` never has a "focused
+  terminal" property at all — only a `tab` does. The line asking a freshly
+  created window for its "focused terminal" was never a real, window-scoped
+  lookup; it was quietly resolving through some undefined fallback the whole
+  time, no delay could have fixed that. The real fix goes through the
+  window's own "selected tab" first (a brand new window always has exactly
+  one, so this is never ambiguous) before asking that tab — which genuinely
+  has "focused terminal" — for its terminal. Applied to both the ad-hoc
+  multi-launch path and the regular single-tool Ghostty launch path.
+
 ## [0.64.0] — 2026-09-02
 
 ### Fixed
