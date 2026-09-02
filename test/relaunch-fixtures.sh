@@ -1,10 +1,32 @@
 #!/bin/zsh
 #
-# "Launch a tool, quit it, land back in the launcher" test — raised
-# live: quitting a tool used to always drop you into a plain shell,
-# same as if you'd typed the command yourself. Someone who wants a
-# plain shell can already open a new tab for that; the more useful
-# default for a *launcher* is reappearing once the tool's done.
+# What happens after you quit a launched tool differs by launch path
+# on purpose, and this pins down which does what.
+#
+# launch_in_current_terminal() relaunches the picker: quitting a tool
+# used to always drop you into a plain shell there, same as if you'd
+# typed the command yourself, and the more useful default for a
+# *launcher* is reappearing once the tool's done. This is the one path
+# where relaunching doesn't create a second, redundant live instance —
+# it replaces the very session that was already running the picker
+# before the tool launched, so there is no "elsewhere" to be redundant
+# with.
+#
+# launch_in_tmux() and launch_in_ghostty() drop to a plain shell
+# instead, on purpose too, and for the opposite reason: both open a
+# brand-new window/tab for one tool while the picker you actually
+# launched it from keeps running, untouched, in whichever window/tab
+# you started from. Relaunching there as well used to leave a second,
+# fully live launcher behind per tool opened this way — several tools
+# opened and quit meant several extra live launchers sitting in
+# windows nobody was using. Reverted to a plain shell for both once
+# that was noticed, tmux's own default (it closes a window
+# automatically once its one pane's process exits with nothing
+# keeping it alive) doing the rest for that path; Ghostty can't close
+# its own tab at all (checked live — no "close" command in its
+# AppleScript dictionary, and Accessibility-based control doesn't see
+# its windows either), so a plain shell is the closest fix available
+# there.
 #
 # launch_in_current_terminal() is dependency-free (no tmux, no
 # Ghostty) and does an actual exec chain worth running for real:
@@ -15,9 +37,9 @@
 #
 # launch_in_tmux() and launch_in_ghostty() need a real tmux session /
 # a real Ghostty.app to run end to end, so those two are covered as
-# direct source-text assertions instead — confirming they still exec
-# into $SCRIPT_PATH rather than a plain shell, without needing either
-# dependency present on the runner.
+# direct source-text assertions instead — confirming each drops to a
+# plain `exec zsh` rather than relaunching the picker, without needing
+# either dependency present on the runner.
 
 set -u
 
@@ -249,29 +271,44 @@ fi
 # ------------------------------------------------------------
 # 2. launch_in_tmux() and launch_in_ghostty(): can't run these end to
 #    end without a real tmux session / Ghostty.app, so this asserts
-#    directly on the source text instead — both should still exec into
-#    $SCRIPT_PATH (quoted per each context's own convention) rather
-#    than a plain `exec zsh`, the thing this whole fix replaced.
+#    directly on the source text instead — both should drop to a
+#    plain `exec zsh` now, NOT relaunch $SCRIPT_PATH/launcherPath.
+#    Comments are stripped before checking: both functions' own
+#    comments mention $SCRIPT_PATH and "exec" while explaining why
+#    they DON'T do that any more, which a plain substring search can't
+#    tell apart from the code actually doing it.
 # ------------------------------------------------------------
 
-tmux_line="$(sed -n '/^launch_in_tmux() {/,/^}/p' "$LAUNCHER")"
-[[ "$tmux_line" == *'exec \"\$2\"'* ]] ||
-    fail "launch_in_tmux should exec into \"\$2\" (SCRIPT_PATH) after the tool exits"
-[[ "$tmux_line" == *'${(q)SCRIPT_PATH}'* ]] ||
-    fail "launch_in_tmux should pass SCRIPT_PATH as the second quoted argument"
-[[ "$tmux_line" == *'read -k 1 -s'* ]] ||
-    fail "launch_in_tmux should pause on a keypress before the relaunch, same as launch_in_current_terminal"
-[[ "$(grep -o '1049l' <<<"$tmux_line" | wc -l | tr -d ' ')" == "2" ]] ||
-    fail "launch_in_tmux should exit alternate-screen mode both before and after the command runs, not just after"
+tmux_block="$(sed -n '/^launch_in_tmux() {/,/^}/p' "$LAUNCHER")"
+tmux_code="$(printf '%s\n' "$tmux_block" | grep -v '^[[:space:]]*#')"
+
+[[ "$tmux_code" != *'SCRIPT_PATH'* ]] ||
+    fail "launch_in_tmux should no longer reference SCRIPT_PATH at all — it drops to a plain shell now"
+[[ "$tmux_code" == *'exec zsh'* && "$tmux_code" == *"' -- "* ]] ||
+    fail "launch_in_tmux should exec into a plain zsh after the tool exits, got: $tmux_code"
+[[ "$tmux_code" != *'read -k 1 -s'* ]] ||
+    fail "launch_in_tmux should not pause on a keypress any more — nothing after it takes over the screen the way fzf did"
+[[ "$(grep -o '1049l' <<<"$tmux_code" | wc -l | tr -d ' ')" == "1" ]] ||
+    fail "launch_in_tmux should exit alternate-screen mode once, after the command — the 'before' exit only ever mattered for reusing the current pane, which a new window never does"
 
 ghostty_block="$(sed -n '/^launch_in_ghostty() {/,/^}/p' "$LAUNCHER")"
-[[ "$ghostty_block" == *'exec \"$2\"'* ]] ||
-    fail "launch_in_ghostty should exec into \"\$2\" (launcherPath) after the tool exits"
-[[ "$ghostty_block" == *'quoted form of launcherPath'* ]] ||
-    fail "launch_in_ghostty should pass SCRIPT_PATH through as launcherPath"
-[[ "$ghostty_block" == *'read -k 1 -s'* ]] ||
-    fail "launch_in_ghostty should pause on a keypress before the relaunch, same as launch_in_current_terminal"
-[[ "$(grep -o '1049l' <<<"$ghostty_block" | wc -l | tr -d ' ')" == "2" ]] ||
-    fail "launch_in_ghostty should exit alternate-screen mode both before and after the command runs, not just after"
+ghostty_code="$(printf '%s\n' "$ghostty_block" | grep -v '^[[:space:]]*--')"
 
-printf 'PASS: quitting a launched tool relaunches the launcher (after a press-any-key pause) instead of dropping to a plain shell, in all three launch paths\n'
+[[ "$ghostty_code" != *'launcherPath'* ]] ||
+    fail "launch_in_ghostty should no longer reference launcherPath at all — it drops to a plain shell now"
+[[ "$ghostty_code" == *'exec zsh'* && "$ghostty_code" == *"' -- "* ]] ||
+    fail "launch_in_ghostty should exec into a plain zsh after the tool exits, got: $ghostty_code"
+[[ "$ghostty_code" != *'read -k 1 -s'* ]] ||
+    fail "launch_in_ghostty should not pause on a keypress any more — nothing after it takes over the screen the way fzf did"
+[[ "$(grep -o '1049l' <<<"$ghostty_code" | wc -l | tr -d ' ')" == "1" ]] ||
+    fail "launch_in_ghostty should exit alternate-screen mode once, after the command — see launch_in_tmux's own comment for why"
+
+# osascript itself should only be handed the one argument it still
+# needs — a stray second one left over from the old relaunch path
+# would silently do nothing, but it'd be a sign the revert was only
+# half done.
+osascript_call="$(printf '%s\n' "$ghostty_block" | grep -m1 'osascript -')"
+[[ "$osascript_call" == *'osascript - "$command_path" <<'* ]] ||
+    fail "launch_in_ghostty should call osascript with just \$command_path now, got: $osascript_call"
+
+printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both drop to a plain, unpaused shell instead of standing up a second live launcher in a window/tab the original session never left\n'
