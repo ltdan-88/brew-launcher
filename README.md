@@ -97,9 +97,9 @@ shortcut, back up, and every standing preference — lives behind
 
 <p align="center"><img src="assets/categories.gif" alt="Opening the view picker, filtering to a category, and stepping back out"></p>
 
-**F2** opens the view picker: `All`, `Favorites`, your own categories (marked
-`·`), then `Most Used`, `Recently Launched`, `Recently Added`, and `Hidden`.
-Every row shows a count.
+**F2** opens the view picker: `All`, then `Most Used`, `Recently Launched`,
+and `Recently Added`, then `Favorites`, your own categories (marked `·`), and
+`Hidden` last. Every row shows a count.
 
 - `Most Used`, `Recently Launched`, and `Recently Added` are computed automatically — by launch count, by when you last launched something, and by install date — capped at 15 tools each.
 - **F3** previews what's inside the highlighted category, including tools filed there only via [bundled defaults](#bundled-defaults).
