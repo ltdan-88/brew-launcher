@@ -160,10 +160,10 @@ in place, quitting brings the launcher right back — pausing first with
 **press any key to return to brew-launcher** so a one-shot CLI's output isn't
 wiped instantly, since the picker's own redraw is about to take over that
 same screen. A new tab or window is different: the launcher you started it
-from is still running there, untouched, so quitting drops to a plain shell
-instead of standing up a second one — no pause needed either, since nothing
-afterward takes over the screen. tmux closes that window on its own once the
-shell exits; want the tab gone too? Close it same as any other tab.
+from is still running there, untouched, so quitting just closes the tab or
+window instead of standing up a second one — pausing first with **press any
+key to close this tab/window**, same reason as above, then closing itself
+with nothing further to do.
 
 ### Launch several tools together
 

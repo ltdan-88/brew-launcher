@@ -12,21 +12,23 @@
 # before the tool launched, so there is no "elsewhere" to be redundant
 # with.
 #
-# launch_in_tmux() and launch_in_ghostty() drop to a plain shell
-# instead, on purpose too, and for the opposite reason: both open a
-# brand-new window/tab for one tool while the picker you actually
-# launched it from keeps running, untouched, in whichever window/tab
-# you started from. Relaunching there as well used to leave a second,
-# fully live launcher behind per tool opened this way — several tools
-# opened and quit meant several extra live launchers sitting in
-# windows nobody was using. Reverted to a plain shell for both once
-# that was noticed, tmux's own default (it closes a window
-# automatically once its one pane's process exits with nothing
-# keeping it alive) doing the rest for that path; Ghostty can't close
-# its own tab at all (checked live — no "close" command in its
-# AppleScript dictionary, and Accessibility-based control doesn't see
-# its windows either), so a plain shell is the closest fix available
-# there.
+# launch_in_tmux() and launch_in_ghostty() close the window/tab
+# outright instead, on purpose too, and for the opposite reason: both
+# open a brand-new window/tab for one tool while the picker you
+# actually launched it from keeps running, untouched, in whichever
+# window/tab you started from, so there's never anything to return to
+# there. A first attempt (v0.62.0) fell back to a plain shell instead
+# of relaunching, which fixed the redundant-launcher problem but left
+# an empty window needing a manual "exit" to close — not what the very
+# first version of this feature actually did before a one-shot CLI's
+# fast exit turned out to close the window before there was any chance
+# to read its output. The real fix keeps that original closing
+# behavior (tmux does it on its own once nothing's left running in the
+# window; Ghostty the same way, since it can't be told to close a tab
+# directly — checked live, no "close" command in its AppleScript
+# dictionary) and keeps the keypress pause too, so a fast command's
+# output survives on screen until a key is pressed, then the
+# window/tab closes exactly the same way a long-running TUI's does.
 #
 # launch_in_current_terminal() is dependency-free (no tmux, no
 # Ghostty) and does an actual exec chain worth running for real:
@@ -37,9 +39,13 @@
 #
 # launch_in_tmux() and launch_in_ghostty() need a real tmux session /
 # a real Ghostty.app to run end to end, so those two are covered as
-# direct source-text assertions instead — confirming each drops to a
-# plain `exec zsh` rather than relaunching the picker, without needing
-# either dependency present on the runner.
+# direct source-text assertions instead — confirming neither relaunches
+# the picker nor falls to a plain shell, and that the keypress pause
+# is still there to protect a one-shot CLI's output, without needing
+# either dependency present on the runner. The actual close-on-exit
+# behavior this relies on was confirmed live in tmux separately (real
+# tool, real new window, quit, keypress, window gone) — not something
+# a source-text check alone could prove.
 
 set -u
 
@@ -283,11 +289,17 @@ tmux_block="$(sed -n '/^launch_in_tmux() {/,/^}/p' "$LAUNCHER")"
 tmux_code="$(printf '%s\n' "$tmux_block" | grep -v '^[[:space:]]*#')"
 
 [[ "$tmux_code" != *'SCRIPT_PATH'* ]] ||
-    fail "launch_in_tmux should no longer reference SCRIPT_PATH at all — it drops to a plain shell now"
-[[ "$tmux_code" == *'exec zsh'* && "$tmux_code" == *"' -- "* ]] ||
-    fail "launch_in_tmux should exec into a plain zsh after the tool exits, got: $tmux_code"
-[[ "$tmux_code" != *'read -k 1 -s'* ]] ||
-    fail "launch_in_tmux should not pause on a keypress any more — nothing after it takes over the screen the way fzf did"
+    fail "launch_in_tmux should no longer reference SCRIPT_PATH at all — it closes the window now, it doesn't relaunch into it"
+# Exactly one "exec zsh" — the outer wrapper that runs the command in
+# the first place. A second occurrence would mean a fallback shell got
+# reintroduced at the end, which is exactly what used to leave the
+# window open needing a manual "exit".
+[[ "$(grep -o 'exec zsh' <<<"$tmux_code" | wc -l | tr -d ' ')" == "1" ]] ||
+    fail "launch_in_tmux should exec into a plain zsh exactly once (the wrapper itself), not fall through to a second one at the end"
+[[ "$tmux_code" == *'read -k 1 -s'* ]] ||
+    fail "launch_in_tmux should still pause on a keypress — without it, a fast one-shot command's output would be lost the instant the window closes"
+[[ "$tmux_code" == *'Press any key to close this window'* ]] ||
+    fail "launch_in_tmux's pause should say it's about to close the window, not the old \"return to brew-launcher\" wording"
 [[ "$(grep -o '1049l' <<<"$tmux_code" | wc -l | tr -d ' ')" == "1" ]] ||
     fail "launch_in_tmux should exit alternate-screen mode once, after the command — the 'before' exit only ever mattered for reusing the current pane, which a new window never does"
 
@@ -295,11 +307,14 @@ ghostty_block="$(sed -n '/^launch_in_ghostty() {/,/^}/p' "$LAUNCHER")"
 ghostty_code="$(printf '%s\n' "$ghostty_block" | grep -v '^[[:space:]]*--')"
 
 [[ "$ghostty_code" != *'launcherPath'* ]] ||
-    fail "launch_in_ghostty should no longer reference launcherPath at all — it drops to a plain shell now"
-[[ "$ghostty_code" == *'exec zsh'* && "$ghostty_code" == *"' -- "* ]] ||
-    fail "launch_in_ghostty should exec into a plain zsh after the tool exits, got: $ghostty_code"
-[[ "$ghostty_code" != *'read -k 1 -s'* ]] ||
-    fail "launch_in_ghostty should not pause on a keypress any more — nothing after it takes over the screen the way fzf did"
+    fail "launch_in_ghostty should no longer reference launcherPath at all — it closes the tab now, it doesn't relaunch into it"
+# Same reasoning as launch_in_tmux above.
+[[ "$(grep -o 'exec zsh' <<<"$ghostty_code" | wc -l | tr -d ' ')" == "1" ]] ||
+    fail "launch_in_ghostty should exec into a plain zsh exactly once (the wrapper itself), not fall through to a second one at the end"
+[[ "$ghostty_code" == *'read -k 1 -s'* ]] ||
+    fail "launch_in_ghostty should still pause on a keypress — without it, a fast one-shot command's output would be lost the instant the tab closes"
+[[ "$ghostty_code" == *'Press any key to close this tab'* ]] ||
+    fail "launch_in_ghostty's pause should say it's about to close the tab, not the old \"return to brew-launcher\" wording"
 [[ "$(grep -o '1049l' <<<"$ghostty_code" | wc -l | tr -d ' ')" == "1" ]] ||
     fail "launch_in_ghostty should exit alternate-screen mode once, after the command — see launch_in_tmux's own comment for why"
 
@@ -311,4 +326,4 @@ osascript_call="$(printf '%s\n' "$ghostty_block" | grep -m1 'osascript -')"
 [[ "$osascript_call" == *'osascript - "$command_path" <<'* ]] ||
     fail "launch_in_ghostty should call osascript with just \$command_path now, got: $osascript_call"
 
-printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both drop to a plain, unpaused shell instead of standing up a second live launcher in a window/tab the original session never left\n'
+printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both let the window/tab close on its own after a keypress pause, instead of relaunching into it or falling back to a plain shell that would need a manual exit\n'

@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.63.0] — 2026-09-02
+
+### Changed
+
+- **A tool opened in its own Ghostty tab or tmux window now closes that
+  tab/window on quit, instead of falling back to a plain shell.** v0.62.0
+  fixed the redundant-live-launcher problem by dropping to a plain shell, but
+  that meant the tab stayed open needing a manual `exit` — not what the very
+  original version of this feature actually did before a one-shot CLI's fast
+  exit turned out to close the tab before there was any chance to read its
+  output. The real fix keeps that original closing behavior (confirmed live:
+  tmux closes a window on its own once nothing's left running in it; Ghostty
+  the same way, since it can't be told to close a tab directly) and keeps the
+  keypress pause too, so a fast command's output survives on screen until a
+  key is pressed and a long-running TUI's tab closes cleanly the moment you
+  quit it — matching what quitting a tool this way did years ago, without
+  reintroducing the bug that pause was originally added to fix.
+
 ## [0.62.0] — 2026-09-02
 
 ### Fixed
