@@ -161,4 +161,83 @@ create_preset_block="$(sed -n '/^create_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$create_preset_block" == *'for seed_command in "${marked_commands[@]}"'* ]] ||
     fail "create_preset should seed its picker from whatever was already marked"
 
-printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, and Create Preset is seeded by marks rather than replaced by them\n'
+# ------------------------------------------------------------
+# 7. Every entry-scoped action either uses the marked set or says it
+#    isn't. Marks visibly set while an action silently acts on one row
+#    reads as a bug even when each half is individually reasonable.
+# ------------------------------------------------------------
+
+# Update: one brew run across every marked formula that's outdated.
+[[ "$full_source" == *'update_marked "${marked_formulas[@]}"'* ]] ||
+    fail "Update should act on the marked formulae when several are marked"
+
+# Create Shortcut: one file per marked entry.
+[[ "$full_source" == *'create_shortcut "${marked_commands[$marked_index]}" "${marked_formulas[$marked_index]}"'* ]] ||
+    fail "Create Shortcut should make one shortcut per marked entry"
+
+# marked_formulas has to stay index-aligned with marked_commands, or
+# Create Shortcut pairs a command with the wrong formula.
+[[ "$full_source" == *'marked_formulas+=("${marked_rest%%$'"'"'\t'"'"'*}")'* ]] ||
+    fail "marked_formulas should be built alongside marked_commands, index-aligned"
+
+# The two that deliberately don't use marks must say so rather than
+# staying silent about it.
+for scoped_fn in pick_launch_flags run_with_args; do
+    fn_block="$(sed -n "/^${scoped_fn}() {/,/^}/p" "$LAUNCHER")"
+    [[ "$fn_block" == *'marked_count'* ]] ||
+        fail "$scoped_fn should know how many rows were marked so it can say it's acting on one"
+    [[ "$fn_block" == *'(( marked_count > 1 ))'* ]] ||
+        fail "$scoped_fn should only mention marks when several actually are marked"
+done
+
+# ------------------------------------------------------------
+# 8. update_marked() run for real: only the outdated marked formulae
+#    are upgraded, and — the part that actually bit — each arrives as
+#    its OWN argument.
+#
+#    Quoting inline in the heredoc looked equivalent and wasn't: the
+#    heredoc flattens the array before (q) runs, escaping the
+#    separators too, so brew received one mangled argument. Caught by
+#    generating the script and running it against a brew that prints
+#    its own argv, which is what this reproduces.
+# ------------------------------------------------------------
+
+UM_HOME="$(mktemp -d)"
+mkdir -p "$UM_HOME/bin" "$UM_HOME/cache"
+printf '#!/bin/zsh\nfor a in "$@"; do print -r -- "ARG:[$a]"; done\n' > "$UM_HOME/bin/brew"
+chmod +x "$UM_HOME/bin/brew"
+
+CACHE_DIR="$UM_HOME/cache"
+TERMINAL="current"
+typeset -A outdated_formulas=(btop 1.4 "weird name" 2.0 glow 3.0)
+LAUNCHED_SCRIPT=""
+launch_in_current_terminal() { LAUNCHED_SCRIPT="$1"; }
+
+source <(sed -n '/^update_marked() {/,/^}/p' "$LAUNCHER")
+
+# fastfetch is marked but NOT outdated — it must be filtered out.
+update_marked btop fastfetch "weird name" >/dev/null 2>&1
+
+[[ -n "$LAUNCHED_SCRIPT" && -f "$LAUNCHED_SCRIPT" ]] ||
+    fail "update_marked should have built and launched an upgrade script"
+
+um_args="$(PATH="$UM_HOME/bin:$PATH" zsh "$LAUNCHED_SCRIPT" 2>/dev/null | grep '^ARG:')"
+
+[[ "$um_args" == *'ARG:[btop]'* ]] ||
+    fail "btop should be passed to brew as its own argument, got: $um_args"
+[[ "$um_args" == *'ARG:[weird name]'* ]] ||
+    fail "a formula containing a space must survive as ONE argument, not be split or merged — got: $um_args"
+[[ "$um_args" != *'ARG:[btop weird name]'* ]] ||
+    fail "formulae were collapsed into a single argument — the heredoc quoting bug is back: $um_args"
+[[ "$um_args" != *fastfetch* ]] ||
+    fail "a marked but already-up-to-date formula should be filtered out, got: $um_args"
+
+# Nothing outdated among the marked set: no script, no brew run.
+LAUNCHED_SCRIPT=""
+update_marked fastfetch >/dev/null 2>&1
+[[ -z "$LAUNCHED_SCRIPT" ]] ||
+    fail "update_marked should launch nothing when none of the marked formulae are outdated"
+
+rm -rf "$UM_HOME"
+
+printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), and Launch Flags/Run With Args say they are acting on one row when several are marked\n'

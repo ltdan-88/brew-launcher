@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.60.0"
+VERSION="0.61.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -510,7 +510,12 @@ Keyboard shortcuts:
   Tab       Mark or unmark the highlighted row. Every action below
             then acts on everything marked, or on the highlighted
             row alone when nothing is — so a batch is the same key
-            as a single entry, just with marks set first. Enter with
+            as a single entry, just with marks set first. Update
+            upgrades every marked formula in one brew run, and
+            Create Shortcut makes one shortcut per marked entry.
+            Launch Flags and Run With Args each concern a single
+            tool and one typed value, so they act on the highlighted
+            row and say so when several are marked. Enter with
             several marked launches them all together, one per tmux
             pane, the same way a preset does without having to name
             and save one. Marks clear once an action runs.
@@ -3483,7 +3488,10 @@ show_help_keys() {
 
     rows+=("Marking — Tab marks or unmarks the highlighted row")
     rows+=("  Every action then acts on everything marked, or on the")
-    rows+=("  highlighted row alone when nothing is. Marks show as ● and")
+    rows+=("  highlighted row alone when nothing is — including Update")
+    rows+=("  (one brew run for all of them) and Create Shortcut (one")
+    rows+=("  file each). Launch Flags and Run With Args stay single-")
+    rows+=("  entry and say so. Marks show as ● and")
     rows+=("  clear once an action runs. Enter with several marked opens")
     rows+=("  them all together, one per tmux pane — a preset without")
     rows+=("  having to name and save one.")
@@ -5970,9 +5978,18 @@ set_launch_flags() {
 pick_launch_flags() {
 
     local command="$1"
+    # How many rows were marked, when several were. Launch Flags is
+    # one stored value for one command, so a marked set has nothing
+    # coherent to mean here — but silently acting on one row while
+    # marks are visibly set looks like a bug, so it says so instead.
+    local marked_count="${2:-0}"
     local current="${launch_flags[$command]-}"
     local fzf_result typed pick_action
     local -a result_lines
+
+    local flags_header="Extra arguments to always pass when launching $command. Blank clears it."
+    (( marked_count > 1 )) &&
+        flags_header+=" Applies to $command only, not the $marked_count marked rows."
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -5989,7 +6006,7 @@ pick_launch_flags() {
             --border-label="$(screen_border_label "Launch flags — $command")" \
             --border-label-pos=2 \
             --prompt=' Flags: ' \
-            --header="Extra arguments to always pass when launching $command. Blank clears it." \
+            --header="$flags_header" \
             --footer='  Type  Flags    Enter  [Save]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --pointer='▌' \
@@ -6053,9 +6070,17 @@ pick_launch_flags() {
 run_with_args() {
 
     local command="$1" resolved_path="$2"
+    # See pick_launch_flags() above — same reasoning: this launches one
+    # tool with one typed argument string, so marks have nothing to
+    # mean, and saying so beats silently ignoring them.
+    local marked_count="${3:-0}"
     local current="${launch_flags[$command]-}"
     local fzf_result typed pick_action launch_path
     local -a result_lines
+
+    local args_header="Extra arguments for this one launch of $command. Blank runs it plain. F3 / ⌥D previews its own --help."
+    (( marked_count > 1 )) &&
+        args_header+=" Runs $command only, not the $marked_count marked rows."
 
     rm -f "$FOOTER_CLICK_FILE"
 
@@ -6072,7 +6097,7 @@ run_with_args() {
             --border-label="$(screen_border_label "Run $command with...")" \
             --border-label-pos=2 \
             --prompt=' Args: ' \
-            --header="Extra arguments for this one launch of $command. Blank runs it plain. F3 / ⌥D previews its own --help." \
+            --header="$args_header" \
             --footer='  Type  Args    Enter  [Run]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --preview "${(q)SCRIPT_PATH} --internal-preview-usage ${(q)resolved_path}" \
@@ -6409,6 +6434,82 @@ EOF
             sleep 2
         fi
 
+    fi
+}
+
+# ------------------------------------------------------------
+# Update, for several marked entries at once (Tab on the main list).
+#
+# One `brew upgrade f1 f2 f3` rather than looping update_tool() per
+# formula: each call there hands the terminal over to its own script,
+# so looping would mean N sequential takeovers, each needing the tool
+# quit before the next began. brew takes any number of formulae in one
+# invocation, so the marked set is one upgrade run with one output
+# stream — closer to Update All, just scoped to what's marked.
+#
+# Silently skipping the already-current ones matches update_tool()'s
+# own single-entry behavior (it says so and does nothing), and marking
+# a mixed batch is the expected case: you mark the tools you care
+# about, not the ones that happen to be outdated right now.
+# ------------------------------------------------------------
+
+update_marked() {
+
+    local -a wanted=("$@")
+    local -a outdated=()
+    local marked_formula
+
+    for marked_formula in "${wanted[@]}"; do
+        [[ -z "$marked_formula" ]] && continue
+        [[ -n "${outdated_formulas[$marked_formula]-}" ]] && outdated+=("$marked_formula")
+    done
+
+    if (( ${#outdated[@]} == 0 )); then
+        printf '\n'
+        printf 'None of the %d marked tools have updates available.\n' "${#wanted[@]}"
+        sleep 1
+        return 1
+    fi
+
+    local update_script
+    update_script="$(mktemp "$CACHE_DIR/update-marked.XXXXXX")" || return 1
+
+    # Quoted into a scalar first, then interpolated. Quoting inline in
+    # the heredoc instead (${(j: :)${(q)outdated}}) looks equivalent
+    # and is not: the heredoc flattens the array to a string before
+    # (q) runs, so every space gets escaped including the separators
+    # between formulae, and brew receives one mangled argument rather
+    # than several. Verified by generating both forms and running them
+    # against a brew that prints its own argv.
+    local quoted_formulae="${(j: :)${(q)outdated[@]}}"
+
+    cat > "$update_script" <<EOF
+#!/bin/zsh
+brew upgrade $quoted_formulae
+printf '\nDone — press F5 (or reopen) to refresh the list with the new versions.\n'
+rm -f -- "\$0"
+EOF
+
+    chmod +x "$update_script"
+
+    if [[ "$TERMINAL" == "current" ]]; then
+        launch_in_current_terminal "$update_script"
+    elif [[ "$TERMINAL" == "ghostty" ]]; then
+        if ! launch_in_ghostty "$update_script"; then
+            printf '\n'
+            printf 'Unable to launch Update.\n'
+            printf 'Make sure Ghostty is installed and macOS allows\n'
+            printf 'brew-launcher to control Ghostty.\n'
+            rm -f "$update_script"
+            sleep 2
+        fi
+    elif [[ "$TERMINAL" == "tmux" ]]; then
+        if ! launch_in_tmux "$update_script"; then
+            printf '\n'
+            printf 'Unable to launch Update.\n'
+            rm -f "$update_script"
+            sleep 2
+        fi
     fi
 }
 
@@ -8004,9 +8105,19 @@ while true; do
 
     marked_entries=("${result_lines[@]:1}")
     marked_commands=()
+    marked_formulas=()
     for marked_line in "${marked_entries[@]}"; do
         [[ -z "$marked_line" ]] && continue
         marked_commands+=("${marked_line%%$'\t'*}")
+
+        # Field 3 is the formula, which is what brew itself takes —
+        # kept parallel to marked_commands (same index) so an action
+        # needing both, like Update or Create Shortcut, can pair them
+        # up without re-parsing the row or looking the formula back up
+        # by command name.
+        marked_rest="${marked_line#*$'\t'}"
+        marked_rest="${marked_rest#*$'\t'}"
+        marked_formulas+=("${marked_rest%%$'\t'*}")
     done
 
     # --------------------------------------------------------
@@ -8307,7 +8418,16 @@ while true; do
 
     if [[ "$action" == "shortcut" ]]; then
 
-        create_shortcut "$command" "$formula"
+        if (( ${#marked_commands[@]} > 1 )); then
+            # Looped rather than batched, unlike Update: each shortcut
+            # is an independent file written to disk with no terminal
+            # handover, so there's nothing to serialize around.
+            for marked_index in {1..${#marked_commands[@]}}; do
+                create_shortcut "${marked_commands[$marked_index]}" "${marked_formulas[$marked_index]}"
+            done
+        else
+            create_shortcut "$command" "$formula"
+        fi
         restore_position="$(find_entry_position "$command")"
         continue
     fi
@@ -8319,7 +8439,7 @@ while true; do
 
     if [[ "$action" == "launch_flags" ]]; then
 
-        pick_launch_flags "$command"
+        pick_launch_flags "$command" "${#marked_commands[@]}"
         restore_position="$(find_entry_position "$command")"
         continue
     fi
@@ -8344,7 +8464,7 @@ while true; do
             printf 'Unable to find command: %s\n' "$command"
             sleep 1
         else
-            run_with_args "$command" "$command_path"
+            run_with_args "$command" "$command_path" "${#marked_commands[@]}"
         fi
 
         restore_position="$(find_entry_position "$command")"
@@ -8360,7 +8480,14 @@ while true; do
 
     if [[ "$action" == "update_tool" ]]; then
 
-        update_tool "$command" "$formula"
+        if (( ${#marked_formulas[@]} > 1 )); then
+            # One brew run for every marked formula that's actually
+            # outdated — see update_marked()'s own comment for why
+            # that beats looping update_tool() per entry.
+            update_marked "${marked_formulas[@]}"
+        else
+            update_tool "$command" "$formula"
+        fi
         restore_position="$(find_entry_position "$command")"
         continue
     fi
