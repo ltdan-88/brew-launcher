@@ -240,4 +240,62 @@ update_marked fastfetch >/dev/null 2>&1
 
 rm -rf "$UM_HOME"
 
-printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), and Launch Flags/Run With Args say they are acting on one row when several are marked\n'
+# ------------------------------------------------------------
+# 10. Live footer feedback while marking — raised live: pressing Tab
+#     gave zero on-screen feedback beyond the small marker dot on the
+#     row itself, so someone marking a row out of curiosity had no way
+#     to discover what happens next without already knowing to check
+#     F4. build_footer() now takes a marked_count and, once it's above
+#     zero, replaces the normal nav line with one that says how many
+#     are marked and spells out what Enter now does — updated live,
+#     inside a still-open fzf session, via explicit tab/shift-tab
+#     binds that chain fzf's own toggle+down/toggle+up onto
+#     transform-footer(...), which re-invokes this script as
+#     --internal-marked-footer using fzf's own $FZF_SELECT_COUNT.
+#
+#     Can't run this end to end here — footer_actions()/build_footer()
+#     use a `${(l:...)}` construct that reports "parameter not set"
+#     under `set -u` even though it works fine unsourced (same
+#     footgun compact-view-fixtures.sh and actions-menu-fixtures.sh
+#     already worked around the same way) — so this is source text,
+#     confirmed working live instead via a real fzf session in tmux:
+#     marking two rows showed "2 marked" immediately, no lag, at every
+#     footer width tier, and unmarking back to zero correctly restored
+#     the plain "Tab Mark" footer.
+# ------------------------------------------------------------
+
+build_footer_block="$(sed -n '/^build_footer() {/,/^}/p' "$LAUNCHER")"
+
+[[ "$build_footer_block" == *'marked_count="${2:-0}"'* ]] ||
+    fail "build_footer should accept a marked_count parameter, defaulting to 0"
+[[ "$build_footer_block" == *'marked_count > 0'* ]] ||
+    fail "build_footer should branch on whether anything is marked"
+[[ "$build_footer_block" == *'Launch $marked_count marked'* ]] ||
+    fail "build_footer's marked-state nav line should say how many are marked and that Enter launches them"
+[[ "$build_footer_block" == *'Launch $marked_count]'* ]] ||
+    fail "build_footer's narrower marked-state nav_short should still show the count"
+
+run_fzf_full_block="$(sed -n '/^run_fzf() {/,/^}/p' "$LAUNCHER")"
+
+[[ "$run_fzf_full_block" == *'local esc_hint="$5"'* ]] ||
+    fail "run_fzf should accept esc_hint as a 5th parameter, needed by the live-marking footer bind"
+[[ "$run_fzf_full_block" == *'tab:toggle+down+transform-footer('* ]] ||
+    fail "run_fzf should bind tab to fzf's own toggle+down default plus a live footer update, not silently drop the transform"
+[[ "$run_fzf_full_block" == *'shift-tab:toggle+up+transform-footer('* ]] ||
+    fail "run_fzf should bind shift-tab to fzf's own toggle+up default plus a live footer update, not silently drop the transform"
+[[ "$run_fzf_full_block" == *'--internal-marked-footer'* ]] ||
+    fail "run_fzf's tab/shift-tab binds should invoke --internal-marked-footer"
+
+run_fzf_call_site="$(grep -A6 'run_fzf \\$' "$LAUNCHER")"
+
+[[ "$run_fzf_call_site" == *'"$restore_position" \'*$'\n''            "$esc_hint"'* ]] ||
+    fail "the main loop's run_fzf call should pass \$esc_hint through as the 5th argument, right after \$restore_position, got: $run_fzf_call_site"
+
+internal_marked_footer_block="$(sed -n '/if \[\[ "\$1" == "--internal-marked-footer" \]\]; then/,/^fi/p' "$LAUNCHER")"
+
+[[ -n "$internal_marked_footer_block" ]] ||
+    fail "--internal-marked-footer dispatch not found"
+[[ "$internal_marked_footer_block" == *'build_footer "$2" "${FZF_SELECT_COUNT:-0}"'* ]] ||
+    fail "--internal-marked-footer should call build_footer with esc_hint and fzf's own \$FZF_SELECT_COUNT"
+
+printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, and the footer updates live the instant something is marked instead of staying silent until an action is taken\n'

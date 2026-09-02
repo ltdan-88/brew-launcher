@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.68.0] — 2026-09-02
+
+### Changed
+
+- **Marking a row now updates the footer immediately, the instant Tab is
+  pressed — how many are marked, and that Enter now launches them together**
+  — instead of giving no feedback beyond the small marker dot until an
+  action was actually taken. Raised live: someone marking a row out of
+  curiosity had no way to discover what happens next without already
+  knowing to check F4. Updates live inside the still-open list, via fzf's
+  own `transform-footer` hooked onto Tab/Shift-Tab, using fzf's own
+  selection-count tracking — no lag, confirmed with a real fzf session.
+
 ## [0.67.0] — 2026-09-02
 
 ### Changed
