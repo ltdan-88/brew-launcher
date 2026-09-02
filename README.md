@@ -155,11 +155,15 @@ On macOS with [Ghostty](https://ghostty.org/), launching a tool opens a
 window**. Everywhere else it launches in place — see
 [Configuration](#configuration).
 
-Quitting or finishing a tool (long-running TUI or one-shot CLI alike) brings
-the launcher right back in that same tab or window, pausing first with
+What happens when the tool quits depends on which of those it was. Launching
+in place, quitting brings the launcher right back — pausing first with
 **press any key to return to brew-launcher** so a one-shot CLI's output isn't
-wiped instantly. Want a plain shell instead? Open a new tab or window for
-that, same as with any other terminal app.
+wiped instantly, since the picker's own redraw is about to take over that
+same screen. A new tab or window is different: the launcher you started it
+from is still running there, untouched, so quitting drops to a plain shell
+instead of standing up a second one — no pause needed either, since nothing
+afterward takes over the screen. tmux closes that window on its own once the
+shell exits; want the tab gone too? Close it same as any other tab.
 
 ### Launch several tools together
 

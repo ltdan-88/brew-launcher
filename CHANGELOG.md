@@ -5,6 +5,33 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.62.0] — 2026-09-02
+
+### Fixed
+
+- **Quitting a tool opened in its own Ghostty tab or tmux window no longer
+  leaves a second, fully live launcher behind.** Both paths open a disposable
+  surface for one tool while the launcher you invoked it from keeps running,
+  untouched, in whichever tab or window you started from. Since v0.34.0,
+  quitting there relaunched the picker anyway — reasonable in isolation, but
+  it meant every tool opened this way left a redundant standing instance:
+  launch and quit a few tools and you'd end up with several extra live
+  launchers in tabs nobody was using, on top of the one already running where
+  you started. Both paths now drop to a plain shell instead, matching the
+  behavior from before v0.34.0. `current` terminal mode is unchanged —
+  relaunching there stays correct, since it's the only way back to the picker
+  at all once the tool exits.
+  - tmux closes the window on its own once its one pane's process exits with
+    nothing keeping it alive; no explicit close needed.
+  - Ghostty can't close its own tab — checked live, its AppleScript
+    dictionary has no `close` command and Accessibility-based control doesn't
+    see its windows either — so a plain shell is the closest fix available
+    for that path.
+  - Neither path pauses for a keypress before dropping to the shell any
+    more: that pause existed to hold a one-shot CLI's output on screen before
+    the picker's own alternate-screen redraw would paint over it, and nothing
+    here takes over the screen the way the picker did.
+
 ## [0.61.0] — 2026-09-02
 
 ### Changed

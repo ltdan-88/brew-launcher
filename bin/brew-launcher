@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.61.0"
+VERSION="0.62.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -721,11 +721,13 @@ Behavior:
   • Over SSH, 'auto' never reaches for Ghostty (no display to open a
     window in) — tmux if you're already inside a tmux session,
     otherwise the current terminal.
-  • Quitting a launched tool relaunches the picker (in place, or in
-    that same tab/window) rather than dropping to a plain shell —
-    after a "press any key to continue" pause, so a one-shot command's
-    output (fastfetch, eza, jq, ...) stays on screen until you're
-    ready, instead of the picker painting over it immediately.
+  • Quitting a launched tool brings the picker back only when it was
+    launched in place — after a "press any key to continue" pause,
+    so a one-shot command's output (fastfetch, eza, jq, ...) stays on
+    screen until you're ready, instead of the picker painting over it
+    immediately. A tool opened in its own tab or window (Ghostty,
+    tmux) drops to a plain shell instead: the picker you launched it
+    from is already running, untouched, elsewhere.
 EOF
     exit 0
 fi
@@ -5268,24 +5270,32 @@ launch_in_tmux() {
         return $?
     fi
 
-    # Same fresh-launcher-instead-of-plain-shell fix as the other two
-    # launch paths: run the command, then fall through to a fresh
-    # instance of the launcher in the new window, rather than exec-ing
-    # straight into it or leaving a bare shell behind. tmux runs this
-    # string through a shell itself, so both paths are quoted with
-    # zsh's own (q) flag — the same tool already used to build the
-    # details pane's --preview command — rather than interpolated raw,
-    # so either one containing spaces still arrives as one argument.
-    # The printfs around the command exit alternate-screen mode and
-    # show the cursor, and the read pauses for a keypress before the
-    # relaunch — see launch_in_current_terminal for why all three
-    # matter. The *before* one is a no-op here specifically: a brand
-    # new tmux window never inherited the picker's own alternate-screen
-    # state to begin with (each window is its own independent grid),
-    # unlike reusing the current pane — kept anyway so all three launch
-    # paths stay identical and this doesn't quietly rot if that ever
-    # changes.
-    tmux new-window "exec zsh -c 'printf \"\033[?1049l\033[?25h\" 2>/dev/null; \"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; printf \"\n\033[2mPress any key to return to brew-launcher...\033[0m\"; read -k 1 -s 2>/dev/null; exec \"\$2\"' -- ${(q)command_path} ${(q)SCRIPT_PATH}"
+    # A plain shell after the command, not a fresh launcher instance —
+    # unlike reusing the current pane (launch_in_current_terminal),
+    # this window's own original launcher is still running, untouched,
+    # in whichever window/tab you actually invoked it from. Relaunching
+    # here too meant every tool opened this way left behind a second
+    # standing, fully live launcher nobody asked for — launch two tools
+    # from the same session and quit both, and there are now two extra
+    # live launchers sitting in windows nobody's using, on top of the
+    # one already running where you started. tmux itself already
+    # closes a window automatically
+    # once its one pane's process exits with nothing keeping it alive
+    # (no remain-on-exit), so ending this script normally is the whole
+    # fix — no explicit kill-window needed.
+    #
+    # tmux runs this string through a shell itself, so command_path is
+    # quoted with zsh's own (q) flag — the same tool already used to
+    # build the details pane's --preview command — rather than
+    # interpolated raw, so a path containing spaces still arrives as
+    # one argument. The printf after the command exits alternate-screen
+    # mode and shows the cursor — see launch_in_current_terminal for
+    # why. No keypress pause here (unlike current-terminal): that pause
+    # exists there specifically to hold a one-shot CLI's output on
+    # screen before fzf's own alternate-screen redraw would otherwise
+    # paint over it: nothing here takes over the screen afterward, so
+    # there's nothing to hold the output back from.
+    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec zsh' -- ${(q)command_path}"
 }
 
 # ------------------------------------------------------------
@@ -5296,11 +5306,10 @@ launch_in_ghostty() {
 
     local command_path="$1"
 
-    osascript - "$command_path" "$SCRIPT_PATH" <<'APPLESCRIPT'
+    osascript - "$command_path" <<'APPLESCRIPT'
 on run argv
 
     set commandPath to item 1 of argv
-    set launcherPath to item 2 of argv
 
     tell application "Ghostty"
 
@@ -5318,19 +5327,31 @@ on run argv
 
         end if
 
-        -- Same reasoning as launch_in_current_terminal: run the
-        -- command, then fall through to a fresh instance of the
-        -- launcher in the same tab, rather than exec-ing straight
-        -- into it or leaving a bare shell behind. A one-shot CLI
-        -- (eza, jq, bat, ...) prints and exits in under a second;
-        -- exec-ing into it left the tab with no process to show for
-        -- it, so it looked broken. The printfs around the command
-        -- exit alternate-screen mode and show the cursor again — see
-        -- launch_in_current_terminal for why both matter (the
-        -- *before* one is a no-op here specifically, since a brand
-        -- new tab/window never inherited the picker's own alternate
-        -- screen, but kept for the same reason as launch_in_tmux:
-        -- so all three launch paths stay identical).
+        -- A plain shell after the command, not a fresh launcher
+        -- instance — see launch_in_tmux()'s own comment for why: this
+        -- tab is disposable, opened for one tool, and the launcher you
+        -- actually invoked it from is still running untouched
+        -- elsewhere. Relaunching here left one more standing, fully
+        -- live launcher behind per tool opened this way, on top of the
+        -- one already running where you started. A one-shot CLI (eza,
+        -- jq, bat, ...) still gets the fix this always had: run it,
+        -- then fall through to a fresh interactive shell rather than
+        -- exec-ing straight into it, so the tab still has a process to
+        -- show for it instead of looking broken. The printf after the
+        -- command exits alternate-screen mode and shows the cursor
+        -- again. No keypress pause (unlike current-terminal's own) —
+        -- that pause exists there to hold a one-shot CLI's output on
+        -- screen before fzf's own redraw would paint over it; a plain
+        -- shell prompt afterward doesn't take over the screen the way
+        -- fzf does, so there's nothing here to hold the output back
+        -- from.
+        --
+        -- Ghostty itself can't close its own tab from here — checked
+        -- live: its AppleScript dictionary has no "close" command at
+        -- all, and Accessibility-based control doesn't see its windows
+        -- either. A plain shell is the closest available fix; closing
+        -- the tab outright isn't possible with what Ghostty exposes
+        -- today.
         --
         -- \\033, not \033: AppleScript has no numeric escape of its
         -- own (confirmed live — \033 alone is a genuine syntax error
@@ -5338,12 +5359,7 @@ on run argv
         -- needs its own literal-backslash escape first to produce the
         -- four real characters \, 0, 3, 3 that the shell on the other
         -- end is the one actually interpreting as an escape code.
-        --
-        -- The read pauses for a keypress before the relaunch, same as
-        -- the other two launch paths — see launch_in_current_terminal
-        -- for why (a one-shot CLI's output was getting painted over
-        -- before there was any chance to read it).
-        input text ("exec zsh -c 'printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; \"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; printf \"\\n\\033[2mPress any key to return to brew-launcher...\\033[0m\"; read -k 1 -s 2>/dev/null; exec \"$2\"' -- " & quoted form of commandPath & " " & quoted form of launcherPath) to newTerminal
+        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; exec zsh' -- " & quoted form of commandPath) to newTerminal
 
         send key "enter" to newTerminal
 
