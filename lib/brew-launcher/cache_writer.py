@@ -484,11 +484,30 @@ for formula in formulae:
 # Remove duplicate command names.
 # ------------------------------------------------------------
 
+
+def _entry_sort_key(entry):
+    # (formula, command), not the raw joined string — sorting by the
+    # string alone sorts by *command* first (it's the first field),
+    # which silently disagrees with what's actually on screen: a row
+    # displays as "$formula ($command)" whenever they differ, formula
+    # first. A formula like `tdf`, whose second command is named
+    # `for_profiling`, ended up filed under "F" (by "for_profiling")
+    # while reading as "tdf (...)" on screen — alphabetical order that
+    # didn't match the alphabet the row's own text suggested. Sorting
+    # by formula first fixes that, and clusters every command a single
+    # formula provides together as a side effect (mc/mcdiff/mcedit/
+    # mcview, mole/mo, ...) instead of leaving that to coincidence.
+    fields = entry.split("\t")
+    formula = fields[2] if len(fields) > 2 else ""
+    command = fields[0]
+    return (formula.lower(), command.lower())
+
+
 seen = set()
 unique = []
 duplicates = []
 
-for entry in sorted(entries, key=str.lower):
+for entry in sorted(entries, key=_entry_sort_key):
 
     command = entry.split("\t", 1)[0]
     formula = entry.split("\t")[2]

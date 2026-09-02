@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.72.0] — 2026-09-02
+
+### Fixed
+
+- **Alphabetical order silently sorted by the internal command name instead of
+  what's actually displayed, scattering a formula's own commands apart when
+  they're named differently from each other.** A formula providing a command
+  named very differently from itself (e.g. `tdf`, whose second command is
+  `for_profiling`) sorted under a completely different letter than its own
+  displayed name suggested — the row reads `tdf (for_profiling)` but filed
+  itself under "F", 20+ rows from `tdf` itself. Sorting now keys on formula
+  name first, matching what's actually shown, which also clusters every
+  command a single formula provides together as a side effect (already true
+  by coincidence for things like `mc`/`mcdiff`/`mcedit`/`mcview`, now true by
+  design for any formula, regardless of how differently its commands happen
+  to be named).
+
 ## [0.71.0] — 2026-09-02
 
 ### Added
