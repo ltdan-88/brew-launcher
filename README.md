@@ -260,6 +260,15 @@ Restoring on a fresh machine: untar the archive, run
 `brew bundle install --file=Brewfile`, then copy `brew-launcher-config` back
 to `~/.config/brew-launcher`.
 
+### Factory Reset
+
+**F4 → Actions → Factory Reset** wipes every category, favorite,
+hidden/shown entry, preset, launch flag, and recorded launch, and resets
+theme/sort/terminal preferences back to their defaults — everything back to
+how it looked freshly installed. Asks first, showing exactly how much of
+each it's about to remove, and can't be undone — run **Backup** first if you
+want to keep a copy.
+
 ### Mouse support
 
 Click a row to select it, double-click to launch, right-click to mark it
@@ -309,6 +318,7 @@ one long scrolling list.
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
 | — | View the launch history and how often each tool was used, or clear it | Actions only |
+| — | Factory Reset — wipe every category, favorite, hidden entry, preset and preference back to defaults (asks first) | Actions only |
 | — | Switch color theme | Settings only |
 | — | Toggle Default Categories / Default Hidden | Settings only |
 | — | Toggle Open to Categories | Settings only |

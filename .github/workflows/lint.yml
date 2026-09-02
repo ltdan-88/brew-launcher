@@ -762,6 +762,18 @@ jobs:
       - name: F1 Help topic split test
         run: zsh test/help-topics-fixtures.sh
 
+  factory-reset-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # No fzf, brew, or tmux needed — confirm_factory_reset() calls a
+      # real fzf, so it and its wiring are source-text, same reasoning
+      # as confirm_quit()'s own test.
+      - name: Factory Reset test
+        run: zsh test/factory-reset-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -911,6 +923,9 @@ jobs:
 
       - name: Launch History test
         run: zsh test/launch-history-fixtures.sh
+
+      - name: Factory Reset test
+        run: zsh test/factory-reset-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would

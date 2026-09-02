@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.70.0"
+VERSION="0.71.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -725,6 +725,14 @@ Backup:
   action of its own: untar the archive, run
   'brew bundle install --file=Brewfile', then copy
   brew-launcher-config back to ~/.config/brew-launcher.
+
+Factory Reset:
+  Actions → Factory Reset wipes every category, favorite, hidden/shown
+  entry, preset, launch flag, and recorded launch, and resets
+  theme/sort/terminal preferences back to their defaults — everything
+  back to how it looked freshly installed. Asks first, showing exactly
+  how much of each it's about to remove, and can't be undone — run
+  Backup first if you want to keep a copy.
 
 Behavior:
   • Applications are discovered automatically from Homebrew.
@@ -1649,6 +1657,9 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             ;;
         launch_history)
             printf 'Launch History\n\nEvery launch is recorded, and Most Used and Recently\nLaunched are built from that record. This shows what is in\nit — each tool and how many times it has been launched —\nand can clear the whole thing (Ctrl-D there, with a\nconfirm). Clearing means both of those views start over.\n'
+            ;;
+        factory_reset)
+            printf 'Factory Reset\n\nWipes every category, favorite, hidden/shown entry,\npreset, launch flag, and recorded launch, and resets\ntheme/sort/terminal preferences back to their defaults —\neverything back to how it looked freshly installed. Asks\nfor confirmation first, and cannot be undone. Back up\nfirst (Actions -> Backup) if you want to keep a copy.\n'
             ;;
         *)
             printf 'No description available.\n'
@@ -3848,6 +3859,10 @@ show_help_actions_menu() {
     rows+=("    Launch History  What you've launched and how often. Ctrl-D")
     rows+=("                    there clears it (asks first) — Most Used and")
     rows+=("                    Recently Launched both start over if you do")
+    rows+=("     Factory Reset  Wipes categories/favorites/hidden/presets/")
+    rows+=("                    history and resets preferences to defaults —")
+    rows+=("                    everything back to freshly installed. Asks")
+    rows+=("                    first, showing real counts, and can't be undone")
     rows+=("")
     rows+=("Theme, Create Preset and Backup return to whichever menu opened")
     rows+=("them once done — only Create Shortcut exits back to the list.")
@@ -4071,6 +4086,17 @@ pick_more_action() {
     fi
     rows+=("launch_history"$'\t'"$(printf '%-20s%s' 'Launch History' "$history_hint")")
 
+    # Last of all — raised live: wanting a clean way to undo months of
+    # accumulated organizing without hand-deleting categories, presets,
+    # hidden entries, and preferences one at a time. Grouped with
+    # Backup/Launch History above (all three are about the data this
+    # app has accumulated, not a preference), but landing after both:
+    # this is the one row here that's actually destructive, so it
+    # shouldn't sit any closer to the top than it has to. Not gated on
+    # has_entry, same reasoning as Backup/Launch History — nothing
+    # about it concerns any one row.
+    rows+=("factory_reset"$'\t'"$(printf '%-20s%s' 'Factory Reset' '')")
+
     [[ "$has_entry" == true && -n "$entry_name" ]] && more_label="Actions on $entry_name"
 
     rm -f "$FOOTER_CLICK_FILE"
@@ -4165,6 +4191,10 @@ open_more_menu() {
                 ;;
             launch_history)
                 show_launch_history
+                continue
+                ;;
+            factory_reset)
+                factory_reset
                 continue
                 ;;
         esac
@@ -5873,6 +5903,90 @@ show_launch_history() {
     printf '\n'
     printf 'Launch history cleared.\n'
     sleep 1
+}
+
+# ------------------------------------------------------------
+# Factory Reset — Actions -> Factory Reset.
+#
+# Raised live: wanting a clean way to undo months of accumulated
+# organizing (categories, favorites, hidden entries, presets, launch
+# flags, recorded launches, and every preference) without hand-
+# deleting each one — Ctrl-D on every category and preset, F6/F7 on
+# every hidden/favorited entry, one at a time.
+#
+# Everything this app has ever written lives under one directory
+# (CONFIG_DIR) — deleting it wholesale and relaunching is simpler and
+# more trustworthy than resetting each of the dozen or so in-memory
+# tables (favorite_commands, hidden_commands, category_members,
+# CATEGORY_NAMES, launch_counts, CONFIG_* vars, SORT_ORDER, ...) by
+# hand and risking missing one, which would leave a stale leftover
+# visible until the next real relaunch anyway. A fresh `exec` of this
+# same script runs the exact startup sequence a real fresh install
+# would, so there's nothing left to reset by hand at all.
+#
+# CACHE_DIR is deliberately untouched — that's just the installed-
+# tools cache, unrelated to anything a person organized, and rebuilds
+# on its own regardless.
+# ------------------------------------------------------------
+
+confirm_factory_reset() {
+
+    local category_count preset_count hidden_count favorite_count history_count
+    local answer
+
+    category_count="$(find "$CATEGORIES_DIR" -type f ! -name Favorites 2>/dev/null | wc -l | tr -d ' ')"
+    preset_count="$(find "$PRESETS_DIR" -type f 2>/dev/null | wc -l | tr -d ' ')"
+    hidden_count="${#hidden_commands[@]}"
+
+    favorite_count=0
+    [[ -f "$CATEGORIES_DIR/Favorites" ]] &&
+        favorite_count="$(grep -c '' "$CATEGORIES_DIR/Favorites" 2>/dev/null || printf '0')"
+
+    history_count=0
+    [[ -f "$LAUNCH_HISTORY_FILE" ]] &&
+        history_count="$(grep -c '' "$LAUNCH_HISTORY_FILE" 2>/dev/null || printf '0')"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    answer="$(
+        printf '%s\n' "Cancel" "Reset everything ($category_count categories, $favorite_count favorites, $hidden_count hidden, $preset_count presets, $history_count history entries)" |
+        fzf \
+            --height=100% \
+            --no-clear \
+            --layout=reverse \
+            --border=rounded \
+            --border-label="$(screen_border_label 'Factory Reset')" \
+            --border-label-pos=2 \
+            --prompt='  ' \
+            --pointer='▌' \
+            --header="This can't be undone — also resets theme, sort, and terminal settings to their defaults. Actions -> Backup first if you want to keep a copy." \
+            `# "Enter chooses" is deliberately not bracketed/clickable, same` \
+            `# reason as confirm_delete_preset(): Enter acts on whichever row` \
+            `# is highlighted, so a clickable [Confirm] would reset` \
+            `# everything whenever that row happened to be highlighted.` \
+            --footer='  ↑ ↓  Navigate    Enter  chooses    Esc  [Cancel]' \
+            --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --color="$FZF_COLORS"
+    )"
+
+    rm -f "$FOOTER_CLICK_FILE"
+
+    [[ "$answer" == Reset* ]]
+}
+
+factory_reset() {
+
+    confirm_factory_reset || return 1
+
+    rm -rf "$CONFIG_DIR"
+
+    printf '\n'
+    printf 'Everything reset. Relaunching...\n'
+    sleep 1
+
+    # Replaces this process outright rather than rebuilding a dozen
+    # in-memory tables by hand — see this section's own comment above.
+    exec "$SCRIPT_PATH"
 }
 
 # ------------------------------------------------------------

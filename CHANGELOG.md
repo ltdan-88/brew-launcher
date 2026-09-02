@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.71.0] — 2026-09-02
+
+### Added
+
+- **Factory Reset** (Actions → Factory Reset) — wipes every category,
+  favorite, hidden/shown entry, preset, launch flag, and recorded launch,
+  and resets theme/sort/terminal preferences back to their defaults,
+  everything back to how it looked freshly installed. Raised live: wanting
+  a clean way to undo months of accumulated organizing without hand-
+  deleting each category/preset/hidden entry one at a time. Asks first,
+  showing exactly how much of each it's about to remove, and points at
+  Backup as a way to keep a copy — it cannot be undone otherwise.
+
 ## [0.70.0] — 2026-09-02
 
 ### Fixed
