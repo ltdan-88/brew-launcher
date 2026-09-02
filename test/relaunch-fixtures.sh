@@ -46,6 +46,12 @@
 # behavior this relies on was confirmed live in tmux separately (real
 # tool, real new window, quit, keypress, window gone) — not something
 # a source-text check alone could prove.
+#
+# launch_in_ghostty() and preset_show_session() also both get checked
+# for a `delay 0.3` positioned right after creating a new Ghostty
+# window/tab and before asking it for its "focused terminal" — a guard
+# against a silent focus race raised live (see section 3 below), same
+# dependency limitation as above.
 
 set -u
 
@@ -326,4 +332,36 @@ osascript_call="$(printf '%s\n' "$ghostty_block" | grep -m1 'osascript -')"
 [[ "$osascript_call" == *'osascript - "$command_path" <<'* ]] ||
     fail "launch_in_ghostty should call osascript with just \$command_path now, got: $osascript_call"
 
-printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both let the window/tab close on its own after a keypress pause, instead of relaunching into it or falling back to a plain shell that would need a manual exit\n'
+# ------------------------------------------------------------
+# 3. The just-created-window focus race: raised live — marking several
+#    TUIs and hitting Enter could open a genuinely new Ghostty window
+#    with nothing but a bare shell in it, while the actual session
+#    ended up attached in a tab on the already-open launcher window
+#    instead. Not a caught AppleScript error (ruled out live — no
+#    "Could not open a new Ghostty window" fallback message appeared,
+#    meaning osascript itself reported success) and not the system-wide
+#    "prefer tabs" preference (also ruled out live). What's left is a
+#    silent one: "focused terminal of newWindow"/"newTab" isn't
+#    guaranteed to mean the window/tab just created — without a beat
+#    for window-server focus to catch up, it can resolve to whatever
+#    already held focus, so the command meant for the new window lands
+#    in the old one instead. `delay 0.3` immediately after creation, and
+#    before that "focused terminal" line asks anything, is the fix; this
+#    checks it's actually positioned there (not just present somewhere
+#    in the block, which wouldn't prove it's guarding the right line) in
+#    both launch_in_ghostty()'s branches and preset_show_session()'s
+#    single one. None of this can be proven behaviorally without a real
+#    Ghostty.app on the runner, so it's a source-text position check,
+#    same as the rest of this section.
+# ------------------------------------------------------------
+
+[[ "$(printf '%s\n' "$ghostty_block" | grep -A1 'set newWindow to new window' | tail -1 | tr -d '[:space:]')" == "delay0.3" ]] ||
+    fail "launch_in_ghostty's new-window branch should delay right after creating the window and before asking for its focused terminal"
+[[ "$(printf '%s\n' "$ghostty_block" | grep -A1 'set newTab to new tab in front window' | tail -1 | tr -d '[:space:]')" == "delay0.3" ]] ||
+    fail "launch_in_ghostty's new-tab branch should delay right after creating the tab and before asking for its focused terminal"
+
+preset_show_block="$(sed -n '/^preset_show_session() {/,/^}/p' "$LAUNCHER")"
+[[ "$(printf '%s\n' "$preset_show_block" | grep -A1 'set newWindow to new window' | tail -1 | tr -d '[:space:]')" == "delay0.3" ]] ||
+    fail "preset_show_session's Ghostty path should delay right after creating the window and before asking for its focused terminal"
+
+printf 'PASS: launch_in_current_terminal() still relaunches the picker (the one path where that is not redundant), while launch_in_tmux() and launch_in_ghostty() both let the window/tab close on its own after a keypress pause, instead of relaunching into it or falling back to a plain shell that would need a manual exit; both launch_in_ghostty() and preset_show_session() give a newly created Ghostty window/tab a beat before asking it for its focused terminal, guarding against a silent focus race\n'

@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.63.0"
+VERSION="0.64.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -1682,6 +1682,19 @@ preset_show_session() {
         # returning as if it had worked — a swallowed failure here
         # would look exactly like the original "nothing happened" bug
         # this whole thing exists to fix.
+        #
+        # The `delay 0.3` right after `new window` guards a narrower,
+        # silent failure mode than the one above: rather than erroring
+        # out, "focused terminal of newWindow" can resolve to whatever
+        # terminal actually holds window-server focus at that instant
+        # — which, immediately after asking Ghostty to create a window,
+        # isn't guaranteed to be the new one yet. When that races, the
+        # `input text`/`send key` below land in the wrong (old) window
+        # instead: it looks like the new window opened with a bare
+        # shell while the session actually attached somewhere else.
+        # This is a standard AppleScript pattern for exactly this class
+        # of just-created-window race in other apps; it costs a beat of
+        # perceived latency here in exchange for targeting reliably.
         if osascript - "$session" "$SCRIPT_PATH" <<'APPLESCRIPT' >/dev/null 2>&1
 on run argv
     set sessionName to item 1 of argv
@@ -1689,6 +1702,7 @@ on run argv
     tell application "Ghostty"
         activate
         set newWindow to new window
+        delay 0.3
         set newTerminal to focused terminal of newWindow
         input text ("exec zsh -c 'tmux attach-session -t \"$1\" && exec \"$2\"' -- " & quoted form of sessionName & " " & quoted form of launcherPath) to newTerminal
         send key "enter" to newTerminal
@@ -5321,15 +5335,24 @@ on run argv
         if (count of windows) = 0 then
 
             set newWindow to new window
+            delay 0.3
             set newTerminal to focused terminal of newWindow
 
         else
 
             set newTab to new tab in front window
+            delay 0.3
             set newTerminal to focused terminal of newTab
 
         end if
 
+        -- The `delay 0.3` above guards a silent focus race: right
+        -- after asking Ghostty to create a window/tab, "focused
+        -- terminal" isn't guaranteed to mean the one just created yet
+        -- — without the pause it can resolve to whichever terminal
+        -- actually held window-server focus at that instant, so the
+        -- command below would land in the wrong place instead.
+        --
         -- The tab closes on its own once the tool quits — see
         -- launch_in_tmux()'s own comment for the full reasoning: this
         -- tab is disposable, opened for one tool, and the launcher you

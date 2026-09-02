@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.64.0] — 2026-09-02
+
+### Fixed
+
+- **Marking several tools and launching them together could open a genuinely
+  new, empty Ghostty window with a bare shell, while the actual session ended
+  up attached in a tab on the already-open launcher window instead.** Not a
+  caught failure — the fallback path never ran, and no forced-tabbing system
+  preference was in play either. The real cause: right after Ghostty is asked
+  to create a window, asking it for its "focused terminal" isn't guaranteed to
+  mean the window just created — without a beat for window-server focus to
+  catch up, it can resolve to whichever terminal already held focus, so the
+  command meant for the new window landed in the old one instead. A tool
+  launched on its own into a fresh Ghostty tab could hit the same silent
+  race, just less noticeably. Both paths now give a newly created
+  window/tab a short pause before asking it for its focused terminal.
+
 ## [0.63.0] — 2026-09-02
 
 ### Changed
