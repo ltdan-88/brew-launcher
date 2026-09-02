@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.61.0] — 2026-09-02
+
+### Changed
+
+- **Every entry-scoped action is now explicit about the marked set.** Marking
+  landed in 0.59.0, but only Hide, Favorite, Categorize and Enter honored it —
+  Update, Create Shortcut, Launch Flags and Run With Args silently acted on
+  the highlighted row while marks sat visibly on screen, which reads as a bug
+  even though each half was individually reasonable.
+  - **Update** upgrades every marked formula that's actually outdated, in a
+    single `brew upgrade` run rather than one terminal handover per tool.
+    Already-current marked tools are filtered out; if none of them have
+    updates, it says so and runs nothing.
+  - **Create Shortcut** makes one shortcut per marked entry.
+  - **Launch Flags** and **Run With Args** still act on one tool — both store
+    or take a single typed value, which has no coherent meaning across several
+    — but now say so in their header when more than one row is marked, instead
+    of ignoring the marks without comment.
+
 ## [0.60.0] — 2026-09-01
 
 ### Added

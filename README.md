@@ -88,7 +88,7 @@ shortcut, back up, and every standing preference — lives behind
 **F4 / ⌥M → Actions**, named after whatever's highlighted (`Actions on fastfetch`).
 
 - **Hide / Favorite / Categorize** (F6/F7/F8) also work directly, without opening the menu.
-- **Tab marks a row.** Every action then acts on whatever's marked, or on the highlighted row when nothing is — so hiding, favoriting or categorizing a batch is the same key as doing one, just with marks set first. Marks clear once the action runs.
+- **Tab marks a row.** Every action then acts on whatever's marked, or on the highlighted row when nothing is — so hiding, favoriting, categorizing, updating or making shortcuts for a batch is the same key as doing one, just with marks set first. The two actions that can't apply to several (Launch Flags, Run With Args) say so rather than quietly acting on one. Marks clear once the action runs.
 - **Create Preset**, **Create Shortcut**, and the bulk actions above only appear when there's an actual list of tools to act on — not from the view picker.
 - **Settings** is its own screen, one level down, holding every on/off preference: Theme, Default Categories, Default Hidden, Open to Categories, Sort, Details, Details Position, Alt Keybinds. Toggles flip with Space or Enter and reopen Settings right after.
 - **F4**, **F5**, and **F9** also work from inside the view picker (**F2**).
@@ -292,11 +292,11 @@ one long scrolling list.
 | **Tab** | Mark/unmark a row — actions then apply to everything marked | footer |
 | **Enter** | With several marked: launch them all together, one per tmux pane | footer |
 | — | Create a new preset | Actions only |
-| — | Create a desktop shortcut (macOS or Linux) | Actions only |
+| — | Create a desktop shortcut (macOS or Linux) — one per marked entry | Actions only |
 | — | Set custom launch flags for the highlighted entry | Actions only |
 | — | Run the highlighted entry with one-off extra arguments | Actions only |
 | **F3** / **⌥D** | Preview that entry's own `--help` output | Run With Args only |
-| — | Update the highlighted entry (brew upgrade for just that formula) | Actions only |
+| — | Update the highlighted entry, or every marked one, in a single brew run | Actions only |
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
 | — | Back up installed apps + launcher config to one file | Actions only |
