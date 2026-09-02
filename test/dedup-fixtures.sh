@@ -31,7 +31,7 @@ trap 'rm -rf "$TEST_HOME"' EXIT
 
 DEDUP_BLOCK="$TEST_HOME/dedup_block.py"
 
-sed -n '/^seen = set()$/,/^# Write cache\.$/p' "$CACHE_WRITER_PY" |
+sed -n '/^def _entry_sort_key/,/^# Write cache\.$/p' "$CACHE_WRITER_PY" |
     sed '$d;$d' \
     > "$DEDUP_BLOCK"
 
@@ -50,15 +50,18 @@ import sys
 # caused it (midnight-commander's mc vs. an unrelated tap also
 # providing an "mc" command).
 #
-# sorted(entries, key=str.lower) sorts on the WHOLE tab-joined string,
-# not just the formula name — both rows start with "mc\t", so the tie
-# is actually broken by the description (the next field), not the
-# formula. "A terminal file manager" is picked to sort before "Some
-# other tool" on purpose, so which one "wins" here is deliberate and
-# readable, not an accident of description text nobody chose.
+# The tie is broken by _entry_sort_key(), (formula, command) rather
+# than the raw joined string — both rows share the same command
+# ("mc"), so this comes down to formula name: "midnight-commander"
+# sorts before "other-mc-tool" alphabetically. The description here is
+# deliberately the *opposite* of that ("Z..." loses on its own, "A..."
+# would win) specifically so this test fails loudly if a future change
+# reintroduces sorting by the raw string (description included) instead
+# of the formula name alone — description text should have no say in
+# who wins this tie any more.
 entries = [
-    "mc\tA terminal file manager\tmidnight-commander\t4.8.33\t8.2MB\t0\tmidnight-commander",
-    "mc\tSome other tool\tother-mc-tool\t1.0.0\t1MB\t0\tsomeone/tap/other-mc-tool",
+    "mc\tZ terminal file manager\tmidnight-commander\t4.8.33\t8.2MB\t0\tmidnight-commander",
+    "mc\tA other tool\tother-mc-tool\t1.0.0\t1MB\t0\tsomeone/tap/other-mc-tool",
     "btop\tResource monitor\tbtop\t1.4.7\t1.5MB\t0\tbtop",
 ]
 
