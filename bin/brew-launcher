@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.72.0"
+VERSION="0.73.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -8559,15 +8559,79 @@ while true; do
         action_formula="${action_formula#*$'\t'}"
         action_formula="${action_formula%%$'\t'*}"
 
-        open_more_menu "$hide_label" true "${selection%%$'\t'*}" "$action_formula"
-        more_menu_status=$?
+        # Loops locally, rather than one open_more_menu call plus a
+        # plain fallthrough, specifically so Launch Flags and Run With
+        # Args — raised live: Esc from either skipped past Actions
+        # straight to the main list, even though Actions is the *only*
+        # way to reach either screen at all (neither has a direct key
+        # of its own). Every other fallthrough action (Hide, Favorite,
+        # Categorize, Create Shortcut, Update) still falls through to
+        # its own existing block further down unchanged — the `break`
+        # at the bottom does exactly what setting $action used to do
+        # on its own, just from one loop iteration deeper, so nothing
+        # about how those get handled actually changes.
+        while true; do
 
-        if (( more_menu_status != 2 )); then
-            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
-            continue
-        fi
+            open_more_menu "$hide_label" true "${selection%%$'\t'*}" "$action_formula"
+            more_menu_status=$?
 
-        action="$MORE_MENU_FALLTHROUGH_ACTION"
+            if (( more_menu_status != 2 )); then
+                restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+                continue 2
+            fi
+
+            if [[ "$MORE_MENU_FALLTHROUGH_ACTION" == "launch_flags" ]]; then
+
+                # A "no" (Esc, or an unchanged value — see
+                # pick_launch_flags()'s own comment) loops back to
+                # Actions instead of falling through; a real save
+                # heads back to the main list, same as today.
+                if ! pick_launch_flags "${selection%%$'\t'*}" "${#marked_commands[@]}"; then
+                    continue
+                fi
+
+                restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+                continue 2
+
+            elif [[ "$MORE_MENU_FALLTHROUGH_ACTION" == "run_with_args" ]]; then
+
+                # Same resolved-path derivation the general selection
+                # parser further down does — duplicated rather than
+                # reordered that block earlier in the file, since
+                # nothing else here needs it moved and reordering a
+                # widely-depended-on block for one fix is a bigger risk
+                # than four lines of arithmetic every reader can see is
+                # the exact same shape.
+                local f4_remaining f4_resolved_path f4_command_path
+                f4_remaining="${selection#*$'\t'}"
+                f4_remaining="${f4_remaining#*$'\t'}"
+                f4_remaining="${f4_remaining#*$'\t'}"
+                f4_resolved_path="${f4_remaining#*$'\t'}"
+
+                if [[ -n "$f4_resolved_path" && -x "$f4_resolved_path" ]]; then
+                    f4_command_path="$f4_resolved_path"
+                else
+                    f4_command_path="$(command -v "${selection%%$'\t'*}" 2>/dev/null)"
+                fi
+
+                if [[ -z "$f4_command_path" ]]; then
+                    printf '\n'
+                    printf 'Unable to find command: %s\n' "${selection%%$'\t'*}"
+                    sleep 1
+                    continue
+                fi
+
+                if ! run_with_args "${selection%%$'\t'*}" "$f4_command_path" "${#marked_commands[@]}"; then
+                    continue
+                fi
+
+                restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+                continue 2
+            fi
+
+            action="$MORE_MENU_FALLTHROUGH_ACTION"
+            break
+        done
     fi
 
     # --------------------------------------------------------
@@ -8757,39 +8821,13 @@ while true; do
     # Create Shortcut above.
     # --------------------------------------------------------
 
-    if [[ "$action" == "launch_flags" ]]; then
-
-        pick_launch_flags "$command" "${#marked_commands[@]}"
-        restore_position="$(find_entry_position "$command")"
-        continue
-    fi
-
-    # --------------------------------------------------------
-    # Run With Args — same resolved-path lookup Enter itself uses
-    # further down (the cached path if it's still valid, a fresh PATH
-    # lookup otherwise), since this is about to launch the tool right
-    # now rather than just store a preference like Launch Flags above.
-    # --------------------------------------------------------
-
-    if [[ "$action" == "run_with_args" ]]; then
-
-        if [[ -n "$resolved_path" && -x "$resolved_path" ]]; then
-            command_path="$resolved_path"
-        else
-            command_path="$(command -v "$command" 2>/dev/null)"
-        fi
-
-        if [[ -z "$command_path" ]]; then
-            printf '\n'
-            printf 'Unable to find command: %s\n' "$command"
-            sleep 1
-        else
-            run_with_args "$command" "$command_path" "${#marked_commands[@]}"
-        fi
-
-        restore_position="$(find_entry_position "$command")"
-        continue
-    fi
+    # Launch Flags and Run With Args are both handled entirely inside
+    # the F4 block above now, not here — neither has a direct key of
+    # its own (Actions is the only way to reach either), so $action
+    # can never actually be "launch_flags" or "run_with_args" by the
+    # time execution reaches this point. Moved so Esc from either can
+    # loop back to Actions instead of skipping past it to the main
+    # list — see the F4 block's own comment for why.
 
     # --------------------------------------------------------
     # Update — Update All's own per-entry sibling. $formula is

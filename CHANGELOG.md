@@ -5,6 +5,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.73.0] — 2026-09-02
+
+### Fixed
+
+- **Esc from Launch Flags or Run With Args skipped straight past Actions to
+  the main list, instead of going back one level like everywhere else.**
+  Raised live. Both are reachable only through Actions (neither has a direct
+  key of its own), so Actions is the only sensible place Esc could return
+  to — it's now where it lands. Confirming (Save, or an actual run) still
+  goes straight back to the main list as before; only cancelling changes.
+
 ## [0.72.0] — 2026-09-02
 
 ### Fixed

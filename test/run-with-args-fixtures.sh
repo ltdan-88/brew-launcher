@@ -188,8 +188,82 @@ has_entry_block="$(printf '%s\n' "$more_action_block" | sed -n '/if \[\[ "\$has_
     fail "pick_more_action should offer a run_with_args row inside the has_entry-gated block"
 
 full_source="$(cat "$LAUNCHER")"
-[[ "$full_source" == *'"$action" == "run_with_args"'* && "$full_source" == *'run_with_args "$command" "$command_path"'* ]] ||
-    fail "the main loop should dispatch run_with_args to run_with_args() with the real command and a resolved path"
+[[ "$full_source" == *'"$MORE_MENU_FALLTHROUGH_ACTION" == "run_with_args"'* ]] ||
+    fail "the F4 block's own loop should dispatch the run_with_args fallthrough action, not a plain \$action check further down"
+[[ "$full_source" == *'run_with_args "${selection%%$'"'"'\t'"'"'*}" "$f4_command_path"'* ]] ||
+    fail "run_with_args should be dispatched with the real (freshly re-derived) command and resolved path"
+
+# ------------------------------------------------------------
+# 5b. Raised live: Esc from Run With Args used to skip straight past
+#     Actions to the main list, even though Actions is the only way to
+#     reach it at all (no direct key of its own). Moved inside the F4
+#     block's own loop specifically so a "no" (Esc) loops back to
+#     Actions instead of falling through — checked as source text (the
+#     loop structure) and confirmed for real below via a live tmux
+#     session, staying on Esc throughout so nothing actually launches.
+# ------------------------------------------------------------
+
+f4_block="$(sed -n '/if \[\[ "\$action" == "f4" || "\$action" == "alt-m" \]\]; then/,/^    fi$/p' "$LAUNCHER")"
+run_with_args_branch="$(printf '%s\n' "$f4_block" | sed -n '/MORE_MENU_FALLTHROUGH_ACTION" == "run_with_args"/,/^            fi$/p')"
+
+[[ "$run_with_args_branch" == *'! run_with_args'*$'\n'*'continue'* ]] ||
+    fail "a 'no' from run_with_args should loop back to Actions (continue, the inner loop) rather than fall through"
+[[ "$run_with_args_branch" == *'continue 2'* ]] ||
+    fail "an actual run should still return to the main list (continue 2, the outer loop)"
+
+if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
+
+    RWA_HOME="$TEST_HOME/rwa-live"
+    mkdir -p "$RWA_HOME"
+
+    RWA_SESSION="blf-run-with-args-esc-$$"
+    tmux kill-session -t "$RWA_SESSION" 2>/dev/null
+
+    tmux new-session -d -s "$RWA_SESSION" -x 100 -y 30 "HOME='$RWA_HOME' zsh '$LAUNCHER'"
+
+    rwa_ready=false
+    for _ in {1..30}; do
+        tmux capture-pane -t "$RWA_SESSION" -p 2>/dev/null | grep -q "Tab  Mark" && { rwa_ready=true; break; }
+        sleep 0.5
+    done
+
+    if [[ "$rwa_ready" == true ]]; then
+
+        tmux send-keys -t "$RWA_SESSION" F4
+        for _ in {1..20}; do
+            tmux capture-pane -t "$RWA_SESSION" -p 2>/dev/null | grep -q "Actions on" && break
+            sleep 0.3
+        done
+
+        # "Args" alone, not "Run With Args" — same space:accept
+        # pitfall as Launch Flags' own live check above. "Args"
+        # uniquely matches this one row.
+        tmux send-keys -t "$RWA_SESSION" -l "Args"
+        sleep 0.4
+        tmux send-keys -t "$RWA_SESSION" Enter
+        for _ in {1..20}; do
+            tmux capture-pane -t "$RWA_SESSION" -p 2>/dev/null | grep -q "Run .* with\.\.\." && break
+            sleep 0.3
+        done
+        tmux capture-pane -t "$RWA_SESSION" -p 2>/dev/null | grep -q "Run .* with\.\.\." ||
+            fail "expected to reach the Run With Args prompt via F4 -> Run With Args"
+
+        tmux send-keys -t "$RWA_SESSION" Escape
+        for _ in {1..20}; do
+            tmux capture-pane -t "$RWA_SESSION" -p 2>/dev/null | grep -q "Actions on" && break
+            sleep 0.3
+        done
+
+        tmux capture-pane -t "$RWA_SESSION" -p 2>/dev/null | grep -q "Actions on" ||
+            fail "Esc from Run With Args should return to Actions, not the main list"
+
+        tmux kill-session -t "$RWA_SESSION" 2>/dev/null
+    else
+        printf 'SKIP: launcher never became interactive, skipping the live Esc check\n' >&2
+    fi
+else
+    printf 'SKIP: tmux or fzf not available, skipping the live Esc check\n' >&2
+fi
 
 # ------------------------------------------------------------
 # 6. --internal-preview-usage: a tool that actually supports --help
