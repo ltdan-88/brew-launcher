@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.68.0"
+VERSION="0.69.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -8082,6 +8082,21 @@ run_fzf() {
         # --internal-marked-footer above for what it actually prints.
         --bind "tab:toggle+down+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
         --bind "shift-tab:toggle+up+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
+
+        # Right-click is fzf's own default for "toggle" whenever --multi
+        # is on (confirmed live and in its own man page) — undocumented
+        # here until a user found it themselves, since nothing prompts
+        # anyone to try it. That's exactly why it needs the same live
+        # footer update as Tab above, more than Tab does: someone who
+        # tries right-clicking on a whim, with nothing written down
+        # anywhere telling them to, should see the same instant "N
+        # marked" feedback teaching them what just happened — a text
+        # hint in an already-packed footer wouldn't reach someone who
+        # never went looking for one, but reacting the moment they
+        # actually try it will. No "+down"/"+up" needed here — a click
+        # already lands on the row clicked, unlike Tab/Shift-Tab moving
+        # from wherever the cursor already was.
+        --bind "right-click:toggle+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
 
         --header="$FZF_HEADER"
         --footer="$footer"

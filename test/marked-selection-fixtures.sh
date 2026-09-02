@@ -286,6 +286,17 @@ run_fzf_full_block="$(sed -n '/^run_fzf() {/,/^}/p' "$LAUNCHER")"
 [[ "$run_fzf_full_block" == *'--internal-marked-footer'* ]] ||
     fail "run_fzf's tab/shift-tab binds should invoke --internal-marked-footer"
 
+# Raised live: right-click already marks a row by default (fzf's own
+# behavior whenever --multi is on), completely undocumented until a
+# user found it themselves — nothing on screen ever prompted anyone to
+# try it. That makes the live footer feedback more important here than
+# for Tab, not less: a text hint in an already-packed footer wouldn't
+# reach someone who never went looking for one, but reacting the
+# instant they actually try right-clicking will. No "+down"/"+up" —
+# unlike Tab/Shift-Tab, a click already lands on the row clicked.
+[[ "$run_fzf_full_block" == *'right-click:toggle+transform-footer('* ]] ||
+    fail "run_fzf should bind right-click to fzf's own toggle default plus a live footer update, same reasoning as tab/shift-tab above"
+
 run_fzf_call_site="$(grep -A6 'run_fzf \\$' "$LAUNCHER")"
 
 [[ "$run_fzf_call_site" == *'"$restore_position" \'*$'\n''            "$esc_hint"'* ]] ||
@@ -298,4 +309,4 @@ internal_marked_footer_block="$(sed -n '/if \[\[ "\$1" == "--internal-marked-foo
 [[ "$internal_marked_footer_block" == *'build_footer "$2" "${FZF_SELECT_COUNT:-0}"'* ]] ||
     fail "--internal-marked-footer should call build_footer with esc_hint and fzf's own \$FZF_SELECT_COUNT"
 
-printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, and the footer updates live the instant something is marked instead of staying silent until an action is taken\n'
+printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, and the footer updates live the instant something is marked (via Tab/Shift-Tab or right-click alike) instead of staying silent until an action is taken\n'

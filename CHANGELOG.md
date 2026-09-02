@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.69.0] — 2026-09-02
+
+### Changed
+
+- **Right-click now shows the same live "N marked" footer feedback as
+  Tab/Shift-Tab.** Right-click already marked a row on its own (fzf's own
+  default behavior whenever multi-select is on), but it was completely
+  undocumented until a user found it themselves — nothing on screen ever
+  prompted anyone to try it. That makes the instant feedback more
+  important here than for Tab, not less: a text hint added to an
+  already-packed footer wouldn't reach someone who never went looking for
+  one, but reacting the moment they actually try right-clicking will.
+
 ## [0.68.0] — 2026-09-02
 
 ### Changed
