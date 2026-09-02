@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.62.0"
+VERSION="0.63.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -726,8 +726,9 @@ Behavior:
     so a one-shot command's output (fastfetch, eza, jq, ...) stays on
     screen until you're ready, instead of the picker painting over it
     immediately. A tool opened in its own tab or window (Ghostty,
-    tmux) drops to a plain shell instead: the picker you launched it
-    from is already running, untouched, elsewhere.
+    tmux) just closes that tab/window instead, after the same pause:
+    the picker you launched it from is already running, untouched,
+    elsewhere, so there's nothing to bring back there.
 EOF
     exit 0
 fi
@@ -5270,19 +5271,20 @@ launch_in_tmux() {
         return $?
     fi
 
-    # A plain shell after the command, not a fresh launcher instance —
-    # unlike reusing the current pane (launch_in_current_terminal),
-    # this window's own original launcher is still running, untouched,
-    # in whichever window/tab you actually invoked it from. Relaunching
-    # here too meant every tool opened this way left behind a second
-    # standing, fully live launcher nobody asked for — launch two tools
-    # from the same session and quit both, and there are now two extra
-    # live launchers sitting in windows nobody's using, on top of the
-    # one already running where you started. tmux itself already
-    # closes a window automatically
-    # once its one pane's process exits with nothing keeping it alive
-    # (no remain-on-exit), so ending this script normally is the whole
-    # fix — no explicit kill-window needed.
+    # The window closes on its own once the tool quits — not a fresh
+    # launcher instance, and not a lingering shell either. This
+    # window's own original launcher is still running, untouched, in
+    # whichever window you actually invoked it from, so there was
+    # never anything to "return to" here: relaunching a second one
+    # just left it standing around unused, and even the plain-shell
+    # fallback this replaced (v0.62.0) left an empty window behind
+    # that needed a manual "exit" to close. tmux already closes a
+    # window automatically once its one pane's process exits with
+    # nothing keeping it alive (no remain-on-exit) — this is exactly
+    # how the very first version of this feature behaved, before a
+    # one-shot CLI's fast exit turned out to close the window before
+    # there was any chance to read its output (see the keypress pause
+    # below for the fix that predates and survives this rewrite).
     #
     # tmux runs this string through a shell itself, so command_path is
     # quoted with zsh's own (q) flag — the same tool already used to
@@ -5290,12 +5292,13 @@ launch_in_tmux() {
     # interpolated raw, so a path containing spaces still arrives as
     # one argument. The printf after the command exits alternate-screen
     # mode and shows the cursor — see launch_in_current_terminal for
-    # why. No keypress pause here (unlike current-terminal): that pause
-    # exists there specifically to hold a one-shot CLI's output on
-    # screen before fzf's own alternate-screen redraw would otherwise
-    # paint over it: nothing here takes over the screen afterward, so
-    # there's nothing to hold the output back from.
-    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; exec zsh' -- ${(q)command_path}"
+    # why. The keypress pause holds a one-shot CLI's output on screen
+    # before the window closes out from under it — verified live: a
+    # bare `exec "$1"` with no pause closes the instant the command
+    # exits, which is correct for a long-running TUI you deliberately
+    # quit but would lose a fast command's output before there was
+    # ever a chance to read it.
+    tmux new-window "exec zsh -c '\"\$1\"; printf \"\033[?1049l\033[?25h\" 2>/dev/null; printf \"\n\033[2mPress any key to close this window...\033[0m\"; read -k 1 -s 2>/dev/null' -- ${(q)command_path}"
 }
 
 # ------------------------------------------------------------
@@ -5327,31 +5330,22 @@ on run argv
 
         end if
 
-        -- A plain shell after the command, not a fresh launcher
-        -- instance — see launch_in_tmux()'s own comment for why: this
+        -- The tab closes on its own once the tool quits — see
+        -- launch_in_tmux()'s own comment for the full reasoning: this
         -- tab is disposable, opened for one tool, and the launcher you
         -- actually invoked it from is still running untouched
-        -- elsewhere. Relaunching here left one more standing, fully
-        -- live launcher behind per tool opened this way, on top of the
-        -- one already running where you started. A one-shot CLI (eza,
-        -- jq, bat, ...) still gets the fix this always had: run it,
-        -- then fall through to a fresh interactive shell rather than
-        -- exec-ing straight into it, so the tab still has a process to
-        -- show for it instead of looking broken. The printf after the
-        -- command exits alternate-screen mode and shows the cursor
-        -- again. No keypress pause (unlike current-terminal's own) —
-        -- that pause exists there to hold a one-shot CLI's output on
-        -- screen before fzf's own redraw would paint over it; a plain
-        -- shell prompt afterward doesn't take over the screen the way
-        -- fzf does, so there's nothing here to hold the output back
-        -- from.
-        --
-        -- Ghostty itself can't close its own tab from here — checked
-        -- live: its AppleScript dictionary has no "close" command at
-        -- all, and Accessibility-based control doesn't see its windows
-        -- either. A plain shell is the closest available fix; closing
-        -- the tab outright isn't possible with what Ghostty exposes
-        -- today.
+        -- elsewhere, so there was never anything to return to here.
+        -- Ghostty can't be told to close its own tab directly (checked
+        -- live: no "close" command in its AppleScript dictionary, and
+        -- Accessibility-based control doesn't see its windows either),
+        -- but it doesn't need to be — once nothing is left running in
+        -- it, Ghostty closes the tab on its own, exactly like the very
+        -- first version of this feature (a bare `exec "$1"`) already
+        -- did before a one-shot CLI's fast exit turned out to close
+        -- the tab before there was any chance to read its output. The
+        -- keypress pause below is that fix, carried forward rather
+        -- than rediscovered: it holds the output on screen until a
+        -- key is pressed, then the tab closes exactly the same way.
         --
         -- \\033, not \033: AppleScript has no numeric escape of its
         -- own (confirmed live — \033 alone is a genuine syntax error
@@ -5359,7 +5353,7 @@ on run argv
         -- needs its own literal-backslash escape first to produce the
         -- four real characters \, 0, 3, 3 that the shell on the other
         -- end is the one actually interpreting as an escape code.
-        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; exec zsh' -- " & quoted form of commandPath) to newTerminal
+        input text ("exec zsh -c '\"$1\"; printf \"\\033[?1049l\\033[?25h\" 2>/dev/null; printf \"\\n\\033[2mPress any key to close this tab...\\033[0m\"; read -k 1 -s 2>/dev/null' -- " & quoted form of commandPath) to newTerminal
 
         send key "enter" to newTerminal
 
