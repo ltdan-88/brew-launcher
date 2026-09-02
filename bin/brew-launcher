@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.66.0"
+VERSION="0.67.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -527,8 +527,8 @@ Keyboard shortcuts:
             and save one. Marks clear once an action runs.
 
   Shown in the footer:
-  F2 / ⌥V   Switch view (All, Favorites, your categories, Most Used,
-            Recently Launched, Recently Added, Hidden)
+  F2 / ⌥V   Switch view (All, Most Used, Recently Launched, Recently
+            Added, Favorites, your categories, Hidden)
   F3 / ⌥D   Show or hide the details pane (homepage, license,
             categories, presets it's part of, dependencies, caveats).
             Shift-Up/Down scrolls it.
@@ -590,8 +590,11 @@ Keyboard shortcuts:
   profile's Keyboard settings first; Ghostty supports it by default.
 
 Views:
-  F2/⌥V switches what you're looking at: All, Favorites, your
-  categories, then the computed views and Hidden last. "Hidden" is an
+  F2/⌥V switches what you're looking at: All, then the computed views
+  (Most Used, Recently Launched, Recently Added), then Favorites, your
+  categories, and Hidden last. The computed views lead since they need
+  no setup and are usually a faster memory jog than a category you
+  filed something under a while ago. "Hidden" is an
   ordinary view — Enter still launches there, and F6 unhides. F9 also
   works here, same as the main list. F3 in the picker previews what's
   actually in the highlighted category — every command it holds, with
@@ -3561,8 +3564,8 @@ show_help_keys() {
     rows+=("same outdated-formula check, brew-launcher is just another one to it")
     rows+=("")
     rows+=("First tier — always on screen")
-    rows+=("  F2 / ⌥V   Switch view (All, Favorites, categories, Most Used,")
-    rows+=("            Recently Launched, Recently Added, Hidden) — F3 there")
+    rows+=("  F2 / ⌥V   Switch view (All, Most Used, Recently Launched,")
+    rows+=("            Recently Added, Favorites, categories, Hidden) — F3 there")
     rows+=("            previews what's in the highlighted category, Ctrl-R")
     rows+=("            renames it, Ctrl-D deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
@@ -4404,24 +4407,20 @@ pick_view() {
     (( count < 0 )) && count=0
     choices=("All"$'\t'"All ($count)")
 
-    compute_category_counts
-
-    for name in "${CATEGORY_NAMES[@]}"; do
-
-        count="${category_counts[$name]:-0}"
-
-        if [[ "$name" == "Favorites" ]]; then
-            choices+=("$name"$'\t'"$name ($count)")
-        else
-            choices+=("$name"$'\t'"· $name ($count)")
-        fi
-    done
-
-    # Most Used, Recently Launched, and Recently Added are all
-    # computed, not saved category files — unmarked, like the other
-    # built-ins above. Their counts reflect what will actually appear
-    # (capped at COMPUTED_VIEW_LIMIT), not the true total, so the
-    # number here never promises more than the view itself will show.
+    # Most Used, Recently Launched, and Recently Added come right after
+    # All now, ahead of Favorites/categories — raised live: someone in
+    # a rush who can't quite recall a tool's name is more likely to
+    # remember it by their own recent activity than by which category
+    # they once filed it under, so these three (need no setup at all,
+    # unlike Favorites/categories) lead the list instead of being
+    # buried after every category. Typing still jumps straight to any
+    # of them regardless of position — this only helps someone
+    # arrowing down or scanning visually rather than typing.
+    #
+    # Computed, not saved category files — unmarked, like "All" and
+    # "Hidden". Their counts reflect what will actually appear (capped
+    # at COMPUTED_VIEW_LIMIT), not the true total, so the number here
+    # never promises more than the view itself will show.
     count="${#launch_counts[@]}"
     (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
     choices+=("Most Used"$'\t'"Most Used ($count)")
@@ -4442,6 +4441,21 @@ pick_view() {
     (( count > COMPUTED_VIEW_LIMIT )) && count=$COMPUTED_VIEW_LIMIT
     choices+=("Recently Added"$'\t'"Recently Added ($count)")
 
+    compute_category_counts
+
+    for name in "${CATEGORY_NAMES[@]}"; do
+
+        count="${category_counts[$name]:-0}"
+
+        if [[ "$name" == "Favorites" ]]; then
+            choices+=("$name"$'\t'"$name ($count)")
+        else
+            choices+=("$name"$'\t'"· $name ($count)")
+        fi
+    done
+
+    # Last — the one you reach for least, same reasoning as Refresh/
+    # Backup landing at the bottom of the Actions menu.
     choices+=("Hidden"$'\t'"Hidden (${#hidden_commands[@]})")
 
     rm -f "$FOOTER_CLICK_FILE"

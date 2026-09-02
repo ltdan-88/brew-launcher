@@ -5,6 +5,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.67.0] — 2026-09-02
+
+### Changed
+
+- **The F2 view picker now leads with Most Used, Recently Launched, and
+  Recently Added, ahead of Favorites and your categories** (Hidden still
+  lands last). Typing still jumps straight to any view regardless of
+  position, so this mainly helps browsing or arrowing down: your own recent
+  activity is usually a faster memory jog than which category you filed
+  something under a while back, and the three computed views need no setup
+  at all, unlike Favorites or a category.
+
 ## [0.66.0] — 2026-09-02
 
 ### Changed
