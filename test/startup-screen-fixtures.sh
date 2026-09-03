@@ -106,8 +106,34 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         return 1
     }
 
+    # Every launch below needs to become interactive fast and
+    # predictably, on any machine — a from-scratch launch would
+    # otherwise call the real `brew info`/`brew list` to build its
+    # cache, and how long that takes depends entirely on how many
+    # formulae happen to be installed wherever this runs. A CI image
+    # comes with far more preinstalled than a personal machine, which
+    # is exactly what made this suite pass reliably here locally while
+    # failing the same "Tab  Mark" wait on GitHub Actions. Seeding a
+    # cache that's already valid (right format version, state file
+    # fresh enough to be inside STATE_TTL, outdated snapshot fresh
+    # enough to be inside OUTDATED_TTL) skips all three `brew` calls
+    # entirely, the same technique edit-preset-fixtures.sh uses for
+    # the same reason.
+    SS_CACHE_FORMAT_VERSION="$(sed -n 's/^CACHE_FORMAT_VERSION=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
+    [[ -n "$SS_CACHE_FORMAT_VERSION" ]] || fail "could not read CACHE_FORMAT_VERSION from $LAUNCHER"
+
+    seed_cache() {
+        local home_dir="$1"
+        local cache_dir="$home_dir/.cache/brew-launcher"
+        mkdir -p "$cache_dir"
+        printf 'cat\tConcatenate files\tcat\t1.0\t1MB\t0\tcat\t/bin/cat\t100\n' > "$cache_dir/entries"
+        printf '%s\nfixture-state-snapshot\n' "$SS_CACHE_FORMAT_VERSION" > "$cache_dir/state"
+        : > "$cache_dir/outdated"
+    }
+
     # 5a. No config at all: still starts on All, same as always.
     SS_HOME_A="$(mktemp -d)"
+    seed_cache "$SS_HOME_A"
     SS_SESSION_A="blss-all-$$"
     tmux kill-session -t "$SS_SESSION_A" 2>/dev/null
     tmux new-session -d -s "$SS_SESSION_A" -x 100 -y 30 "HOME='$SS_HOME_A' zsh '$LAUNCHER'"
@@ -120,6 +146,7 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
 
     # 5b. STARTUP_SCREEN=views opens straight to the view picker.
     SS_HOME_B="$(mktemp -d)"
+    seed_cache "$SS_HOME_B"
     mkdir -p "$SS_HOME_B/.config/brew-launcher"
     printf 'STARTUP_SCREEN=views\n' > "$SS_HOME_B/.config/brew-launcher/config"
     SS_SESSION_B="blss-views-$$"
@@ -133,6 +160,7 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     # 5c. STARTUP_SCREEN=presets, with a real preset saved, opens
     #     straight to the preset picker.
     SS_HOME_C="$(mktemp -d)"
+    seed_cache "$SS_HOME_C"
     mkdir -p "$SS_HOME_C/.config/brew-launcher/presets"
     printf 'STARTUP_SCREEN=presets\n' > "$SS_HOME_C/.config/brew-launcher/config"
     printf 'cat\n' > "$SS_HOME_C/.config/brew-launcher/presets/startup-screen-test"
@@ -148,6 +176,7 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     # 5d. STARTUP_SCREEN=presets with no presets saved yet falls back
     #     to All, same as Esc from the view picker already does.
     SS_HOME_D="$(mktemp -d)"
+    seed_cache "$SS_HOME_D"
     mkdir -p "$SS_HOME_D/.config/brew-launcher"
     printf 'STARTUP_SCREEN=presets\n' > "$SS_HOME_D/.config/brew-launcher/config"
     SS_SESSION_D="blss-nopresets-$$"
@@ -164,6 +193,7 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     #     all, still opens to the view picker — the actual migration,
     #     not just the source text describing one.
     SS_HOME_E="$(mktemp -d)"
+    seed_cache "$SS_HOME_E"
     mkdir -p "$SS_HOME_E/.config/brew-launcher"
     printf 'OPEN_TO_CATEGORIES=on\n' > "$SS_HOME_E/.config/brew-launcher/config"
     SS_SESSION_E="blss-migrate-$$"
