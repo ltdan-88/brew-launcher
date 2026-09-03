@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.79.0"
+VERSION="0.80.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -131,6 +131,7 @@ CONFIG_STARTUP_SCREEN=""
 CONFIG_OPEN_TO_CATEGORIES=""
 CONFIG_SORT=""
 CONFIG_ALT_KEYBINDS=""
+CONFIG_DETAILS=""
 CONFIG_DETAILS_POSITION=""
 CONFIG_COMPACT_VIEW=""
 
@@ -156,6 +157,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
             SORT)                CONFIG_SORT="$config_value" ;;
             ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="$config_value" ;;
+            DETAILS)             CONFIG_DETAILS="$config_value" ;;
             DETAILS_POSITION)    CONFIG_DETAILS_POSITION="$config_value" ;;
             COMPACT_VIEW)        CONFIG_COMPACT_VIEW="$config_value" ;;
         esac
@@ -1825,7 +1827,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
             ;;
         toggle_details)
-            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice: it stays on until you turn it off again here — F3\nhas nothing left to do while this is on (and drops out of\nthe footer, so nothing on screen even offers it), so it\ncan'"'"'t be undone by accident. Pressing F3 directly instead\n(while this is off) is just a quick peek, and Esc there\ncloses it first before doing anything else. The preset\npicker (F9) has its own details pane that'"'"'s always on, no\ntoggle needed.\n'
+            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice: it stays on — across relaunches too, same as every\nother setting here — until you turn it off again here. F3\nhas nothing left to do while this is on (and drops out of\nthe footer, so nothing on screen even offers it), so it\ncan'"'"'t be undone by accident. Pressing F3 directly instead\n(while this is off) is just a quick peek that never saves\nanywhere, and Esc there closes it first before doing\nanything else. The preset picker (F9) has its own details\npane that'"'"'s always on, no toggle needed.\n'
             ;;
         toggle_details_position)
             printf 'Details Position\n\nBottom (default): the details/preview pane opens below the\nlist. Top: it opens above instead. Applies everywhere one\nshows up — the main list, F2, F9, and Actions/Settings'"'"'\nown always-on panes — not just wherever you toggle it from.\n'
@@ -3590,6 +3592,23 @@ DETAILS_VISIBLE=false
 # without guessing.
 DETAILS_PINNED=false
 
+# Raised live: "changing themes and relaunching toggles the details
+# pane into off in settings." A theme change relaunches the whole
+# process (see pick_theme()'s own exec) to apply the new colors, and
+# DETAILS_VISIBLE/DETAILS_PINNED above used to be genuinely
+# per-session — the exact same gap the earlier "not always persistent"
+# fix had already closed for a stray F3 press, just reached through a
+# different door here (any real process restart, not just F3). Seeded
+# from config now, same as every other Settings row — but only the
+# standing-choice case (CONFIG_DETAILS=on), never the F3 peek: a peek
+# is deliberately never written to config in the first place (see
+# open_settings_menu()'s own toggle_details case, the only place that
+# writes this key).
+if [[ "$CONFIG_DETAILS" == on ]]; then
+    DETAILS_VISIBLE=true
+    DETAILS_PINNED=true
+fi
+
 typeset -A category_members
 
 load_category_names() {
@@ -4543,11 +4562,11 @@ pick_settings_action() {
     [[ "$DETAILS_VISIBLE" == true ]] && details_state='On'
     rows+=("toggle_details"$'\t'"$(printf '%-20s%s' 'Details' "$details_state")")
 
-    # Persisted (unlike Details above, which is a per-session peek) —
-    # where the pane sits is a standing layout preference, same as
-    # Sort or Alt Keybinds. Read by details_preview_window(), which
-    # every screen with a details/preview pane builds its
-    # --preview-window value through.
+    # Persisted, same as Details above (now) and Sort/Alt Keybinds —
+    # where the pane sits is a standing layout preference regardless
+    # of whether the pane itself is currently pinned on. Read by
+    # details_preview_window(), which every screen with a details/
+    # preview pane builds its --preview-window value through.
     local details_position_state='Bottom'
     [[ "$DETAILS_POSITION" == top ]] && details_position_state='Top'
     rows+=("toggle_details_position"$'\t'"$(printf '%-20s%s' 'Details Position' "$details_position_state")")
@@ -4680,11 +4699,18 @@ open_settings_menu() {
                 continue
                 ;;
             toggle_details)
-                # Not persisted like the toggles above — same as F3
-                # itself, this is a per-session view preference, not a
-                # setting. No rebuild needed either: unlike Sort, this
-                # only changes whether the preview window shows, not
-                # the data in it, so the main loop's own next fzf
+                # Persisted now — raised live: "changing themes and
+                # relaunching toggles the details pane into off in
+                # settings." A theme change relaunches the whole
+                # process, and this used to be genuinely per-session,
+                # the same underlying gap the earlier "not always
+                # persistent" fix had already closed for a stray F3
+                # press. Only this path writes CONFIG_DETAILS — F3
+                # itself stays a deliberate, never-written peek; see
+                # DETAILS_PINNED's own comment on why the two states
+                # exist at all. No rebuild needed either: unlike Sort,
+                # this only changes whether the preview window shows,
+                # not the data in it, so the main loop's own next fzf
                 # redraw already picks it up.
                 [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
 
@@ -4693,6 +4719,11 @@ open_settings_menu() {
                 # true (a standing "always on" choice) if Details just
                 # turned on this way, false if it just turned off.
                 DETAILS_PINNED="$DETAILS_VISIBLE"
+
+                new_value='off'
+                [[ "$DETAILS_VISIBLE" == true ]] && new_value='on'
+                set_config_value DETAILS "$new_value"
+                CONFIG_DETAILS="$new_value"
                 continue
                 ;;
             toggle_details_position)

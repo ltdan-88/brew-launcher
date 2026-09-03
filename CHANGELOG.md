@@ -5,6 +5,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.80.0] — 2026-09-03
+
+### Changed
+
+- **Details (turned on via Actions → Settings → Details) now survives a
+  relaunch, not just a session.** Raised live: "changing themes and
+  relaunching toggles the details pane into off in settings." Picking a
+  theme relaunches the whole process to apply the new colors
+  (`pick_theme()`'s own `exec`), and Details being on/off had never been
+  written to the config file at all — a deliberate, but increasingly
+  surprising, "per-session view preference, not a setting" choice from
+  when it first shipped. It was the one row in Settings that didn't
+  behave like every other one there (Theme, Startup Screen, Sort, and so
+  on all persist). A new `DETAILS=` config key now saves the standing
+  choice, read back at startup the same way every other setting is — but
+  only from the Settings toggle; a plain F3 press stays a deliberate,
+  never-saved peek, same as always. Confirmed live: turn Details on via
+  Settings, kill and restart the process against the same config (not
+  just check the file), still on; turn it off, restart again, stays off.
+
 ## [0.79.0] — 2026-09-03
 
 ### Fixed
