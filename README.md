@@ -90,6 +90,7 @@ shortcut, back up, and every standing preference — lives behind
 - **Hide / Favorite / Categorize** (F6/F7/F8) also work directly, without opening the menu.
 - **Tab marks a row** (right-click, or Control-click on a Mac trackpad, does the same thing with a mouse). Every action then acts on whatever's marked, or on the highlighted row when nothing is — so hiding, favoriting, categorizing, updating or making shortcuts for a batch is the same key as doing one, just with marks set first. The two actions that can't apply to several (Launch Flags, Run With Args) say so rather than quietly acting on one. Marks clear once the action runs. The footer updates the instant something is marked — how many, and that Enter now launches them together — so marking a row for the first time doesn't require already knowing what comes next.
 - **Ctrl-A** marks (or, pressed again, unmarks) every row the current search actually matches — search or switch views first to narrow things down, then Ctrl-A the whole result instead of Tab-ing through each one.
+- **Esc** clears a marked set too, ahead of anything else it would otherwise do — see [Reference](#reference) for where that fits among Esc's other steps.
 - **Create Preset**, **Create Shortcut**, and the bulk actions above only appear when there's an actual list of tools to act on — not from the view picker.
 - **Settings** is its own screen, one level down, holding every on/off preference: Theme, Default Categories, Default Hidden, Startup Screen, Sort, Details, Details Position, Alt Keybinds. Toggles flip with Space or Enter and reopen Settings right after.
 - **F4**, **F5**, and **F9** also work from inside the view picker (**F2**).
@@ -296,7 +297,7 @@ one long scrolling list.
 | **F2** / **⌥V** | Switch view (All · Favorites · categories · Uncategorized · Hidden) | footer |
 | **F3** / **⌥D** | Show or hide the details pane | footer |
 | **Shift-Up/Down** | Scroll the details pane | footer |
-| **Esc** | Go back one level; on `All`, asks Quit or Cancel first | footer |
+| **Esc** | Go back one level — closes the details pane, then clears a marked set, then steps back a view; on `All`, asks Quit or Cancel first | footer |
 | **F4** / **⌥M** | Open the Actions menu — also works from the view picker | footer |
 | **F9** / **⌥P** | Launch a preset (reattaches if it's already running) — also works from the view picker; its own details pane is always on, previewing what's in the highlighted preset | footer |
 | **Ctrl-E** | Rearrange (add/remove/reorder tools in) the highlighted preset — in the F9 picker | picker |

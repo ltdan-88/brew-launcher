@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.82.0"
+VERSION="0.83.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -83,6 +83,17 @@ export FOOTER_CLICK_FILE="${FOOTER_CLICK_FILE:-$CACHE_DIR/footer-click.$$}"
 # Same idea as FOOTER_CLICK_FILE above, for a click on the main list's
 # own NAME/SIZE column header — see --internal-header-click below.
 export HEADER_CLICK_FILE="${HEADER_CLICK_FILE:-$CACHE_DIR/header-click.$$}"
+
+# Same idea again, for $FZF_SELECT_COUNT — fzf's own live mark count,
+# only ever visible inside the still-running fzf process (the marking
+# binds read it directly). The main loop needs it too, after fzf has
+# already exited, to tell "nothing marked" apart from "the one row
+# under the cursor, marked or not" in its own $selection/$marked_entries
+# (see run_fzf's caller for why those two cases print identically) —
+# so the same marking binds that already re-invoke this script for the
+# live footer (see --internal-marked-footer below) drop the count here
+# too, as a side effect, for the main loop to read once fzf is done.
+export MARKED_COUNT_FILE="${MARKED_COUNT_FILE:-$CACHE_DIR/marked-count.$$}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher"
 IGNORE_FILE="$CONFIG_DIR/ignore"
 
@@ -561,7 +572,8 @@ Keyboard shortcuts:
             pressed again, unmarks) every row the current search
             actually matches — search or switch views first to
             narrow it down, then Ctrl-A the whole result instead of
-            Tab-ing through each one.
+            Tab-ing through each one. Esc clears a marked set too,
+            ahead of anything else it would otherwise do (see below).
 
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Most Used, Recently Launched, Recently
@@ -657,9 +669,10 @@ Views:
   category holds — it's the one action here you can't undo.
 
   Esc goes up one level at a time: the details pane (if open) -> a
-  filtered view -> the view picker -> All -> a Quit/Cancel confirm
-  (Esc there means Cancel too, so a second stray Esc doesn't compound
-  the first).
+  marked set (if anything's marked, clearing it rather than acting on
+  it) -> a filtered view -> the view picker -> All -> a Quit/Cancel
+  confirm (Esc there means Cancel too, so a second stray Esc doesn't
+  compound the first).
 
 Categories:
   F7/⌥F toggles Favorites for the selected entry, instantly. F8/⌥C is
@@ -1163,6 +1176,7 @@ build_footer() {
 
 if [[ "$1" == "--internal-marked-footer" ]]; then
 
+    printf '%s' "${FZF_SELECT_COUNT:-0}" > "$MARKED_COUNT_FILE"
     build_footer "$2" "${FZF_SELECT_COUNT:-0}"
     exit 0
 fi
@@ -4087,7 +4101,9 @@ show_help_keys() {
     rows+=("  instant something is marked, saying how many and what")
     rows+=("  Enter now does. Ctrl-A marks (or unmarks) everything the")
     rows+=("  current search matches — narrow it down first, then")
-    rows+=("  Ctrl-A the whole result instead of Tab-ing through each one")
+    rows+=("  Ctrl-A the whole result instead of Tab-ing through each one.")
+    rows+=("  Esc clears a marked set too, ahead of anything else it would")
+    rows+=("  otherwise do — see Esc's own row below")
     rows+=("")
     rows+=("Markers — shown next to an entry, not things you press")
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
@@ -4123,9 +4139,14 @@ show_help_keys() {
     rows+=("  F7 / ⌥F   Toggle Favorites for the selected entry")
     rows+=("  F8 / ⌥C   Categorize the selected entry")
     rows+=("")
+    rows+=("Esc — one step back at a time")
+    rows+=("  Closes the details pane first if it's open as a peek, then")
+    rows+=("  clears a marked set if anything's marked, then steps back a")
+    rows+=("  view, then asks to quit — whichever of those is still true")
+    rows+=("  when it's pressed")
+    rows+=("")
     rows+=("Details pane, once open")
     rows+=("  Shift-Up / Shift-Down   Scroll it")
-    rows+=("  Esc                     Closes it first — back/quit on the next press")
 
     show_help_screen "${rows[@]}"
 }
@@ -4239,7 +4260,9 @@ show_help_mouse_and_notes() {
     rows+=("  A just-installed tool can take up to 60s to appear;")
     rows+=("  F5 shows it immediately")
     rows+=("  Esc goes back one level at a time rather than quitting —")
-    rows+=("  on All, with nowhere further back to go, it asks first")
+    rows+=("  closes the details pane, then clears a marked set, then")
+    rows+=("  steps back a view; on All, with nowhere further back to")
+    rows+=("  go, it asks first")
 
     show_help_screen "${rows[@]}"
 }
@@ -8693,6 +8716,13 @@ run_fzf() {
     rm -f "$HEADER_CLICK_FILE"
     options+=(--bind "click-header:transform:$SCRIPT_PATH --internal-header-click")
 
+    # Same reasoning, for $MARKED_COUNT_FILE — see its own comment
+    # near FOOTER_CLICK_FILE/HEADER_CLICK_FILE above. Absent (rather
+    # than stale-but-cleared) is what the reader after fzf exits
+    # treats as "nothing marked", so removing it, not zeroing it, is
+    # what actually resets it between calls.
+    rm -f "$MARKED_COUNT_FILE"
+
     fzf "${options[@]}"
 }
 
@@ -8863,6 +8893,22 @@ while true; do
         marked_rest="${marked_rest#*$'\t'}"
         marked_formulas+=("${marked_rest%%$'\t'*}")
     done
+
+    # --------------------------------------------------------
+    # How many rows are *actually* marked right now, as opposed to
+    # marked_entries above, which always holds at least one line
+    # (fzf falls back to the cursor row once nothing is marked) and so
+    # can't itself tell "1 marked" apart from "0 marked, cursor row
+    # only". Esc's own handling below is the one place that distinction
+    # matters — see MARKED_COUNT_FILE's own comment for why a
+    # side-channel file is what carries it out of the fzf process that
+    # just exited. Missing file (nothing ever marked this screen, so
+    # none of the marking binds ever ran) reads as zero, same as an
+    # empty one.
+    # --------------------------------------------------------
+
+    marked_count="$(cat "$MARKED_COUNT_FILE" 2>/dev/null)"
+    marked_count="${marked_count:-0}"
 
     # --------------------------------------------------------
     # A footer click reports as a plain "enter" above (see
@@ -9130,26 +9176,49 @@ while true; do
 
     # --------------------------------------------------------
     # Esc: one step back at a time. A view filter (same idea as F2's
-    # picker itself) and the details pane are two independent things
-    # Esc can undo, so whichever is currently "open" closes first —
-    # closing the pane takes priority over stepping back a view, and
-    # only quits once there's truly nothing left to back out of.
-    # "Back" while filtered reopens the category picker (same as F5)
-    # rather than jumping straight to "All", so you can switch to a
-    # different category without detouring through the full list.
+    # picker itself), the details pane, and a marked set are three
+    # independent things Esc can undo, so whichever of them is
+    # currently "open" closes first — only quits once there's truly
+    # nothing left to back out of. "Back" while filtered reopens the
+    # category picker (same as F5) rather than jumping straight to
+    # "All", so you can switch to a different category without
+    # detouring through the full list.
     #
-    # Skipped entirely when DETAILS_PINNED is true. Turning Details on via Actions is a
-    # standing "always on" choice; Esc immediately undoing it on the
-    # very next press would make that choice pointless. A pane opened
-    # with a quick F3 press is the opposite — Esc closing it first is
-    # exactly what it's for — and DETAILS_PINNED is what tells the two
-    # apart (see its own comment).
+    # Pane-close is skipped entirely when DETAILS_PINNED is true.
+    # Turning Details on via Actions is a standing "always on" choice;
+    # Esc immediately undoing it on the very next press would make
+    # that choice pointless. A pane opened with a quick F3 press is
+    # the opposite — Esc closing it first is exactly what it's for —
+    # and DETAILS_PINNED is what tells the two apart (see its own
+    # comment).
+    #
+    # Mark-clearing comes next, ahead of stepping back a view or
+    # quitting — raised live ("do we have a keybind to unselect
+    # all?"), after toggle-all (Ctrl-A) turned out to invert a mixed
+    # marked set row-by-row rather than cleanly clearing it (confirmed
+    # live), leaving no clean "give up on this batch" key at all.
+    # fzf's own deselect-all is the right primitive, but there's
+    # nothing here to explicitly call it: marks are private to the
+    # fzf process that just exited, so simply not carrying them
+    # forward into the next run_fzf call already clears them — the
+    # "clearing" is the redraw itself, not a separate step. Esc
+    # quitting or stepping back a view with something still marked
+    # would already have thrown the marks away as a side effect of
+    # that same redraw; folding this in first just makes the marks
+    # themselves the thing Esc undoes on that press, rather than a
+    # silent side effect of a bigger step the marking may not have
+    # been meant to trigger yet.
     # --------------------------------------------------------
 
     if [[ "$action" == "esc" ]]; then
 
         if [[ "$DETAILS_VISIBLE" == true && "$DETAILS_PINNED" == false ]]; then
             DETAILS_VISIBLE=false
+            restore_position="$(find_entry_position "${selection%%$'\t'*}")"
+            continue
+        fi
+
+        if (( marked_count > 0 )); then
             restore_position="$(find_entry_position "${selection%%$'\t'*}")"
             continue
         fi

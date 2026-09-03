@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.83.0] — 2026-09-03
+
+### Added
+
+- **Esc clears a marked set, ahead of stepping back a view or quitting.**
+  Raised live: "do we have a keybind to unselect all?" — after Ctrl-A
+  (`toggle-all`) turned out to invert a mixed marked set row-by-row rather
+  than cleanly clearing it (confirmed live), there was no key that reliably
+  gave up on a batch. Folded into Esc rather than a new bind, as its own
+  priority step: closes the details pane first if it's open as a peek
+  (unchanged), then clears a marked set if anything's marked (new), then
+  steps back a view or asks to quit (unchanged). Detecting "anything
+  marked" needed fzf's own `$FZF_SELECT_COUNT`, which only exists inside
+  the fzf process itself — a new `MARKED_COUNT_FILE` side-channel (same
+  pattern as the existing footer/header click files) carries it out, written
+  by the same marking binds that already update the live footer.
+
 ## [0.82.0] — 2026-09-03
 
 ### Added
