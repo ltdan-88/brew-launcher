@@ -89,6 +89,7 @@ shortcut, back up, and every standing preference — lives behind
 
 - **Hide / Favorite / Categorize** (F6/F7/F8) also work directly, without opening the menu.
 - **Tab marks a row** (right-click, or Control-click on a Mac trackpad, does the same thing with a mouse). Every action then acts on whatever's marked, or on the highlighted row when nothing is — so hiding, favoriting, categorizing, updating or making shortcuts for a batch is the same key as doing one, just with marks set first. The two actions that can't apply to several (Launch Flags, Run With Args) say so rather than quietly acting on one. Marks clear once the action runs. The footer updates the instant something is marked — how many, and that Enter now launches them together — so marking a row for the first time doesn't require already knowing what comes next.
+- **Ctrl-A** marks (or, pressed again, unmarks) every row the current search actually matches — search or switch views first to narrow things down, then Ctrl-A the whole result instead of Tab-ing through each one.
 - **Create Preset**, **Create Shortcut**, and the bulk actions above only appear when there's an actual list of tools to act on — not from the view picker.
 - **Settings** is its own screen, one level down, holding every on/off preference: Theme, Default Categories, Default Hidden, Startup Screen, Sort, Details, Details Position, Alt Keybinds. Toggles flip with Space or Enter and reopen Settings right after.
 - **F4**, **F5**, and **F9** also work from inside the view picker (**F2**).
@@ -309,6 +310,7 @@ one long scrolling list.
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
 | **Tab** | Mark/unmark a row — actions then apply to everything marked | footer |
+| **Ctrl-A** | Mark/unmark every row the current search matches | footer |
 | **Enter** | With several marked: launch them all together, one per tmux pane | footer |
 | — | Create a new preset | Actions only |
 | — | Create a desktop shortcut (macOS or Linux) — one per marked entry | Actions only |

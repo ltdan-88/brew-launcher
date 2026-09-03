@@ -297,6 +297,21 @@ run_fzf_full_block="$(sed -n '/^run_fzf() {/,/^}/p' "$LAUNCHER")"
 [[ "$run_fzf_full_block" == *'right-click:toggle+transform-footer('* ]] ||
     fail "run_fzf should bind right-click to fzf's own toggle default plus a live footer update, same reasoning as tab/shift-tab above"
 
+# ------------------------------------------------------------
+# 11. Ctrl-A marks/unmarks everything the current search actually
+#     matches, not literally every row ever loaded — raised live:
+#     "are there any improvements we can still make to make navigation
+#     and usability even easier?" Narrowing down with a search or a
+#     category first, then acting on the whole result in one press,
+#     had no way to select all of it short of Tab-ing through each
+#     row. fzf's own toggle-all is filter-aware and a real toggle (not
+#     a one-way select-all), confirmed live before relying on either
+#     property — see section 12 below for the actual live proof.
+# ------------------------------------------------------------
+
+[[ "$run_fzf_full_block" == *'ctrl-a:toggle-all+transform-footer('* ]] ||
+    fail "run_fzf should bind ctrl-a to fzf's own toggle-all (filter-aware, and a real toggle) plus the same live footer update tab/shift-tab/right-click already get"
+
 run_fzf_call_site="$(grep -A6 'run_fzf \\$' "$LAUNCHER")"
 
 [[ "$run_fzf_call_site" == *'"$restore_position" \'*$'\n''            "$esc_hint"'* ]] ||
@@ -309,4 +324,73 @@ internal_marked_footer_block="$(sed -n '/if \[\[ "\$1" == "--internal-marked-foo
 [[ "$internal_marked_footer_block" == *'build_footer "$2" "${FZF_SELECT_COUNT:-0}"'* ]] ||
     fail "--internal-marked-footer should call build_footer with esc_hint and fzf's own \$FZF_SELECT_COUNT"
 
-printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, and the footer updates live the instant something is marked (via Tab/Shift-Tab or right-click alike) instead of staying silent until an action is taken\n'
+# ------------------------------------------------------------
+# 12. Live: Ctrl-A actually marks only what a search narrowed down to,
+#     and toggles back off on a second press — the two properties
+#     section 11 above only checks as source text. A cache with three
+#     tools, two sharing a "pytool" prefix, is deliberately not just
+#     "any 3 tools with something in common by accident" — chosen so
+#     a fuzzy match on a single shared letter (tried first, see below)
+#     couldn't coincidentally satisfy this the same way a real prefix
+#     filter does.
+# ------------------------------------------------------------
+
+if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
+
+    wait_for() {
+        local session="$1" pattern="$2"
+        local _
+        for _ in {1..40}; do
+            tmux capture-pane -t "$session" -p 2>/dev/null | grep -q "$pattern" && return 0
+            sleep 0.5
+        done
+        return 1
+    }
+
+    MS_CACHE_FORMAT_VERSION="$(sed -n 's/^CACHE_FORMAT_VERSION=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
+    [[ -n "$MS_CACHE_FORMAT_VERSION" ]] || fail "could not read CACHE_FORMAT_VERSION from $LAUNCHER"
+
+    MS_HOME="$(mktemp -d)"
+    MS_CACHE_DIR="$MS_HOME/.cache/brew-launcher"
+    mkdir -p "$MS_CACHE_DIR"
+    cat > "$MS_CACHE_DIR/entries" <<'EOF'
+pytool1	Python tool 1	pytool1	1.0	1MB	0	pytool1	/bin/pytool1	100	-	0
+pytool2	Python tool 2	pytool2	1.0	1MB	0	pytool2	/bin/pytool2	200	-	0
+rustool	Rust tool	rustool	1.0	1MB	0	rustool	/bin/rustool	300	-	0
+EOF
+    printf '%s\nfixture-state-snapshot\n' "$MS_CACHE_FORMAT_VERSION" > "$MS_CACHE_DIR/state"
+    : > "$MS_CACHE_DIR/outdated"
+
+    MS_SESSION="blf-mark-all-$$"
+    tmux kill-session -t "$MS_SESSION" 2>/dev/null
+    tmux new-session -d -s "$MS_SESSION" -x 100 -y 30 \
+        "HOME='$MS_HOME' XDG_CONFIG_HOME='$MS_HOME/.config' XDG_CACHE_HOME='$MS_HOME/.cache' zsh '$LAUNCHER'"
+
+    if wait_for "$MS_SESSION" "Tab  Mark"; then
+
+        tmux send-keys -t "$MS_SESSION" -l "pytool"
+        sleep 0.3
+        tmux send-keys -t "$MS_SESSION" C-a
+        wait_for "$MS_SESSION" "2 marked" ||
+            fail "Ctrl-A after filtering to \"pytool\" should mark both pytool rows, got: $(tmux capture-pane -t "$MS_SESSION" -p 2>/dev/null)"
+
+        tmux capture-pane -t "$MS_SESSION" -p 2>/dev/null | grep -q "rustool" &&
+            fail "rustool shouldn't even be visible once filtered to \"pytool\", let alone marked"
+
+        tmux send-keys -t "$MS_SESSION" C-a
+        sleep 0.5
+        tmux capture-pane -t "$MS_SESSION" -p 2>/dev/null | grep -q "Tab  Mark    Enter" ||
+            fail "a second Ctrl-A should unmark everything again (plain \"Tab  Mark\" footer, no count), got: $(tmux capture-pane -t "$MS_SESSION" -p 2>/dev/null)"
+
+    else
+        printf 'SKIP: launcher never became interactive, skipping the live Ctrl-A check\n' >&2
+    fi
+
+    tmux kill-session -t "$MS_SESSION" 2>/dev/null
+    rm -rf "$MS_HOME"
+
+else
+    printf 'SKIP: tmux or fzf not available, skipping the live Ctrl-A check\n' >&2
+fi
+
+printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, the footer updates live the instant something is marked (via Tab/Shift-Tab, right-click, or Ctrl-A alike) instead of staying silent until an action is taken, and Ctrl-A marks/unmarks exactly what the current search matches (confirmed live, not just as source text)\n'
