@@ -40,6 +40,7 @@ mkdir -p "$CATEGORIES_DIR"
 # here.
 : > "$CATEGORIES_DIR/All"
 : > "$CATEGORIES_DIR/Hidden"
+: > "$CATEGORIES_DIR/Uncategorized"
 : > "$CATEGORIES_DIR/Favorites"
 : > "$CATEGORIES_DIR/Weather"
 : > "$CATEGORIES_DIR/Games"
@@ -62,7 +63,7 @@ load_category_names
 # 1. Reserved names never appear, even as hand-made files.
 # ------------------------------------------------------------
 
-for reserved in All Hidden; do
+for reserved in All Hidden Uncategorized; do
     for name in "${CATEGORY_NAMES[@]}"; do
         if [[ "$name" == "$reserved" ]]; then
             fail "reserved name '$reserved' appeared in CATEGORY_NAMES despite being a real file on disk"
@@ -188,4 +189,45 @@ if [[ "${category_counts[Security]:-0}" != "2" ]]; then
     fail "expected Security count 2 (age + age-keygen; age-inspect hidden, uninstalled-tool not cached), got ${category_counts[Security]:-0}"
 fi
 
-printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest, merges bundled categories without duplicating, counts exclude hidden/uninstalled entries\n'
+# ------------------------------------------------------------
+# 8. load_bundled_categories() reads field 10 correctly even when an
+#    earlier field is genuinely empty — raised live via a wrong
+#    "Uncategorized" count, the same class of bug already fixed in
+#    load_bundled_hidden_commands() (see ignore-fixtures.sh's own
+#    matching section). It used to read the cache with a zsh `read`
+#    loop and placeholder variables for the fields in between; a
+#    collapsed empty field there didn't just make the read one token
+#    short the way it did for load_bundled_hidden_commands() — two
+#    placeholders sit after field 10 here (before field 11), so the
+#    shift landed field 11's own value ("0" or "1") in what this
+#    thought was field 10, meaning a formula could have silently been
+#    "filed" into a bogus category literally named "0" or "1" instead
+#    of its real one. Two fields a real formula's cache row can
+#    actually have empty: description (no `desc` from `brew info`)
+#    and size (no entry in `brew info --sizes`).
+# ------------------------------------------------------------
+
+typeset -A manually_categorized_commands category_excluded_commands categorized_commands
+categorized_commands=()
+manually_categorized_commands=()
+category_excluded_commands=()
+
+source <(sed -n '/^load_bundled_categories() {/,/^}/p' "$LAUNCHER")
+
+CACHE_FILE="$TEST_HOME/entries-bundled-fields"
+CONFIG_DEFAULT_CATEGORIES=""
+
+cat > "$CACHE_FILE" <<CACHE
+empty-desc		empty-desc	1.0	1MB	0	empty-desc	/opt/homebrew/bin/empty-desc	100	Games	0
+empty-size	Some tool	empty-size	1.0		0	empty-size	/opt/homebrew/bin/empty-size	100	Games	0
+CACHE
+
+default_category_commands=()
+load_bundled_categories
+
+[[ "${default_category_commands[empty-desc]-}" == "Games" ]] ||
+    fail "a bundled category should still be read correctly when the command's description is empty, got: ${default_category_commands[empty-desc]-<unset>}"
+[[ "${default_category_commands[empty-size]-}" == "Games" ]] ||
+    fail "a bundled category should still be read correctly when the command's size is empty, got: ${default_category_commands[empty-size]-<unset>}"
+
+printf 'PASS: category loading skips reserved names, pins Favorites first, sorts the rest, merges bundled categories without duplicating, counts exclude hidden/uninstalled entries, and load_bundled_categories() reads field 10 correctly even past an empty description or size\n'

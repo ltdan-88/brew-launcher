@@ -5,6 +5,34 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.81.0] — 2026-09-03
+
+### Added
+
+- **A new "Uncategorized" view in F2** — raised live: "I'd like to have a
+  category called 'Uncategorized'." Computed, not a real category file
+  (same family as All/Hidden/Most Used/Recently Launched/Recently Added):
+  every installed, non-hidden command that isn't filed anywhere — no
+  category you made, no [bundled default](#bundled-defaults) either.
+  Being favorited alone doesn't count as filed, matching how the `#`
+  marker already treats it. F3 previews its contents like every other
+  row now does; Ctrl-R/Ctrl-D refuse it the same way they refuse every
+  other built-in view.
+
+### Fixed
+
+- **`load_bundled_categories()` misreading a cache row with an empty
+  description or size**, the same class of bug just fixed in
+  `load_bundled_hidden_commands()` (v0.79.0) — found while building the
+  above, since it's exactly the function the new Uncategorized view
+  depends on for correctness. Two placeholders sat after the category
+  field in the old zsh `read` loop, so a collapsed empty field didn't
+  just come back empty the way it did there — it shifted `default_hidden`'s
+  own value ("0" or "1") into what the code thought was the category
+  name, meaning a formula could have silently been "filed" into a bogus
+  category literally named "0" or "1" instead of its real one. Fixed the
+  same way: `awk` instead of a `read` loop with placeholder variables.
+
 ## [0.80.0] — 2026-09-03
 
 ### Changed

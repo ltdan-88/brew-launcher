@@ -47,7 +47,7 @@ rename_category_block="$(sed -n '/^rename_category() {/,/^}/p' "$LAUNCHER")"
 [[ "$rename_category_block" == *'--print-query'* ]] ||
     fail "rename_category should use fzf's --print-query, the same typed-name idiom as toggle_category"
 
-for reserved in 'All' 'Hidden' 'Favorites' 'Most Used' 'Recently Added'; do
+for reserved in 'All' 'Hidden' 'Favorites' 'Most Used' 'Recently Added' 'Uncategorized'; do
     [[ "$rename_category_block" == *"\"$reserved\""* ]] ||
         fail "rename_category should refuse the built-in view name \"$reserved\""
 done
@@ -128,4 +128,25 @@ launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$launch_preset_block" == *'rename_preset "$preset_name"'* ]] ||
     fail "launch_preset (F9) should call rename_preset on ctrl-r"
 
-printf 'PASS: rename_category()/rename_preset() guard against reserved/invalid/colliding names and mv the file, F2 and F9 both wire up Ctrl-R to call them\n'
+# ------------------------------------------------------------
+# 4. pick_view() has its own reserved-name guard ahead of even calling
+#    rename_category()/deleting a file — "All" refusing with "can't
+#    be renamed"/"can't be deleted" was previously only ever confirmed
+#    live, never checked here. Uncategorized (raised live: "I'd like
+#    to have a category called 'Uncategorized'") needs the exact same
+#    guard, since it's a computed view with no CATEGORIES_DIR file
+#    behind it, same as All/Hidden/Most Used/Recently Added/Recently
+#    Launched.
+# ------------------------------------------------------------
+
+ctrl_r_guard_block="$(printf '%s\n' "$pick_view_block" | sed -n '/pick_action" == "ctrl-r"/,/^    fi$/p')"
+ctrl_d_guard_block="$(printf '%s\n' "$pick_view_block" | sed -n '/pick_action" == "ctrl-d"/,/^    fi$/p')"
+
+for reserved in 'All' 'Hidden' 'Favorites' 'Most Used' 'Recently Added' 'Recently Launched' 'Uncategorized'; do
+    [[ "$ctrl_r_guard_block" == *"\"$reserved\""* ]] ||
+        fail "pick_view's own Ctrl-R guard should refuse the built-in view name \"$reserved\" before ever calling rename_category"
+    [[ "$ctrl_d_guard_block" == *"\"$reserved\""* ]] ||
+        fail "pick_view's own Ctrl-D guard should refuse the built-in view name \"$reserved\" before ever deleting a file"
+done
+
+printf 'PASS: rename_category()/rename_preset() guard against reserved/invalid/colliding names and mv the file, F2 and F9 both wire up Ctrl-R to call them, and pick_view'"'"'s own Ctrl-R/Ctrl-D guards refuse every built-in view name (including Uncategorized) before reaching either\n'

@@ -807,6 +807,22 @@ jobs:
       - name: Details pinned + F3 no-op test
         run: zsh test/details-pinned-f3-fixtures.sh
 
+  uncategorized-view-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf and tmux
+        run: brew install fzf tmux
+
+      # Live: the Uncategorized row's count, its own F3 preview
+      # content, Ctrl-R/Ctrl-D both refusing it, and selecting it
+      # actually filtering the main list — each its own fresh tmux
+      # session, real keys pressed against a real launch.
+      - name: Uncategorized view test
+        run: zsh test/uncategorized-view-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -965,6 +981,9 @@ jobs:
 
       - name: Details pinned + F3 no-op test
         run: zsh test/details-pinned-f3-fixtures.sh
+
+      - name: Uncategorized view test
+        run: zsh test/uncategorized-view-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would
