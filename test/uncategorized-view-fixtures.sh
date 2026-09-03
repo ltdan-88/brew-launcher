@@ -90,6 +90,20 @@ EOF
     printf 'tool2\n' > "$UV_CONFIG_DIR/categories/Morning"
     printf 'tool5\n' > "$UV_CONFIG_DIR/categories/Favorites"
 
+    # Sanity check the fixture itself before ever launching anything
+    # against it — raised live after a CI-only failure (Morning and
+    # Favorites missing from the picker, on Linux specifically,
+    # reproducible on rerun but not reproducible in an isolated Docker
+    # container matching the same OS/Homebrew/fzf/tmux versions) that
+    # this diagnostic exists specifically to narrow down: is the
+    # fixture itself ever incomplete on disk (a mkdir/printf that
+    # silently failed — this file has no `set -e`, so that would
+    # otherwise go unnoticed), or is a complete, correct fixture being
+    # misread by the app itself.
+    if [[ ! -f "$UV_CONFIG_DIR/categories/Morning" || ! -f "$UV_CONFIG_DIR/categories/Favorites" ]]; then
+        fail "fixture setup itself is incomplete before any session even launched — ls -la \"$UV_CONFIG_DIR/categories\": $(ls -la "$UV_CONFIG_DIR/categories" 2>&1)"
+    fi
+
     uv_open_view_picker() {
         local session="$1"
         tmux kill-session -t "$session" 2>/dev/null
@@ -114,7 +128,7 @@ EOF
     if uv_open_view_picker "$UV_SESSION_A"; then
 
         tmux capture-pane -t "$UV_SESSION_A" -p 2>/dev/null | grep -q "Uncategorized (2)" ||
-            fail "expected an Uncategorized row reading (2), got: $(tmux capture-pane -t "$UV_SESSION_A" -p 2>/dev/null)"
+            fail "expected an Uncategorized row reading (2), got: $(tmux capture-pane -t "$UV_SESSION_A" -p 2>/dev/null); ls -la \"$UV_CONFIG_DIR/categories\" at failure time: $(ls -la "$UV_CONFIG_DIR/categories" 2>&1); Morning contents: $(cat "$UV_CONFIG_DIR/categories/Morning" 2>&1); Favorites contents: $(cat "$UV_CONFIG_DIR/categories/Favorites" 2>&1)"
 
         # F3 first, then type the filter — not the other way around.
         # pick_view()'s own F3 handler recurses into a fresh pick_view()
