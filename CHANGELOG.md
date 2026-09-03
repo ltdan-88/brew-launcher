@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.74.0] — 2026-09-03
+
+### Changed
+
+- **The border on every screen now says "brew-launcher", not "Homebrew
+  CLI".** Raised live: paired with a version number, "Homebrew CLI vX.Y.Z"
+  reads exactly like an app's own self-identification — but there's no app
+  actually called that; it's this launcher's own version, not Homebrew's.
+  Every other place this project shows its own name (the README, `--help`,
+  the Homebrew formula itself) already says brew-launcher; the border was
+  the one place that didn't, despite the very function generating it having
+  always said in its own comment that it should.
+
 ## [0.73.0] — 2026-09-02
 
 ### Fixed
