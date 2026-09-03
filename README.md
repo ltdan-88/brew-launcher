@@ -90,7 +90,7 @@ shortcut, back up, and every standing preference — lives behind
 - **Hide / Favorite / Categorize** (F6/F7/F8) also work directly, without opening the menu.
 - **Tab marks a row** (right-click, or Control-click on a Mac trackpad, does the same thing with a mouse). Every action then acts on whatever's marked, or on the highlighted row when nothing is — so hiding, favoriting, categorizing, updating or making shortcuts for a batch is the same key as doing one, just with marks set first. The two actions that can't apply to several (Launch Flags, Run With Args) say so rather than quietly acting on one. Marks clear once the action runs. The footer updates the instant something is marked — how many, and that Enter now launches them together — so marking a row for the first time doesn't require already knowing what comes next.
 - **Create Preset**, **Create Shortcut**, and the bulk actions above only appear when there's an actual list of tools to act on — not from the view picker.
-- **Settings** is its own screen, one level down, holding every on/off preference: Theme, Default Categories, Default Hidden, Open to Categories, Sort, Details, Details Position, Alt Keybinds. Toggles flip with Space or Enter and reopen Settings right after.
+- **Settings** is its own screen, one level down, holding every on/off preference: Theme, Default Categories, Default Hidden, Startup Screen, Sort, Details, Details Position, Alt Keybinds. Toggles flip with Space or Enter and reopen Settings right after.
 - **F4**, **F5**, and **F9** also work from inside the view picker (**F2**).
 
 ### One place to switch views
@@ -104,7 +104,7 @@ and `Recently Added`, then `Favorites`, your own categories (marked `·`), and
 - `Most Used`, `Recently Launched`, and `Recently Added` are computed automatically — by launch count, by when you last launched something, and by install date — capped at 15 tools each.
 - **F3** previews what's inside the highlighted category, including tools filed there only via [bundled defaults](#bundled-defaults).
 - **Ctrl-R** renames a category, **Ctrl-D** deletes it (asks first, shows the count). Built-in views can't be renamed or deleted.
-- **F4 → Actions → Settings → Open to Categories** starts here instead of `All`.
+- **F4 → Actions → Settings → Startup Screen** can start here (or on [Presets](#presets)) instead of `All`.
 
 ### Favorites
 
@@ -184,6 +184,7 @@ background, since unlike a saved preset there's no F9 entry to bring it back.
 - **Ctrl-E** on a highlighted preset rearranges it (same Tab-to-mark screen, seeded with its current members) — add or drop tools too, not just reorder.
 - **Ctrl-R** renames it, **Ctrl-D** deletes it (asks first).
 - Needs [tmux](#terminal-backends). **F9** and **Create Preset** stay visible either way and explain the install command if it's missing.
+- **F4 → Actions → Settings → Startup Screen** can open straight here instead of `All` — worth it once you actually have a preset saved.
 
 ### Custom launch flags
 
@@ -321,7 +322,7 @@ one long scrolling list.
 | — | Factory Reset — wipe every category, favorite, hidden entry, preset and preference back to defaults (asks first) | Actions only |
 | — | Switch color theme | Settings only |
 | — | Toggle Default Categories / Default Hidden | Settings only |
-| — | Toggle Open to Categories | Settings only |
+| — | Cycle Startup Screen (All / Views / Presets) | Settings only |
 | — | Sort by name or size, each ascending or descending (Space cycles all four) | Settings only |
 | — | Click the **NAME** or **SIZE** column header to sort by it, click again to reverse | header |
 | — | Toggle Compact View (hide version/size columns and +/#/\* markers) | Settings only |
@@ -379,7 +380,7 @@ plain text if you'd rather edit them directly, one setting or command per
 line, `#` comments and blank lines ignored:
 
 ```
-~/.config/brew-launcher/config              # TERMINAL=, THEME=, CUSTOM_COLORS=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, OPEN_TO_CATEGORIES=, SORT=, ALT_KEYBINDS= — see below
+~/.config/brew-launcher/config              # TERMINAL=, THEME=, CUSTOM_COLORS=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, STARTUP_SCREEN=, SORT=, ALT_KEYBINDS= — see below
 ~/.config/brew-launcher/ignore               # hidden entries
 ~/.config/brew-launcher/shown                # bundled-hidden commands you F6'd back visible
 ~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8
