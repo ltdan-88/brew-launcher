@@ -141,7 +141,13 @@ confirm_quit_block="$(sed -n '/^confirm_quit() {/,/^}/p' "$LAUNCHER")"
 [[ "$confirm_quit_block" == *"Esc  [Cancel]"* ]] ||
     fail "confirm_quit's own footer should say Esc means Cancel, not Quit"
 
-esc_handler="$(grep -A20 '\[\[ "\$action" == "esc" \]\]; then' "$LAUNCHER" | head -20)"
+# Range-based, not a fixed line count after the match: a fixed window
+# (originally -A20) silently truncates the block again the next time
+# something is added ahead of the confirm_quit check inside it (as
+# happened when mark-clearing was inserted — see
+# marked-selection-fixtures.sh) and starts missing a real regression
+# instead of catching one.
+esc_handler="$(sed -n '/\[\[ "\$action" == "esc" \]\]; then/,/^    fi$/p' "$LAUNCHER")"
 [[ "$esc_handler" == *'confirm_quit'* ]] ||
     fail "the main list's Esc handler should call confirm_quit before actually quitting — raised live: \"I often accidentally exit the brew-launcher with ESC\""
 [[ "$esc_handler" == *'if confirm_quit; then'$'\n''            break'* ]] ||

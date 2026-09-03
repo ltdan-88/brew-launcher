@@ -393,4 +393,115 @@ else
     printf 'SKIP: tmux or fzf not available, skipping the live Ctrl-A check\n' >&2
 fi
 
-printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, the footer updates live the instant something is marked (via Tab/Shift-Tab, right-click, or Ctrl-A alike) instead of staying silent until an action is taken, and Ctrl-A marks/unmarks exactly what the current search matches (confirmed live, not just as source text)\n'
+# ------------------------------------------------------------
+# 13. Esc clears a marked set before it does anything else — raised
+#     live: "do we have a keybind to unselect all?", after toggle-all
+#     (Ctrl-A) turned out to invert a mixed marked set row-by-row
+#     rather than cleanly clearing it, leaving no key that reliably
+#     gives up on a batch. Folded into Esc rather than a new bind,
+#     ahead of stepping back a view or quitting.
+#
+#     marked_entries alone can't tell "1 marked" apart from "0 marked,
+#     cursor row only" (fzf falls back to the cursor row either way),
+#     so the main loop needs $FZF_SELECT_COUNT itself, which only
+#     exists inside the fzf process that already exited by the time
+#     the Esc branch runs — hence MARKED_COUNT_FILE, a side-channel the
+#     marking binds already write to for the live footer (section 10
+#     above), now read back into $marked_count after fzf returns.
+# ------------------------------------------------------------
+
+[[ "$full_source" == *'export MARKED_COUNT_FILE='* ]] ||
+    fail "MARKED_COUNT_FILE should be exported as a side-channel, same pattern as FOOTER_CLICK_FILE/HEADER_CLICK_FILE"
+
+internal_marked_footer_block="$(sed -n '/^if \[\[ "\$1" == "--internal-marked-footer" \]\]; then/,/^fi/p' "$LAUNCHER")"
+[[ "$internal_marked_footer_block" == *'> "$MARKED_COUNT_FILE"'* ]] ||
+    fail "--internal-marked-footer should also drop the live FZF_SELECT_COUNT into MARKED_COUNT_FILE for the main loop to read later"
+
+[[ "$run_fzf_full_block" == *'rm -f "$MARKED_COUNT_FILE"'* ]] ||
+    fail "run_fzf should clear MARKED_COUNT_FILE before every call, same as FOOTER_CLICK_FILE/HEADER_CLICK_FILE, so a stale count can't leak into a fresh screen"
+
+esc_block="$(sed -n '/if \[\[ "\$action" == "esc" \]\]; then/,/^    fi$/p' "$LAUNCHER" | head -40)"
+[[ "$full_source" == *'marked_count="$(cat "$MARKED_COUNT_FILE"'* ]] ||
+    fail "the main loop should read MARKED_COUNT_FILE into \$marked_count after every fzf_result parse"
+[[ "$esc_block" == *'(( marked_count > 0 ))'* ]] ||
+    fail "Esc should check marked_count before falling through to the view-step-back/quit checks"
+
+# Order matters: mark-clearing must come after the pane-close check
+# and before the view-step-back check, not merely appear somewhere in
+# the block.
+esc_pane_close_pos="$(printf '%s\n' "$esc_block" | grep -n 'DETAILS_VISIBLE" == true' | head -1 | cut -d: -f1)"
+esc_mark_clear_pos="$(printf '%s\n' "$esc_block" | grep -n 'marked_count > 0' | head -1 | cut -d: -f1)"
+esc_view_step_pos="$(printf '%s\n' "$esc_block" | grep -n 'CURRENT_VIEW" != "All"' | head -1 | cut -d: -f1)"
+[[ -n "$esc_pane_close_pos" && -n "$esc_mark_clear_pos" && -n "$esc_view_step_pos" ]] ||
+    fail "could not locate all three Esc priority checks to verify their order"
+(( esc_pane_close_pos < esc_mark_clear_pos && esc_mark_clear_pos < esc_view_step_pos )) ||
+    fail "Esc's priority order should be pane-close, then mark-clearing, then view-step-back/quit"
+
+# ------------------------------------------------------------
+# 14. Live: marking rows and pressing Esc clears them and stays on the
+#     same screen — a second Esc, now with nothing marked, falls
+#     through to the normal Quit confirmation exactly as before.
+# ------------------------------------------------------------
+
+if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
+
+    wait_for() {
+        local session="$1" pattern="$2"
+        local _
+        for _ in {1..40}; do
+            tmux capture-pane -t "$session" -p 2>/dev/null | grep -q "$pattern" && return 0
+            sleep 0.5
+        done
+        return 1
+    }
+
+    EM_CACHE_FORMAT_VERSION="$(sed -n 's/^CACHE_FORMAT_VERSION=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
+    [[ -n "$EM_CACHE_FORMAT_VERSION" ]] || fail "could not read CACHE_FORMAT_VERSION from $LAUNCHER"
+
+    EM_HOME="$(mktemp -d)"
+    EM_CACHE_DIR="$EM_HOME/.cache/brew-launcher"
+    mkdir -p "$EM_CACHE_DIR"
+    cat > "$EM_CACHE_DIR/entries" <<'EOF'
+pytool1	Python tool 1	pytool1	1.0	1MB	0	pytool1	/bin/pytool1	100	-	0
+pytool2	Python tool 2	pytool2	1.0	1MB	0	pytool2	/bin/pytool2	200	-	0
+rustool	Rust tool	rustool	1.0	1MB	0	rustool	/bin/rustool	300	-	0
+EOF
+    printf '%s\nfixture-state-snapshot\n' "$EM_CACHE_FORMAT_VERSION" > "$EM_CACHE_DIR/state"
+    : > "$EM_CACHE_DIR/outdated"
+
+    EM_SESSION="blf-esc-clear-$$"
+    tmux kill-session -t "$EM_SESSION" 2>/dev/null
+    tmux new-session -d -s "$EM_SESSION" -x 100 -y 30 \
+        "HOME='$EM_HOME' XDG_CONFIG_HOME='$EM_HOME/.config' XDG_CACHE_HOME='$EM_HOME/.cache' zsh '$LAUNCHER'"
+
+    if wait_for "$EM_SESSION" "Tab  Mark"; then
+
+        tmux send-keys -t "$EM_SESSION" Tab
+        sleep 0.2
+        tmux send-keys -t "$EM_SESSION" Tab
+        wait_for "$EM_SESSION" "2 marked" ||
+            fail "two Tab presses should mark two rows, got: $(tmux capture-pane -t "$EM_SESSION" -p 2>/dev/null)"
+
+        tmux send-keys -t "$EM_SESSION" Escape
+        wait_for "$EM_SESSION" "Tab  Mark    Enter" ||
+            fail "Esc with something marked should clear the marks (plain \"Tab  Mark\" footer, no count), got: $(tmux capture-pane -t "$EM_SESSION" -p 2>/dev/null)"
+
+        tmux capture-pane -t "$EM_SESSION" -p 2>/dev/null | grep -q "pytool1" ||
+            fail "clearing marks with Esc should redraw the same list, not step back a view or quit"
+
+        tmux send-keys -t "$EM_SESSION" Escape
+        wait_for "$EM_SESSION" "Quit?" ||
+            fail "a second Esc, now with nothing marked, should fall through to the normal Quit confirmation, got: $(tmux capture-pane -t "$EM_SESSION" -p 2>/dev/null)"
+
+    else
+        printf 'SKIP: launcher never became interactive, skipping the live Esc-clears-marks check\n' >&2
+    fi
+
+    tmux kill-session -t "$EM_SESSION" 2>/dev/null
+    rm -rf "$EM_HOME"
+
+else
+    printf 'SKIP: tmux or fzf not available, skipping the live Esc-clears-marks check\n' >&2
+fi
+
+printf 'PASS: the main list marks rows via fzf --multi, the key/selection split handles one row identically to before and several correctly (keeping the pressed key intact), Hide/Favorite/Categorize branch on the marked count rather than on marks merely existing, Enter with several marked launches them through run_preset'"'"'s existing pane machinery and logs every one, Create Preset is seeded by marks rather than replaced by them, Update and Create Shortcut both act on the marked set (Update as a single brew run, with each formula passed as its own argument and already-current ones filtered out), Launch Flags/Run With Args say they are acting on one row when several are marked, the footer updates live the instant something is marked (via Tab/Shift-Tab, right-click, or Ctrl-A alike) instead of staying silent until an action is taken, Ctrl-A marks/unmarks exactly what the current search matches (confirmed live, not just as source text), and Esc clears a marked set first, ahead of stepping back a view or quitting, before falling through to its previous behavior once nothing is left marked (confirmed live)\n'
