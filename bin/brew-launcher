@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.77.0"
+VERSION="0.78.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -629,10 +629,11 @@ Views:
   filed something under a while ago. "Hidden" is an
   ordinary view — Enter still launches there, and F6 unhides. F9 also
   works here, same as the main list. F3 in the picker previews what's
-  actually in the highlighted category — every command it holds, with
-  its description, including ones only there via the bundled defaults
-  — built-in views (All, Hidden, Most Used, Recently Launched,
-  Recently Added) say there's nothing stored to preview instead.
+  actually in the highlighted row — any of them, not just a category:
+  every command it holds, with its description, including ones only
+  there via the bundled defaults. Most Used/Recently Launched/
+  Recently Added show their own numbered ranking instead of
+  alphabetical, capped at the same 15 tools the view itself is.
   Ctrl-R in the picker
   renames the
   highlighted category (just a file rename —
@@ -1421,20 +1422,22 @@ fi
 # the real picker, just without needing that function's own globals
 # (default_category_commands isn't populated this early — see it for
 # why), reading straight from the cache instead.
+#
+# Widened again later: All, Hidden, Most Used, Recently Launched, and
+# Recently Added used to bail out with "not a stored category" instead
+# of previewing anything — raised live: "why wouldn't it list the TUIs
+# regardless of whether it was a stored category?" None of the five is
+# backed by a CATEGORIES_DIR file, which is still true and is exactly
+# why they were skipped, but each is computable from data this preview
+# can already reach directly (the cache itself, or the plain launch-
+# history log), the same way the bundled-category case above reads the
+# cache instead of calling a real function. See the branches below for
+# each one's own reasoning.
 # ------------------------------------------------------------
 
 if [[ "$1" == "--internal-preview-category" ]]; then
 
     preview_view_name="$2"
-
-    if [[ "$preview_view_name" == "All" || "$preview_view_name" == "Hidden" \
-          || "$preview_view_name" == "Most Used" || "$preview_view_name" == "Recently Added" \
-          || "$preview_view_name" == "Recently Launched" ]]; then
-        print -r -- "  Not a stored category — nothing to preview."
-        exit 0
-    fi
-
-    preview_category_file="$CATEGORIES_DIR/$preview_view_name"
 
     # Hidden-status check, inlined rather than calling
     # load_hidden_commands() — that (and the two loaders it calls in
@@ -1445,7 +1448,9 @@ if [[ "$1" == "--internal-preview-category" ]]; then
     # count (compute_category_counts(), which does exclude hidden
     # entries) and this preview visibly disagreed on how many tools a
     # category actually held — confirmed live against a real category
-    # with two hidden members, count said 3, preview said 5.
+    # with two hidden members, count said 3, preview said 5. Moved
+    # ahead of every branch below (it used to sit after the "not a
+    # stored category" bail-out) since All/Hidden now need it too.
     typeset -A preview_ignore_set preview_shown_set preview_bundled_hidden_set
 
     if [[ -f "$IGNORE_FILE" ]]; then
@@ -1480,70 +1485,222 @@ if [[ "$1" == "--internal-preview-category" ]]; then
         return 1
     }
 
+    # Most Used / Recently Launched / Recently Added get their own
+    # branch, exiting directly, rather than falling into the shared
+    # alphabetical rendering below. Raised live: "why wouldn't it list
+    # the TUIs regardless of whether it was a stored category?" — none
+    # of the three is backed by a category file (that's still true),
+    # but each is computable from data this preview can read directly,
+    # the same way build_entries() computes the real view: launch
+    # counts/order from LAUNCH_HISTORY_FILE, install order from the
+    # cache's own field 9. Ranked, not alphabetical (numbered, same as
+    # the preset preview below) — the entire point of these three
+    # views is the order itself, so sorting that away would defeat the
+    # preview's purpose. Same COMPUTED_VIEW_LIMIT cap as the real view,
+    # so the preview never promises more rows than the view itself
+    # would actually show.
+    if [[ "$preview_view_name" == "Most Used" || "$preview_view_name" == "Recently Launched" \
+          || "$preview_view_name" == "Recently Added" ]]; then
+
+        typeset -A preview_rank_key
+        preview_rank_counter=0
+
+        if [[ "$preview_view_name" == "Recently Added" ]]; then
+
+            # Same field build_entries()'s own Recently Added sort key
+            # reads — already numeric, no counting needed. Every
+            # cached row has one, so no installed-only filter is
+            # needed here the way Most Used/Recently Launched need
+            # below: everything in this hash is already something
+            # rebuild_cache() found installed.
+            if [[ -f "$CACHE_FILE" ]]; then
+                while IFS=$'\t' read -r preview_ra_cmd preview_ra_install_time; do
+                    [[ -z "$preview_ra_cmd" ]] && continue
+                    preview_rank_key[$preview_ra_cmd]="$preview_ra_install_time"
+                done < <(awk -F'\t' '{ print $1"\t"$9 }' "$CACHE_FILE")
+            fi
+
+        else
+
+            # Most Used: how many times a command appears in the log.
+            # Recently Launched: the line number it last appeared
+            # on — same two derivations load_launch_counts() makes
+            # from this exact file, just without needing that
+            # function's own globals this early (same reasoning the
+            # real-category branch below already gives for reading the
+            # cache directly instead of calling
+            # load_category_members()).
+            if [[ -f "$LAUNCH_HISTORY_FILE" ]]; then
+                while IFS= read -r preview_launched_cmd; do
+                    [[ -z "$preview_launched_cmd" ]] && continue
+                    (( preview_rank_counter++ ))
+                    if [[ "$preview_view_name" == "Most Used" ]]; then
+                        (( preview_rank_key[$preview_launched_cmd]++ ))
+                    else
+                        preview_rank_key[$preview_launched_cmd]="$preview_rank_counter"
+                    fi
+                done < "$LAUNCH_HISTORY_FILE"
+            fi
+
+            # Unlike Recently Added above, the log can still name a
+            # command that's since been uninstalled — build_entries()
+            # only ever shows Most Used/Recently Launched entries that
+            # also exist in the current cache, so a stale log entry
+            # needs the same exclusion here rather than showing up
+            # with no description.
+            typeset -A preview_still_installed
+
+            if [[ -f "$CACHE_FILE" ]]; then
+                while IFS= read -r preview_installed_cmd; do
+                    [[ -n "$preview_installed_cmd" ]] && preview_still_installed[$preview_installed_cmd]=1
+                done < <(awk -F'\t' '{ print $1 }' "$CACHE_FILE")
+            fi
+
+            for preview_rank_cmd in "${(k)preview_rank_key[@]}"; do
+                [[ -z "${preview_still_installed[$preview_rank_cmd]-}" ]] && unset "preview_rank_key[$preview_rank_cmd]"
+            done
+        fi
+
+        if (( ${#preview_rank_key[@]} == 0 )); then
+            print -r -- "  Empty."
+            exit 0
+        fi
+
+        # Alphabetical first (${(ok)} sorts the keys), so ties in the
+        # numeric sort just below fall back to alphabetical order —
+        # matching how build_entries() gets that same tie-break for
+        # free from CACHE_FILE's own alphabetical order, before its
+        # otherwise-identical descending re-sort runs.
+        typeset -a preview_rank_prep
+        preview_rank_prep=()
+
+        for preview_rank_cmd in "${(ok)preview_rank_key[@]}"; do
+            preview_is_hidden "$preview_rank_cmd" && continue
+            preview_rank_prep+=("$(printf '%020d' "${preview_rank_key[$preview_rank_cmd]}")"$'\t'"$preview_rank_cmd")
+        done
+
+        if (( ${#preview_rank_prep[@]} == 0 )); then
+            print -r -- "  Empty."
+            exit 0
+        fi
+
+        # (On) = descending, same direction and same zero-padded-
+        # prefix technique build_entries() itself uses for these exact
+        # three views — see its own comment for why a plain numeric
+        # sort isn't trusted directly against a string with more text
+        # after the key.
+        preview_rank_prep=(${(On)preview_rank_prep})
+
+        preview_rank_num=0
+
+        for preview_rank_entry in "${preview_rank_prep[@]}"; do
+            (( preview_rank_num >= COMPUTED_VIEW_LIMIT )) && break
+            (( preview_rank_num++ ))
+            preview_rank_cmd="${preview_rank_entry#*$'\t'}"
+            preview_member_desc="$(awk -F'\t' -v cmd="$preview_rank_cmd" '$1 == cmd { print $2; exit }' "$CACHE_FILE" 2>/dev/null)"
+            if [[ -n "$preview_member_desc" ]]; then
+                printf '  %2d. %-20s%s\n' "$preview_rank_num" "$preview_rank_cmd" "$preview_member_desc"
+            else
+                printf '  %2d. %s\n' "$preview_rank_num" "$preview_rank_cmd"
+            fi
+        done
+
+        exit 0
+    fi
+
     typeset -A preview_category_seen
     preview_category_commands=()
 
-    if [[ -f "$preview_category_file" ]]; then
-        while IFS= read -r preview_member; do
-            preview_member="${preview_member#"${preview_member%%[![:space:]]*}"}"
-            preview_member="${preview_member%"${preview_member##*[![:space:]]}"}"
-            [[ -z "$preview_member" ]] && continue
-            [[ "$preview_member" == \#* ]] && continue
-            [[ -n "${preview_category_seen[$preview_member]-}" ]] && continue
-            preview_category_seen[$preview_member]=1
-            preview_is_hidden "$preview_member" && continue
-            preview_category_commands+=("$preview_member")
-        done < "$preview_category_file"
-    fi
+    if [[ "$preview_view_name" == "All" || "$preview_view_name" == "Hidden" ]]; then
 
-    # Bundled contributions are skipped outright when Default
-    # Categories is off (Actions -> Default Categories) — same guard
-    # load_bundled_categories() itself opens with. Confirmed live: a
-    # category with no real members of its own (an empty real file,
-    # left over from before Default Categories was turned off) still
-    # showed 3 bundled tools in the preview even though the count
-    # correctly showed 0 — the preview had no idea the setting existed.
-    #
-    # Also skips a command that's already filed into some *other* real
-    # category by hand — same as load_bundled_categories()'s own
-    # manually_categorized_commands check, so a tool doesn't appear to
-    # double-belong here and wherever it was actually filed.
-    if [[ "$CONFIG_DEFAULT_CATEGORIES" != off && -f "$CACHE_FILE" ]]; then
+        # Neither is backed by a category file either — All is "every
+        # installed command minus hidden ones," Hidden is the inverse,
+        # both read straight from the cache rather than a
+        # CATEGORIES_DIR file the way a real category (including
+        # Favorites, which really is one — see load_favorite_commands)
+        # falls through to below.
+        if [[ -f "$CACHE_FILE" ]]; then
+            while IFS= read -r preview_av_cmd; do
+                [[ -z "$preview_av_cmd" ]] && continue
+                if [[ "$preview_view_name" == "Hidden" ]]; then
+                    preview_is_hidden "$preview_av_cmd" || continue
+                else
+                    preview_is_hidden "$preview_av_cmd" && continue
+                fi
+                preview_category_commands+=("$preview_av_cmd")
+            done < <(awk -F'\t' '{ print $1 }' "$CACHE_FILE")
+        fi
 
-        typeset -A preview_manually_categorized
-        local preview_other_file preview_other_member
+    else
 
-        for preview_other_file in "$CATEGORIES_DIR"/*(N); do
-            [[ -f "$preview_other_file" ]] || continue
-            [[ "${preview_other_file:t}" == "Favorites" ]] && continue
+        preview_category_file="$CATEGORIES_DIR/$preview_view_name"
 
-            while IFS= read -r preview_other_member; do
-                preview_other_member="${preview_other_member#"${preview_other_member%%[![:space:]]*}"}"
-                preview_other_member="${preview_other_member%"${preview_other_member##*[![:space:]]}"}"
-                [[ -z "$preview_other_member" ]] && continue
-                [[ "$preview_other_member" == \#* ]] && continue
-                preview_manually_categorized[$preview_other_member]=1
-            done < "$preview_other_file"
-        done
+        if [[ -f "$preview_category_file" ]]; then
+            while IFS= read -r preview_member; do
+                preview_member="${preview_member#"${preview_member%%[![:space:]]*}"}"
+                preview_member="${preview_member%"${preview_member##*[![:space:]]}"}"
+                [[ -z "$preview_member" ]] && continue
+                [[ "$preview_member" == \#* ]] && continue
+                [[ -n "${preview_category_seen[$preview_member]-}" ]] && continue
+                preview_category_seen[$preview_member]=1
+                preview_is_hidden "$preview_member" && continue
+                preview_category_commands+=("$preview_member")
+            done < "$preview_category_file"
+        fi
 
-        # Reads field 10 via awk, not a zsh `read` loop with
-        # placeholder variables for the fields in between — confirmed
-        # live that `IFS=$'\t' read` collapses a genuinely empty field
-        # (field 6, "outdated", empty for anything not outdated)
-        # together with its neighboring tab, silently shifting every
-        # field after it left by one. awk's explicit -F'\t' doesn't
-        # have that problem, which is exactly why --internal-preview's
-        # own default-category lookup above already uses awk instead
-        # of read for the same field.
-        while IFS= read -r preview_bundled_command; do
-            [[ -z "$preview_bundled_command" ]] && continue
-            [[ -n "${preview_category_seen[$preview_bundled_command]-}" ]] && continue
-            preview_category_seen[$preview_bundled_command]=1
-            preview_is_hidden "$preview_bundled_command" && continue
-            [[ -n "${preview_manually_categorized[$preview_bundled_command]-}" ]] && continue
-            grep -Fqx -- "$preview_bundled_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
-            preview_category_commands+=("$preview_bundled_command")
-        done < <(awk -F'\t' -v cat="$preview_view_name" '$10 == cat { print $1 }' "$CACHE_FILE")
+        # Bundled contributions are skipped outright when Default
+        # Categories is off (Actions -> Default Categories) — same
+        # guard load_bundled_categories() itself opens with. Confirmed
+        # live: a category with no real members of its own (an empty
+        # real file, left over from before Default Categories was
+        # turned off) still showed 3 bundled tools in the preview even
+        # though the count correctly showed 0 — the preview had no
+        # idea the setting existed.
+        #
+        # Also skips a command that's already filed into some *other*
+        # real category by hand — same as load_bundled_categories()'s
+        # own manually_categorized_commands check, so a tool doesn't
+        # appear to double-belong here and wherever it was actually
+        # filed.
+        if [[ "$CONFIG_DEFAULT_CATEGORIES" != off && -f "$CACHE_FILE" ]]; then
+
+            typeset -A preview_manually_categorized
+            local preview_other_file preview_other_member
+
+            for preview_other_file in "$CATEGORIES_DIR"/*(N); do
+                [[ -f "$preview_other_file" ]] || continue
+                [[ "${preview_other_file:t}" == "Favorites" ]] && continue
+
+                while IFS= read -r preview_other_member; do
+                    preview_other_member="${preview_other_member#"${preview_other_member%%[![:space:]]*}"}"
+                    preview_other_member="${preview_other_member%"${preview_other_member##*[![:space:]]}"}"
+                    [[ -z "$preview_other_member" ]] && continue
+                    [[ "$preview_other_member" == \#* ]] && continue
+                    preview_manually_categorized[$preview_other_member]=1
+                done < "$preview_other_file"
+            done
+
+            # Reads field 10 via awk, not a zsh `read` loop with
+            # placeholder variables for the fields in between —
+            # confirmed live that `IFS=$'\t' read` collapses a
+            # genuinely empty field (field 6, "outdated", empty for
+            # anything not outdated) together with its neighboring
+            # tab, silently shifting every field after it left by one.
+            # awk's explicit -F'\t' doesn't have that problem, which
+            # is exactly why --internal-preview's own default-category
+            # lookup above already uses awk instead of read for the
+            # same field.
+            while IFS= read -r preview_bundled_command; do
+                [[ -z "$preview_bundled_command" ]] && continue
+                [[ -n "${preview_category_seen[$preview_bundled_command]-}" ]] && continue
+                preview_category_seen[$preview_bundled_command]=1
+                preview_is_hidden "$preview_bundled_command" && continue
+                [[ -n "${preview_manually_categorized[$preview_bundled_command]-}" ]] && continue
+                grep -Fqx -- "$preview_bundled_command" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
+                preview_category_commands+=("$preview_bundled_command")
+            done < <(awk -F'\t' -v cat="$preview_view_name" '$10 == cat { print $1 }' "$CACHE_FILE")
+        fi
+
     fi
 
     if (( ${#preview_category_commands[@]} == 0 )); then
@@ -1551,8 +1708,10 @@ if [[ "$1" == "--internal-preview-category" ]]; then
         exit 0
     fi
 
-    # Alphabetical, unlike the preset preview below — a category has no
-    # inherent order of its own the way a preset's launch order does.
+    # Alphabetical, unlike the preset preview below (and the ranked
+    # views above) — a category, All, and Hidden all have no inherent
+    # order of their own the way a preset's launch order or a ranked
+    # view's own rank does.
     preview_category_commands=("${(@o)preview_category_commands}")
 
     for preview_member in "${preview_category_commands[@]}"; do
@@ -3846,8 +4005,8 @@ show_help_keys() {
     rows+=("First tier — always on screen")
     rows+=("  F2 / ⌥V   Switch view (All, Most Used, Recently Launched,")
     rows+=("            Recently Added, Favorites, categories, Hidden) — F3 there")
-    rows+=("            previews what's in the highlighted category, Ctrl-R")
-    rows+=("            renames it, Ctrl-D deletes it")
+    rows+=("            previews what's in the highlighted row (any of them),")
+    rows+=("            Ctrl-R renames a category, Ctrl-D deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
     rows+=("  F4 / ⌥M   Open the Actions menu — see Actions Menu")
     rows+=("            F4 and F9 also work from inside the view picker (F2)")

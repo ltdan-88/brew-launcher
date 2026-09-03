@@ -102,7 +102,7 @@ and `Recently Added`, then `Favorites`, your own categories (marked `·`), and
 `Hidden` last. Every row shows a count.
 
 - `Most Used`, `Recently Launched`, and `Recently Added` are computed automatically — by launch count, by when you last launched something, and by install date — capped at 15 tools each.
-- **F3** previews what's inside the highlighted category, including tools filed there only via [bundled defaults](#bundled-defaults).
+- **F3** previews what's inside the highlighted row — any of them, not just a category: `Most Used`/`Recently Launched`/`Recently Added` show their own ranking (numbered, same 15-tool cap as the view itself), `All`/`Hidden` list straight from the cache, and a category includes tools filed there only via [bundled defaults](#bundled-defaults).
 - **Ctrl-R** renames a category, **Ctrl-D** deletes it (asks first, shows the count). Built-in views can't be renamed or deleted.
 - **F4 → Actions → Settings → Startup Screen** can start here (or on [Presets](#presets)) instead of `All`.
 
@@ -304,7 +304,7 @@ one long scrolling list.
 | **F6** / **⌥H** | Hide — or unhide, in the Hidden view | Actions |
 | **F7** / **⌥F** | Toggle Favorites for selected entry | Actions |
 | **F8** / **⌥C** | Categorize selected entry (adds or removes) | Actions |
-| **F3** | Preview what's in the highlighted category — in the F2 picker | picker |
+| **F3** | Preview what's in the highlighted row — any of them — in the F2 picker | picker |
 | **Ctrl-R** | Rename the highlighted category — in the F2 picker | picker |
 | **Ctrl-D** | Delete the highlighted category — in the F2 picker | picker |
 | **Tab** | Mark/unmark a row — actions then apply to everything marked | footer |

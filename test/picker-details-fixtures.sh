@@ -109,14 +109,149 @@ echo "$output" | grep -q "tele" ||
 rm -f "$XDG_CONFIG_HOME/brew-launcher/ignore" "$XDG_CONFIG_HOME/brew-launcher/shown"
 
 # ------------------------------------------------------------
-# 2. Built-in view: explains there's nothing to preview, doesn't error.
+# 2. Built-in, non-category views: raised live — "why wouldn't it list
+#    the TUIs regardless of whether it was a stored category?" All,
+#    Hidden, Most Used, Recently Launched, and Recently Added now list
+#    their actual contents instead of refusing. A dedicated cache and
+#    launch-history fixture, saved and restored around this section —
+#    proving a specific rank order needs install times and launch
+#    counts more deliberately controlled than the shared fixture
+#    above, and every section after this one depends on that shared
+#    cache's own original content (macmon's default_category
+#    especially).
 # ------------------------------------------------------------
 
-for builtin_view in All Hidden "Most Used" "Recently Added"; do
-    output="$("$LAUNCHER" --internal-preview-category "$builtin_view" 2>&1)"
-    echo "$output" | grep -qi "not a stored category" ||
-        fail "category preview for \"$builtin_view\" should explain it isn't a stored category, got: $output"
+cp "$CACHE_FILE" "$TEST_HOME/cache-before-builtin-views"
+CONFIG_DIR="$XDG_CONFIG_HOME/brew-launcher"
+LAUNCH_HISTORY_FILE="$CONFIG_DIR/launch-history"
+mkdir -p "$CONFIG_DIR"
+
+# delta is bundled-hidden (field 11 = 1); the other three aren't.
+cat > "$CACHE_FILE" <<'EOF'
+alpha	Alpha tool	alpha	1.0	1MB		alpha	/opt/homebrew/bin/alpha	100	-	0
+beta	Beta tool	beta	1.0	1MB		beta	/opt/homebrew/bin/beta	200	-	0
+gamma	Gamma tool	gamma	1.0	1MB		gamma	/opt/homebrew/bin/gamma	300	-	0
+delta	Delta tool	delta	1.0	1MB		delta	/opt/homebrew/bin/delta	400	-	1
+EOF
+
+# 2a. All / Hidden: straight from the cache, no category file involved,
+#     same hidden-exclusion (or inclusion, for Hidden) as everywhere
+#     else.
+output="$("$LAUNCHER" --internal-preview-category All 2>&1)"
+echo "$output" | grep -q "alpha" || fail "All should list alpha, got: $output"
+echo "$output" | grep -q "gamma" || fail "All should list gamma, got: $output"
+echo "$output" | grep -q "delta" &&
+    fail "All should exclude the bundled-hidden delta, got: $output"
+alpha_line="$(echo "$output" | grep -n "alpha" | cut -d: -f1)"
+gamma_line="$(echo "$output" | grep -n "gamma" | cut -d: -f1)"
+(( alpha_line < gamma_line )) ||
+    fail "All should be alphabetical, got alpha at $alpha_line, gamma at $gamma_line"
+
+output="$("$LAUNCHER" --internal-preview-category Hidden 2>&1)"
+echo "$output" | grep -q "delta" ||
+    fail "Hidden should list the bundled-hidden delta, got: $output"
+echo "$output" | grep -q "alpha" &&
+    fail "Hidden should not list alpha (not hidden), got: $output"
+
+# 2b. Most Used / Recently Launched: alpha launched twice, beta once,
+#     delta (hidden) once, gamma never. Most Used ranks by count
+#     (alpha, then beta) with delta excluded despite qualifying by
+#     count alone. Recently Launched ranks by recency ignoring delta's
+#     later launch, since it's excluded — the most recent *visible*
+#     launch is the second alpha, not delta.
+printf 'alpha\nbeta\nalpha\ndelta\n' > "$LAUNCH_HISTORY_FILE"
+
+output="$("$LAUNCHER" --internal-preview-category "Most Used" 2>&1)"
+echo "$output" | grep -qE '^ *1\. alpha' ||
+    fail "Most Used should rank alpha (2 launches) first, got: $output"
+echo "$output" | grep -qE '^ *2\. beta' ||
+    fail "Most Used should rank beta (1 launch) second, got: $output"
+echo "$output" | grep -q "gamma" &&
+    fail "Most Used should not list gamma (never launched), got: $output"
+echo "$output" | grep -q "delta" &&
+    fail "Most Used should exclude the hidden delta even though it was launched, got: $output"
+
+output="$("$LAUNCHER" --internal-preview-category "Recently Launched" 2>&1)"
+echo "$output" | grep -qE '^ *1\. alpha' ||
+    fail "Recently Launched should rank alpha first (delta's later launch is excluded), got: $output"
+echo "$output" | grep -qE '^ *2\. beta' ||
+    fail "Recently Launched should rank beta second, got: $output"
+echo "$output" | grep -q "delta" &&
+    fail "Recently Launched should exclude the hidden delta, got: $output"
+
+# 2c. A launch-history entry for a command that's since been
+#     uninstalled shouldn't appear at all, rather than showing with no
+#     description.
+printf 'alpha\nzeta\n' > "$LAUNCH_HISTORY_FILE"
+output="$("$LAUNCHER" --internal-preview-category "Most Used" 2>&1)"
+echo "$output" | grep -q "zeta" &&
+    fail "Most Used should not list a launch-history entry for a since-uninstalled command, got: $output"
+
+# 2d. Recently Added: descending install time (cache field 9), hidden
+#     excluded — gamma (300), then beta (200), then alpha (100).
+output="$("$LAUNCHER" --internal-preview-category "Recently Added" 2>&1)"
+echo "$output" | grep -qE '^ *1\. gamma' ||
+    fail "Recently Added should rank gamma (install time 300) first, got: $output"
+echo "$output" | grep -qE '^ *2\. beta' ||
+    fail "Recently Added should rank beta (install time 200) second, got: $output"
+echo "$output" | grep -qE '^ *3\. alpha' ||
+    fail "Recently Added should rank alpha (install time 100) third, got: $output"
+echo "$output" | grep -q "delta" &&
+    fail "Recently Added should exclude the hidden delta, got: $output"
+
+# 2e. No launches at all yet: Most Used/Recently Launched say Empty,
+#     same as an empty category would, not an error.
+: > "$LAUNCH_HISTORY_FILE"
+output="$("$LAUNCHER" --internal-preview-category "Most Used" 2>&1)"
+echo "$output" | grep -qi "Empty" ||
+    fail "Most Used with no launch history should say Empty, got: $output"
+
+# 2f. Same COMPUTED_VIEW_LIMIT cap (15) the real view enforces —
+#     otherwise the preview could promise more rows than the view
+#     itself would ever actually show. 16 tools tied on every ranking
+#     axis (one launch each, ordered t01..t16 in both the launch log
+#     and install time) so the only thing separating rank 15 from rank
+#     16 is the tie-break itself.
+#
+#     For Most Used that tie-break comes out *reverse*-alphabetical
+#     (t16 first, t01 dropped), not forward — confirmed directly
+#     against the real build_entries(), not assumed: ${(On)array}
+#     sorts ascending and then reverses the whole array rather than
+#     doing a true stable descending sort, so tied entries end up
+#     reversed from whatever order they were fed in, the exact same
+#     mechanism this preview reuses on purpose for consistency with
+#     the real view. Recently Added/Recently Launched have no ties
+#     here (distinct install times/launch order), so they just cap at
+#     the least recent, t01.
+cache_cap_lines=()
+history_cap_lines=()
+for cap_num in {01..16}; do
+    cache_cap_lines+=("t$cap_num"$'\t'"Tool $cap_num"$'\t'"t$cap_num"$'\t'"1.0"$'\t'"1MB"$'\t'$'\t'"t$cap_num"$'\t'"/opt/homebrew/bin/t$cap_num"$'\t'"$cap_num"$'\t'"-"$'\t'"0")
+    history_cap_lines+=("t$cap_num")
 done
+printf '%s\n' "${cache_cap_lines[@]}" > "$CACHE_FILE"
+printf '%s\n' "${history_cap_lines[@]}" > "$LAUNCH_HISTORY_FILE"
+
+output="$("$LAUNCHER" --internal-preview-category "Most Used" 2>&1)"
+echo "$output" | grep -q "t16" ||
+    fail "Most Used should still show t16 (reverse-alphabetical tie-break puts it first), got: $output"
+echo "$output" | grep -q "t01" &&
+    fail "Most Used should cap at 15, dropping t01 (last in the reverse-alphabetical tie-break), got: $output"
+
+output="$("$LAUNCHER" --internal-preview-category "Recently Added" 2>&1)"
+echo "$output" | grep -q "t16" ||
+    fail "Recently Added should show t16 (installed last), got: $output"
+echo "$output" | grep -q "t01" &&
+    fail "Recently Added should cap at 15, dropping the least recent (t01), got: $output"
+
+output="$("$LAUNCHER" --internal-preview-category "Recently Launched" 2>&1)"
+echo "$output" | grep -q "t16" ||
+    fail "Recently Launched should show t16 (launched last), got: $output"
+echo "$output" | grep -q "t01" &&
+    fail "Recently Launched should cap at 15, dropping the least recent (t01), got: $output"
+
+rm -f "$LAUNCH_HISTORY_FILE"
+cp "$TEST_HOME/cache-before-builtin-views" "$CACHE_FILE"
 
 # ------------------------------------------------------------
 # 3. Bundled-only category (no real file, members come purely from the
@@ -242,4 +377,4 @@ launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$launch_preset_block" == *'--internal-preview-preset'* ]] ||
     fail "launch_preset (F9) should preview via --internal-preview-preset"
 
-printf 'PASS: F2 previews category contents via F3, F9 always previews preset contents (alphabetical vs. launch order respectively), explains bundled-only/built-in/empty/missing cases instead of showing nothing\n'
+printf 'PASS: F2 previews category contents via F3, F9 always previews preset contents (alphabetical vs. launch order respectively), explains bundled-only/empty/missing cases instead of showing nothing, and All/Hidden/Most Used/Recently Launched/Recently Added now list their actual tools too (ranked and capped at COMPUTED_VIEW_LIMIT the same way the real view is, hidden-exclusion and stale-launch-history entries handled correctly) instead of refusing with "not a stored category"\n'

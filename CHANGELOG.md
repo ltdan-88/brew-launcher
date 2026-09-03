@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.78.0] — 2026-09-03
+
+### Changed
+
+- **F2's F3 preview now lists All, Hidden, Most Used, Recently Launched,
+  and Recently Added instead of refusing.** Raised live: "why wouldn't it
+  list the TUIs regardless of whether it was a stored category?" None of
+  the five is backed by a `CATEGORIES_DIR` file, which is still true and
+  is exactly why they were skipped before, but each is computable from
+  data already reachable from the preview: the cache itself for All/
+  Hidden, and the plain launch-history log plus the cache's own install-
+  time field for the three ranked views. Most Used/Recently Launched/
+  Recently Added are numbered by their own rank (not alphabetical) and
+  capped at the same 15 tools (`COMPUTED_VIEW_LIMIT`) the real view is,
+  so the preview never promises more than the view itself would show. A
+  stale launch-history entry for a since-uninstalled command is excluded
+  rather than shown with no description.
+
 ## [0.77.0] — 2026-09-03
 
 ### Changed
