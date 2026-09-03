@@ -380,7 +380,7 @@ plain text if you'd rather edit them directly, one setting or command per
 line, `#` comments and blank lines ignored:
 
 ```
-~/.config/brew-launcher/config              # TERMINAL=, THEME=, CUSTOM_COLORS=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, STARTUP_SCREEN=, SORT=, ALT_KEYBINDS= — see below
+~/.config/brew-launcher/config              # TERMINAL=, THEME=, CUSTOM_COLORS=, DEFAULT_CATEGORIES=, DEFAULT_HIDDEN=, STARTUP_SCREEN=, SORT=, ALT_KEYBINDS=, DETAILS= — see below
 ~/.config/brew-launcher/ignore               # hidden entries
 ~/.config/brew-launcher/shown                # bundled-hidden commands you F6'd back visible
 ~/.config/brew-launcher/category-exclude     # commands excluded from a bundled-only category via F8

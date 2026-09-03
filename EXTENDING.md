@@ -54,7 +54,7 @@ invocation.
 — plain `KEY=value` lines, one per line, `#` comments and blank lines
 ignored. Recognized keys: `TERMINAL`, `THEME`, `CUSTOM_COLORS`,
 `DEFAULT_CATEGORIES`, `DEFAULT_HIDDEN`, `STARTUP_SCREEN`, `SORT`,
-`ALT_KEYBINDS`, `DETAILS_POSITION`, `COMPACT_VIEW` — see the README's
+`ALT_KEYBINDS`, `DETAILS`, `DETAILS_POSITION`, `COMPACT_VIEW` — see the README's
 Configuration section for each one's values. `OPEN_TO_CATEGORIES` (the old
 name for `STARTUP_SCREEN`) is still read too, `on` migrating to
 `STARTUP_SCREEN=views`, for anyone who already had it set — not written

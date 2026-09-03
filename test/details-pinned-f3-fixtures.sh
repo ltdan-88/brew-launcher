@@ -31,15 +31,27 @@
 # actually the same one (a permanent environment gap vs. a choice made
 # two screens away in Settings).
 #
-# Both F3 handlers, and both footer call sites, are checked as source
-# text (same reasoning as actions-menu-fixtures.sh: they're plain zsh
-# embedded in a much larger dispatch loop, not their own callable
-# function). The real behavior — Details staying open across a stray
-# F3 press once pinned, and F3 actually vanishing from (then
-# returning to) both footers — is then driven for real in a live tmux
-# session, since a guard that merely *looks* right in a diff is
-# exactly the kind of thing worth actually launching and pressing
-# keys against.
+# Extended again for a third follow-up, raised live: "changing themes
+# and relaunching toggles the details pane into off in settings." A
+# theme change relaunches the whole process (pick_theme()'s own exec)
+# to apply the new colors — DETAILS_VISIBLE/DETAILS_PINNED used to be
+# genuinely per-session, the same underlying gap the first fix above
+# had already closed for a stray F3 press, just reached through a
+# different door (any real process restart, not only F3). Now
+# persisted to config (CONFIG_DETAILS), same as every other Settings
+# row, but only from the Settings toggle — F3 itself still never
+# writes it, staying a deliberate, never-saved peek.
+#
+# Every F3 handler, both footer call sites, and the persistence
+# itself are checked as source text (same reasoning as
+# actions-menu-fixtures.sh: they're plain zsh embedded in a much
+# larger dispatch loop, not their own callable function). The real
+# behavior — Details staying open across a stray F3 press once
+# pinned, F3 actually vanishing from (then returning to) both
+# footers, and the pinned state surviving an actual process
+# relaunch — is then driven for real in a live tmux session, since a
+# guard that merely *looks* right in a diff is exactly the kind of
+# thing worth actually launching and pressing keys against.
 
 set -u
 
@@ -88,6 +100,35 @@ footer_actions_block="$(sed -n '/^footer_actions() {/,/^}/p' "$LAUNCHER")"
 pick_view_footer_block="$(sed -n '/^pick_view() {/,/^}/p' "$LAUNCHER" | grep -A2 'view_footer_specs=()')"
 [[ "$pick_view_footer_block" == *'[[ "$DETAILS_PINNED" == false ]]'*'view_footer_specs+='* ]] ||
     fail "pick_view() should only add the F3 spec to view_footer_specs when DETAILS_PINNED is false"
+
+# ------------------------------------------------------------
+# 3b. Persistence: DETAILS is parsed like every other config key,
+#     seeded into DETAILS_VISIBLE/DETAILS_PINNED at startup, and only
+#     the Settings toggle ever writes it — not F3.
+# ------------------------------------------------------------
+
+[[ "$full_source" == *'DETAILS)             CONFIG_DETAILS="$config_value"'* ]] ||
+    fail "the config parser should read a DETAILS key into CONFIG_DETAILS"
+
+startup_seed_block="$(sed -n '/if \[\[ "\$CONFIG_DETAILS" == on \]\]; then/,/^fi$/p' "$LAUNCHER")"
+[[ -n "$startup_seed_block" ]] ||
+    fail "could not find the CONFIG_DETAILS startup-seeding block"
+[[ "$startup_seed_block" == *'DETAILS_VISIBLE=true'*'DETAILS_PINNED=true'* ]] ||
+    fail "CONFIG_DETAILS=on at startup should seed both DETAILS_VISIBLE and DETAILS_PINNED true"
+
+open_settings_menu_block="$(sed -n '/^open_settings_menu() {/,/^}/p' "$LAUNCHER")"
+toggle_details_block="$(printf '%s\n' "$open_settings_menu_block" | sed -n '/toggle_details)/,/continue/p')"
+[[ -n "$toggle_details_block" ]] ||
+    fail "could not find open_settings_menu()'s own toggle_details case"
+[[ "$toggle_details_block" == *'set_config_value DETAILS'* ]] ||
+    fail "the Settings toggle_details case should persist the new state via set_config_value"
+
+pick_view_f3_full_block="$(sed -n '/^pick_view() {/,/^}/p' "$LAUNCHER")"
+[[ "$pick_view_f3_full_block" == *'set_config_value DETAILS'* ]] &&
+    fail "pick_view's F3 handler should never write CONFIG_DETAILS — F3 stays a peek even now"
+main_f3_full_block="$(sed -n '/if \[\[ "\$action" == "f3" || "\$action" == "alt-d" \]\]; then/,/^    fi$/p' "$LAUNCHER")"
+[[ "$main_f3_full_block" == *'set_config_value DETAILS'* ]] &&
+    fail "the main list's F3/alt-d handler should never write CONFIG_DETAILS — F3 stays a peek even now"
 
 # ------------------------------------------------------------
 # 4. Live: turn Details on via Settings, return to the main list,
@@ -207,6 +248,22 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         wait_for "$DP_SESSION" "Tab  Mark" ||
             fail "Esc from the view picker should return to the main list"
 
+        # Raised live, a direct follow-up: "changing themes and
+        # relaunching toggles the details pane into off in settings."
+        # A theme change relaunches the whole process (pick_theme()'s
+        # own exec) — proven here by actually killing the session and
+        # starting a fresh one against the same $HOME, not just
+        # checking CONFIG_DETAILS got written to disk. Details should
+        # already be pinned on before a single key is pressed.
+        tmux kill-session -t "$DP_SESSION" 2>/dev/null
+        tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 "HOME='$DP_HOME' zsh '$LAUNCHER'"
+        wait_for "$DP_SESSION" "Tab  Mark" ||
+            fail "the relaunched session never became interactive"
+        tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q "no details cached" ||
+            fail "Details pinned on via Settings should survive a real relaunch, not just a stray F3 press"
+        tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q '\[Details\]' &&
+            fail "F3/[Details] should still be gone from the footer after a relaunch too"
+
         # Round trip: turning Details back off via Settings should
         # bring F3 back to the footer (and close the pane) — this
         # isn't a one-way lockout, only a lockout while pinned.
@@ -237,6 +294,19 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q "no details cached" &&
             fail "the pane should have closed once Details was turned back off"
 
+        # And the "off" write persists too, symmetric with "on" above
+        # — turning it off shouldn't just avoid overwriting a stale
+        # "on" some other way, it should genuinely land back on Off
+        # after a real relaunch.
+        tmux kill-session -t "$DP_SESSION" 2>/dev/null
+        tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 "HOME='$DP_HOME' zsh '$LAUNCHER'"
+        wait_for "$DP_SESSION" "Tab  Mark" ||
+            fail "the second relaunched session never became interactive"
+        tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q "no details cached" &&
+            fail "Details turned off via Settings should stay off across a relaunch too"
+        tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q '\[Details\]' ||
+            fail "F3/[Details] should still be in the footer after a relaunch with Details off"
+
     else
         printf 'SKIP: launcher never became interactive, skipping the live Details-pin check\n' >&2
     fi
@@ -248,4 +318,4 @@ else
     printf 'SKIP: tmux or fzf not available, skipping the live Details-pin check\n' >&2
 fi
 
-printf 'PASS: turning Details on via Actions -> Settings -> Details pins it as a standing choice (DETAILS_PINNED=true), both F3 handlers (main list, F2 view picker) now no-op instead of silently clearing that pin, and F3 drops out of both footers entirely while pinned — confirmed live: the pane is already open on return to the main list with no F3 press needed, a stray F3 press afterward leaves it open, F3 is gone from both the main list'"'"'s and F2'"'"'s own footer while pinned (with every other entry still there), and turning Details back off via Settings brings F3 back and closes the pane\n'
+printf 'PASS: turning Details on via Actions -> Settings -> Details pins it as a standing choice (DETAILS_PINNED=true) and persists it to config (CONFIG_DETAILS, written only from Settings, never by F3), both F3 handlers (main list, F2 view picker) now no-op instead of silently clearing that pin, and F3 drops out of both footers entirely while pinned — confirmed live: the pane is already open on return to the main list with no F3 press needed, a stray F3 press afterward leaves it open, F3 is gone from both the main list'"'"'s and F2'"'"'s own footer while pinned (with every other entry still there), the pinned state survives a real process relaunch (not just staying alive within one session), and turning Details back off via Settings brings F3 back, closes the pane, and stays off across a relaunch too\n'
