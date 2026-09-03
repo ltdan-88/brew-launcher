@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.77.0] — 2026-09-03
+
+### Changed
+
+- **F3 drops out of the footer while Details is pinned on via Settings.**
+  Direct follow-up, raised live: "why don't we hide F3 in the bottom menu,
+  when it is basically unusable?" — answered with a general principle
+  ("hide menus in general that are not usable") and applied here. Both
+  footers that carry an F3 entry (the main list's own `footer_actions()`,
+  and F2's view picker) now drop it the moment `DETAILS_PINNED` is true,
+  and it reappears the moment Details is turned back off. Deliberately
+  *not* applied to F9/Presets staying visible without tmux — that stays as
+  is, since it's a permanent environment gap rather than a choice made two
+  screens away in Settings, and hiding it once already meant nobody
+  without tmux ever learned Presets existed at all. Confirmed live: F3
+  visible with Details off, gone from both footers the moment it's pinned
+  on (every other entry still there), and back once unpinned.
+
 ## [0.76.0] — 2026-09-03
 
 ### Fixed

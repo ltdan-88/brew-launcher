@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.76.0"
+VERSION="0.77.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -612,10 +612,10 @@ Keyboard shortcuts:
   size (each with its own ascending/descending direction — Space
   cycles through all four), toggle the details pane (same toggle as
   F3 itself, mirrored here so its state is visible before opening it —
-  turning it on here makes F3 a no-op until it's turned off here too),
-  toggle Alt Keybinds (see above). Its own always-on details pane
-  explains each one. Esc from Settings returns to Actions, not out to
-  the main list.
+  turning it on here makes F3 a no-op and drops it from the footer
+  until it's turned off here too), toggle Alt Keybinds (see above).
+  Its own always-on details pane explains each one. Esc from Settings
+  returns to Actions, not out to the main list.
 
   The ⌥ (Option) aliases work if F-keys need Fn on your keyboard.
   In stock Terminal.app, enable "Use Option as Meta Key" in the
@@ -1023,7 +1023,22 @@ footer_actions() {
     # the highlighted row" the way a GUI right-click menu would,
     # rather than something vaguer like "more info" or "more results."
     parts+=("$(footer_key F2 V $with_alt)  [Views]")
-    parts+=("$(footer_key F3 D $with_alt)  [Details]")
+
+    # Dropped once Details is pinned on via Settings — raised live:
+    # "why don't we hide F3 in the bottom menu, when it is basically
+    # unusable?" F3 has nothing left to toggle at that point (see its
+    # own dispatch comment), so advertising it as a live key is
+    # actively misleading rather than merely idle. This is a
+    # deliberate exception to the rule Presets follows right below
+    # (stay visible even when it can't do anything, so the feature
+    # stays discoverable) — the two aren't the same situation: Presets
+    # without tmux is a permanent environment gap nothing here can
+    # change, so hiding it would mean never learning it exists at all;
+    # a pinned Details pane is a choice made in Settings two screens
+    # away, so the fix is "go there," not "wonder why F3 is dead."
+    [[ "$DETAILS_PINNED" == false ]] &&
+        parts+=("$(footer_key F3 D $with_alt)  [Details]")
+
     parts+=("$(footer_key F4 M $with_alt)  [Actions]")
 
     # Refresh dropped from here. It's now Actions -> Refresh
@@ -1651,7 +1666,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
             ;;
         toggle_details)
-            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice: it stays on until you turn it off again here — F3\nhas nothing left to do while this is on, so it can'"'"'t be\nundone by accident. Pressing F3 directly instead (while\nthis is off) is just a quick peek, and Esc there closes it\nfirst before doing anything else. The preset picker (F9)\nhas its own details pane that'"'"'s always on, no toggle needed.\n'
+            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice: it stays on until you turn it off again here — F3\nhas nothing left to do while this is on (and drops out of\nthe footer, so nothing on screen even offers it), so it\ncan'"'"'t be undone by accident. Pressing F3 directly instead\n(while this is off) is just a quick peek, and Esc there\ncloses it first before doing anything else. The preset\npicker (F9) has its own details pane that'"'"'s always on, no\ntoggle needed.\n'
             ;;
         toggle_details_position)
             printf 'Details Position\n\nBottom (default): the details/preview pane opens below the\nlist. Top: it opens above instead. Applies everywhere one\nshows up — the main list, F2, F9, and Actions/Settings'"'"'\nown always-on panes — not just wherever you toggle it from.\n'
@@ -3936,8 +3951,9 @@ show_help_settings_reference() {
     rows+=("                    leaving just name and description")
     rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
     rows+=("                    state shows before you even open the pane —")
-    rows+=("                    turning it on here makes F3 a no-op until")
-    rows+=("                    it's turned off here too")
+    rows+=("                    turning it on here makes F3 a no-op (and it")
+    rows+=("                    drops out of the footer) until it's turned")
+    rows+=("                    off here too")
     rows+=("  Details Position  Bottom (default, below the list) or Top —")
     rows+=("                    applies to every details/preview pane, not")
     rows+=("                    just this one")
@@ -4763,13 +4779,19 @@ pick_view() {
     # actions plus nav/search, more than a single static footer string
     # can safely promise; fzf was truncating it mid-word instead of
     # degrading gracefully. See build_picker_footer() for how.
+    # Same reasoning as footer_actions()'s own F3 entry — dropped
+    # while Details is pinned on via Settings, since it has nothing
+    # left to toggle here either.
+    local -a view_footer_specs=()
+    [[ "$DETAILS_PINNED" == false ]] && view_footer_specs+=($'F3\tD\t[Details]')
+    view_footer_specs+=($'F4\tM\t[Actions]' $'F9\tP\t[Presets]' $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]')
+
     local view_footer
     view_footer="$(
         build_picker_footer \
             '  ↑ ↓  Navigate    Type  Search    Enter  [View]    Esc  [Back]' \
             '  ↑ ↓  Navigate    Enter  [View]    Esc  [Back]' \
-            $'F3\tD\t[Details]' $'F4\tM\t[Actions]' $'F9\tP\t[Presets]' \
-            $'Ctrl-R\t\t[Rename]' $'Ctrl-D\t\t[Delete]'
+            "${view_footer_specs[@]}"
     )"
 
     result="$(
