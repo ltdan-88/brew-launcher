@@ -110,16 +110,30 @@ EOF
     # below fail again: this and pick_view()'s own F3 preview both go
     # through --internal-preview-category, so if this also can't find
     # Morning, the bug is in reading CATEGORIES_DIR itself, not
-    # anything specific to the interactive picker.
-    UV_DIRECT_PREVIEW="$(HOME="$UV_HOME" "$LAUNCHER" --internal-preview-category Morning 2>&1)"
-    printf 'DIAGNOSTIC: --internal-preview-category Morning (direct CLI, no tmux) got: %s\n' "$UV_DIRECT_PREVIEW" >&2
+    # anything specific to the interactive picker — and it was: this
+    # direct call also came back Empty on CI. Leading theory, being
+    # tested directly here rather than just assumed: CONFIG_DIR is
+    # "${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher", which prefers
+    # XDG_CONFIG_HOME over $HOME unconditionally if it's already set —
+    # and something in this environment (candidate: the Linux Homebrew
+    # setup action) may be setting it ambiently. Overriding just HOME
+    # (as every other live test in this suite does) would only be
+    # wrong here if that's true; the diagnostic print just below
+    # settles it either way, and XDG_CONFIG_HOME/XDG_CACHE_HOME are
+    # explicitly cleared for every invocation below regardless, since
+    # doing so is harmless if the theory is wrong and the actual fix
+    # if it's right.
+    printf 'DIAGNOSTIC: ambient XDG_CONFIG_HOME=%s XDG_CACHE_HOME=%s\n' "${XDG_CONFIG_HOME-<unset>}" "${XDG_CACHE_HOME-<unset>}" >&2
+
+    UV_DIRECT_PREVIEW="$(HOME="$UV_HOME" XDG_CONFIG_HOME="$UV_HOME/.config" XDG_CACHE_HOME="$UV_HOME/.cache" "$LAUNCHER" --internal-preview-category Morning 2>&1)"
     [[ "$UV_DIRECT_PREVIEW" == *"tool2"* ]] ||
-        fail "even a direct, non-interactive --internal-preview-category call can't find Morning's member — the bug is in reading CATEGORIES_DIR itself, not the interactive picker. Full output above."
+        fail "a direct, non-interactive --internal-preview-category call can't find Morning's member even with XDG_CONFIG_HOME/XDG_CACHE_HOME explicitly cleared too — got: $UV_DIRECT_PREVIEW"
 
     uv_open_view_picker() {
         local session="$1"
         tmux kill-session -t "$session" 2>/dev/null
-        tmux new-session -d -s "$session" -x 100 -y 30 "HOME='$UV_HOME' zsh '$LAUNCHER'"
+        tmux new-session -d -s "$session" -x 100 -y 30 \
+            "HOME='$UV_HOME' XDG_CONFIG_HOME='$UV_HOME/.config' XDG_CACHE_HOME='$UV_HOME/.cache' zsh '$LAUNCHER'"
         wait_for "$session" "Tab  Mark" || return 1
         tmux send-keys -t "$session" F2
         wait_for "$session" "· View " || return 1
