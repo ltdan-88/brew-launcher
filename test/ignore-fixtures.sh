@@ -148,4 +148,40 @@ load_hidden_commands
 grep -qxF "age-inspect" "$SHOWN_FILE" 2>/dev/null && fail "hide_entry should have removed age-inspect from SHOWN_FILE, not left it there"
 [[ ! -f "$IGNORE_FILE" ]] || fail "hide_entry should not add a redundant IGNORE_FILE line for an already bundled-hidden command"
 
-printf 'PASS: hide/unhide round-trips correctly, comments and blank lines are skipped, unhide is surgical, bundled-hidden overrides work via SHOWN_FILE\n'
+# ------------------------------------------------------------
+# 7b. A bundled-hidden command still registers even when an earlier
+#     field is genuinely empty — raised live via a wrong "All" count.
+#     load_bundled_hidden_commands() used to read the cache with a
+#     zsh `read` loop and placeholder variables for the fields in
+#     between field 1 and field 11 (default_hidden); `IFS=$'\t' read`
+#     treats a run of consecutive tabs the same way it treats a run of
+#     ordinary whitespace — as a single separator — so a genuinely
+#     empty field doesn't consume a placeholder of its own, leaving
+#     the read one token short by the time it reaches the last
+#     variable. Two fields a real formula's cache row can actually
+#     have empty (unlike field 10, default_category, which was
+#     already given a non-empty "-" placeholder for this exact
+#     reason): description (a formula with no `desc` — see
+#     cache_writer.py's own `.get("desc", "")`) and size (no entry in
+#     `brew info --sizes` for it — `.get(name, "")`). Either one used
+#     to make raw_default_hidden come back empty regardless of what
+#     field 11 actually held, so the command silently never counted
+#     as hidden anywhere (a category/All/Hidden count, or the F3
+#     preview above, all disagreeing with reality). Fixed by reading
+#     field 11 with awk instead, same as --internal-preview-category's
+#     own equivalent lookup already does.
+# ------------------------------------------------------------
+
+rm -f "$IGNORE_FILE" "$SHOWN_FILE"
+
+printf 'empty-desc\t\tempty-desc\t1.0\t1MB\t0\tempty-desc\t/opt/homebrew/bin/empty-desc\t100\t-\t1\n' > "$CACHE_FILE"
+load_hidden_commands
+[[ -n "${hidden_commands[empty-desc]-}" ]] ||
+    fail "a bundled-hidden command with an empty description should still be hidden"
+
+printf 'empty-size\tSome tool\tempty-size\t1.0\t\t0\tempty-size\t/opt/homebrew/bin/empty-size\t100\t-\t1\n' > "$CACHE_FILE"
+load_hidden_commands
+[[ -n "${hidden_commands[empty-size]-}" ]] ||
+    fail "a bundled-hidden command with an empty size should still be hidden"
+
+printf 'PASS: hide/unhide round-trips correctly, comments and blank lines are skipped, unhide is surgical, bundled-hidden overrides work via SHOWN_FILE, and a bundled-hidden command with an empty description or size still registers as hidden\n'

@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.78.0"
+VERSION="0.79.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -3329,12 +3329,32 @@ load_bundled_hidden_commands() {
 
     [[ -f "$CACHE_FILE" ]] || return
 
-    local raw_command raw_default_hidden
-    local _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 _f10
+    # awk, not a zsh `read` loop with placeholder variables for the
+    # fields in between — raised live via a wrong "All" count on a
+    # bundled-hidden command. `IFS=$'\t' read` treats a run of
+    # consecutive tabs the same way it treats a run of any other IFS
+    # whitespace — as a single separator — so a genuinely empty field
+    # anywhere before the last one doesn't consume a placeholder of
+    # its own, leaving every read one token short by the time it
+    # reaches the last variable. Two of the fields this row walks past
+    # (description and size — see cache_writer.py's own `.get(...,
+    # "")` fallbacks for each) really can come back empty for a real
+    # formula, unlike field 10 (default_category), which was already
+    # given a non-empty "-" placeholder specifically to dodge this
+    # same class of bug — this function just didn't get the same
+    # treatment. raw_default_hidden ended up empty every single time,
+    # regardless of what field 11 actually held — not a value
+    # collision, just always false. Confirmed live: a bundled-hidden
+    # command with either field genuinely empty never registered here
+    # at all. awk's explicit -F'\t' doesn't have that problem, which
+    # is exactly why --internal-preview-category's own equivalent
+    # lookup already uses awk instead of read for the same field (see
+    # its own comment).
+    local raw_command
 
-    while IFS=$'\t' read -r raw_command _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 _f10 raw_default_hidden; do
-        [[ "$raw_default_hidden" == "1" ]] && bundled_hidden_commands[$raw_command]=1
-    done < "$CACHE_FILE"
+    while IFS= read -r raw_command; do
+        [[ -n "$raw_command" ]] && bundled_hidden_commands[$raw_command]=1
+    done < <(awk -F'\t' '$11 == "1" { print $1 }' "$CACHE_FILE")
 }
 
 # Commands force-shown despite being in bundled_hidden_commands above
