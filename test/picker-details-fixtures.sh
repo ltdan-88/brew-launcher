@@ -250,6 +250,32 @@ echo "$output" | grep -q "t16" ||
 echo "$output" | grep -q "t01" &&
     fail "Recently Launched should cap at 15, dropping the least recent (t01), got: $output"
 
+# 2g. Uncategorized: raised live, "I'd like to have a category called
+#     'Uncategorized'." Not ranked, not backed by a category file
+#     either — the inverse of every real/bundled category combined.
+#     beta is filed into a real category, gamma into a bundled one,
+#     delta is hidden (and uncategorized, to prove hidden-exclusion
+#     wins independently of categorization) — alpha alone should be
+#     left.
+cat > "$CACHE_FILE" <<'EOF'
+alpha	Alpha tool	alpha	1.0	1MB		alpha	/opt/homebrew/bin/alpha	100	-	0
+beta	Beta tool	beta	1.0	1MB		beta	/opt/homebrew/bin/beta	200	-	0
+gamma	Gamma tool	gamma	1.0	1MB		gamma	/opt/homebrew/bin/gamma	300	Games	0
+delta	Delta tool	delta	1.0	1MB		delta	/opt/homebrew/bin/delta	400	-	1
+EOF
+printf 'beta\n' > "$CATEGORIES_DIR/Weekend"
+
+output="$("$LAUNCHER" --internal-preview-category "Uncategorized" 2>&1)"
+echo "$output" | grep -q "alpha" ||
+    fail "Uncategorized should list alpha (filed nowhere), got: $output"
+echo "$output" | grep -q "beta" &&
+    fail "Uncategorized should exclude beta (filed in a real category, Weekend), got: $output"
+echo "$output" | grep -q "gamma" &&
+    fail "Uncategorized should exclude gamma (bundled into Games), got: $output"
+echo "$output" | grep -q "delta" &&
+    fail "Uncategorized should exclude delta (hidden), got: $output"
+
+rm -f "$CATEGORIES_DIR/Weekend"
 rm -f "$LAUNCH_HISTORY_FILE"
 cp "$TEST_HOME/cache-before-builtin-views" "$CACHE_FILE"
 
@@ -377,4 +403,4 @@ launch_preset_block="$(sed -n '/^launch_preset() {/,/^}/p' "$LAUNCHER")"
 [[ "$launch_preset_block" == *'--internal-preview-preset'* ]] ||
     fail "launch_preset (F9) should preview via --internal-preview-preset"
 
-printf 'PASS: F2 previews category contents via F3, F9 always previews preset contents (alphabetical vs. launch order respectively), explains bundled-only/empty/missing cases instead of showing nothing, and All/Hidden/Most Used/Recently Launched/Recently Added now list their actual tools too (ranked and capped at COMPUTED_VIEW_LIMIT the same way the real view is, hidden-exclusion and stale-launch-history entries handled correctly) instead of refusing with "not a stored category"\n'
+printf 'PASS: F2 previews category contents via F3, F9 always previews preset contents (alphabetical vs. launch order respectively), explains bundled-only/empty/missing cases instead of showing nothing, All/Hidden/Most Used/Recently Launched/Recently Added now list their actual tools too (ranked and capped at COMPUTED_VIEW_LIMIT the same way the real view is, hidden-exclusion and stale-launch-history entries handled correctly) instead of refusing with "not a stored category", and Uncategorized correctly excludes real-category/bundled-category/hidden entries alike\n'

@@ -177,4 +177,41 @@ for expected in "${expected_order[@]}"; do
     (( i++ ))
 done
 
-printf 'PASS: Most Used, Recently Launched, and Recently Added each rank correctly and independently (Recently Launched deliberately reverses Most Used'"'"'s own order on the same fixture data, so a real sort-key mix-up would fail loudly), all capped at %s\n' "$COMPUTED_VIEW_LIMIT"
+# ------------------------------------------------------------
+# 5. Uncategorized: raised live, "I'd like to have a category called
+#    'Uncategorized'." Alphabetical, not ranked like the three above
+#    (no inherent order of its own, same as All) — excludes hidden
+#    entries and anything in categorized_commands (the exact set the
+#    "#" marker itself uses: real category files, plus bundled
+#    default_category, Favorites-only membership deliberately not
+#    counted either way — see categorized_commands' own comment).
+#    banana and cherry are "categorized" here, date is hidden; apple
+#    and elderberry are neither, so those two are what should remain.
+# ------------------------------------------------------------
+
+categorized_commands=(banana 1 cherry 1)
+hidden_commands=(date 1)
+
+CURRENT_VIEW="Uncategorized"
+build_entries
+
+if (( ${#entries[@]} != 2 )); then
+    fail "Uncategorized: expected 2 entries (apple, elderberry), got ${#entries[@]}: $(for e in "${entries[@]}"; do print -n "${e%%$'\t'*} "; done)"
+fi
+
+for expected in apple elderberry; do
+    found=0
+    for e in "${entries[@]}"; do
+        [[ "${e%%$'\t'*}" == "$expected" ]] && found=1
+    done
+    (( found )) || fail "Uncategorized should include '$expected', got: $(for e in "${entries[@]}"; do print -n "${e%%$'\t'*} "; done)"
+done
+
+for excluded in banana cherry date; do
+    for e in "${entries[@]}"; do
+        [[ "${e%%$'\t'*}" == "$excluded" ]] &&
+            fail "Uncategorized should not include '$excluded' (categorized or hidden), got: $(for e2 in "${entries[@]}"; do print -n "${e2%%$'\t'*} "; done)"
+    done
+done
+
+printf 'PASS: Most Used, Recently Launched, and Recently Added each rank correctly and independently (Recently Launched deliberately reverses Most Used'"'"'s own order on the same fixture data, so a real sort-key mix-up would fail loudly), all capped at %s, and Uncategorized excludes both hidden and categorized_commands members\n' "$COMPUTED_VIEW_LIMIT"

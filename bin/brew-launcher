@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.80.0"
+VERSION="0.81.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -626,9 +626,12 @@ Keyboard shortcuts:
 Views:
   F2/⌥V switches what you're looking at: All, then the computed views
   (Most Used, Recently Launched, Recently Added), then Favorites, your
-  categories, and Hidden last. The computed views lead since they need
-  no setup and are usually a faster memory jog than a category you
-  filed something under a while ago. "Hidden" is an
+  categories, Uncategorized, and Hidden last. The computed views lead
+  since they need no setup and are usually a faster memory jog than a
+  category you filed something under a while ago. "Uncategorized" is
+  everything installed, not hidden, and filed nowhere — no real
+  category, no bundled default either; being favorited alone doesn't
+  count. "Hidden" is an
   ordinary view — Enter still launches there, and F6 unhides. F9 also
   works here, same as the main list. F3 in the picker previews what's
   actually in the highlighted row — any of them, not just a category:
@@ -1630,6 +1633,51 @@ if [[ "$1" == "--internal-preview-category" ]]; then
                     preview_is_hidden "$preview_av_cmd" && continue
                 fi
                 preview_category_commands+=("$preview_av_cmd")
+            done < <(awk -F'\t' '{ print $1 }' "$CACHE_FILE")
+        fi
+
+    elif [[ "$preview_view_name" == "Uncategorized" ]]; then
+
+        # Also not a category file — the inverse of every other one
+        # combined. Everything filed anywhere (any real category file,
+        # Favorites excluded — being favorited alone doesn't count as
+        # "categorized," same as load_categorized_commands()'s own
+        # Favorites skip — or a bundled default_category, field 10)
+        # goes into one set first; anything installed, not hidden, and
+        # not in that set is what's left uncategorized.
+        typeset -A preview_categorized_anywhere
+        local preview_cat_file preview_cat_member preview_uncat_cmd
+
+        for preview_cat_file in "$CATEGORIES_DIR"/*(N); do
+            [[ -f "$preview_cat_file" ]] || continue
+            [[ "${preview_cat_file:t}" == "Favorites" ]] && continue
+
+            while IFS= read -r preview_cat_member; do
+                preview_cat_member="${preview_cat_member#"${preview_cat_member%%[![:space:]]*}"}"
+                preview_cat_member="${preview_cat_member%"${preview_cat_member##*[![:space:]]}"}"
+                [[ -z "$preview_cat_member" ]] && continue
+                [[ "$preview_cat_member" == \#* ]] && continue
+                preview_categorized_anywhere[$preview_cat_member]=1
+            done < "$preview_cat_file"
+        done
+
+        # Same Default Categories guard and awk-not-read field-10
+        # reasoning as the real-category branch below.
+        if [[ "$CONFIG_DEFAULT_CATEGORIES" != off && -f "$CACHE_FILE" ]]; then
+            while IFS= read -r preview_uncat_cmd; do
+                [[ -z "$preview_uncat_cmd" ]] && continue
+                [[ -n "${preview_categorized_anywhere[$preview_uncat_cmd]-}" ]] && continue
+                grep -Fqx -- "$preview_uncat_cmd" "$CATEGORY_EXCLUDE_FILE" 2>/dev/null && continue
+                preview_categorized_anywhere[$preview_uncat_cmd]=1
+            done < <(awk -F'\t' '$10 != "-" && $10 != "" { print $1 }' "$CACHE_FILE")
+        fi
+
+        if [[ -f "$CACHE_FILE" ]]; then
+            while IFS= read -r preview_uncat_cmd; do
+                [[ -z "$preview_uncat_cmd" ]] && continue
+                preview_is_hidden "$preview_uncat_cmd" && continue
+                [[ -n "${preview_categorized_anywhere[$preview_uncat_cmd]-}" ]] && continue
+                preview_category_commands+=("$preview_uncat_cmd")
             done < <(awk -F'\t' '{ print $1 }' "$CACHE_FILE")
         fi
 
@@ -3633,7 +3681,7 @@ load_category_names() {
             # built-in view would shadow anyway.
             if [[ "$name" == "All" || "$name" == "Hidden" \
                   || "$name" == "Most Used" || "$name" == "Recently Added" \
-                  || "$name" == "Recently Launched" ]]; then
+                  || "$name" == "Recently Launched" || "$name" == "Uncategorized" ]]; then
                 continue
             fi
 
@@ -3863,7 +3911,7 @@ rename_category() {
 
     if [[ "$new_name" == "All" || "$new_name" == "Hidden" || "$new_name" == "Favorites" \
           || "$new_name" == "Most Used" || "$new_name" == "Recently Added" \
-          || "$new_name" == "Recently Launched" ]]; then
+          || "$new_name" == "Recently Launched" || "$new_name" == "Uncategorized" ]]; then
         printf '\n'
         printf '"%s" is a built-in view name.\n' "$new_name"
         printf 'Pick a different name.\n'
@@ -4043,7 +4091,8 @@ show_help_keys() {
     rows+=("")
     rows+=("First tier — always on screen")
     rows+=("  F2 / ⌥V   Switch view (All, Most Used, Recently Launched,")
-    rows+=("            Recently Added, Favorites, categories, Hidden) — F3 there")
+    rows+=("            Recently Added, Favorites, categories, Uncategorized,")
+    rows+=("            Hidden) — F3 there")
     rows+=("            previews what's in the highlighted row (any of them),")
     rows+=("            Ctrl-R renames a category, Ctrl-D deletes it")
     rows+=("  F3 / ⌥D   Show or hide the details pane")
@@ -4978,6 +5027,28 @@ pick_view() {
         fi
     done
 
+    # Raised live: "I'd like to have a category called 'Uncategorized'."
+    # Computed, not a real category file — same family as All/Hidden/
+    # the three above — everything installed, not hidden, and not in
+    # categorized_commands (every real category's members, plus every
+    # bundled default_category, minus whatever CONFIG_DEFAULT_CATEGORIES/
+    # F8 excluded; see categorized_commands' own comment). Counted with
+    # a real loop rather than a total-minus-hidden-minus-categorized
+    # subtraction — hidden and categorized commands can overlap, and a
+    # plain subtraction would double-discount them. Placed right after
+    # the category list, not with Most Used/Recently Launched/Recently
+    # Added up top — those three help you find something you already
+    # use; this one's about the same organizing job the category list
+    # right above it is, not about finding a tool to launch right now.
+    count=0
+    while IFS= read -r uncategorized_count_cmd; do
+        [[ -z "$uncategorized_count_cmd" ]] && continue
+        [[ -n "${hidden_commands[$uncategorized_count_cmd]-}" ]] && continue
+        [[ -n "${categorized_commands[$uncategorized_count_cmd]-}" ]] && continue
+        (( count++ ))
+    done < <(awk -F'\t' '{ print $1 }' "$CACHE_FILE")
+    choices+=("Uncategorized"$'\t'"Uncategorized ($count)")
+
     # Last — the one you reach for least, same reasoning as Refresh/
     # Backup landing at the bottom of the Actions menu.
     choices+=("Hidden"$'\t'"Hidden (${#hidden_commands[@]})")
@@ -5124,7 +5195,7 @@ pick_view() {
         # a bundled category into a real file the normal way.
         if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" \
               || "$picked" == "Most Used" || "$picked" == "Recently Added" \
-              || "$picked" == "Recently Launched" ]]; then
+              || "$picked" == "Recently Launched" || "$picked" == "Uncategorized" ]]; then
             printf '\n'
             printf '"%s" can'"'"'t be renamed.\n' "$picked"
             sleep 1
@@ -5154,9 +5225,10 @@ pick_view() {
         # "All" and "Hidden" aren't category files, "Favorites" is
         # protected because F6 owns it (deleting it out from under
         # that would leave F6 unable to get it back into this list),
-        # and "Most Used"/"Recently Added"/"Recently Launched" are computed rather than a
-        # category file at all — there's nothing under CATEGORIES_DIR
-        # for any of these to delete.
+        # and "Most Used"/"Recently Added"/"Recently Launched"/
+        # "Uncategorized" are computed rather than a category file at
+        # all — there's nothing under CATEGORIES_DIR for any of these
+        # to delete.
         #
         # Explicit message on refusal, not a silent no-op: otherwise
         # this falls through to rebuilding with whatever view was
@@ -5164,7 +5236,7 @@ pick_view() {
         # "navigated" somewhere on its own.
         if [[ "$picked" == "All" || "$picked" == "Hidden" || "$picked" == "Favorites" \
               || "$picked" == "Most Used" || "$picked" == "Recently Added" \
-              || "$picked" == "Recently Launched" ]]; then
+              || "$picked" == "Recently Launched" || "$picked" == "Uncategorized" ]]; then
             printf '\n'
             printf '"%s" can'"'"'t be deleted.\n' "$picked"
             sleep 1
@@ -5310,10 +5382,23 @@ load_bundled_categories() {
     [[ -f "$CACHE_FILE" ]] || return
     [[ "$CONFIG_DEFAULT_CATEGORIES" == off ]] && return
 
+    # awk, not a zsh `read` loop with placeholder variables for the
+    # fields in between — raised live via a wrong "Uncategorized"
+    # count on a formula with an empty description or size (real
+    # cache_writer.py fallbacks — see `load_bundled_hidden_commands()`'s
+    # own comment for the exact mechanism). Two placeholders sit after
+    # raw_category here (field 10) before field 11, so a collapsed
+    # empty field didn't just make raw_category come back empty the
+    # way it did there — it shifted field 11's own value ("0" or "1")
+    # into what this thought was field 10, so a formula could have
+    # silently been "filed" into a bogus category literally named "0"
+    # or "1" instead of its real one. awk's explicit -F'\t' doesn't
+    # have that problem, which is exactly why --internal-preview-
+    # category's own equivalent lookup already uses awk instead of
+    # read for the same field.
     local raw_command raw_category
-    local _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 _f11
 
-    while IFS=$'\t' read -r raw_command _f2 _f3 _f4 _f5 _f6 _f7 _f8 _f9 raw_category _f11; do
+    while IFS=$'\t' read -r raw_command raw_category; do
 
         [[ -z "$raw_category" || "$raw_category" == "-" ]] && continue
         [[ -n "${manually_categorized_commands[$raw_command]-}" ]] && continue
@@ -5322,7 +5407,7 @@ load_bundled_categories() {
         default_category_commands[$raw_command]="$raw_category"
         categorized_commands[$raw_command]=1
 
-    done < "$CACHE_FILE"
+    done < <(awk -F'\t' '{ print $1"\t"$10 }' "$CACHE_FILE")
 }
 
 # Runs the four loads above in the only order that actually works:
@@ -5483,11 +5568,11 @@ build_entries() {
         # View filter. "Hidden" is the only view that shows hidden
         # entries, and it shows nothing else — which is what lets it
         # be an ordinary view instead of a separate screen. Most Used,
-        # Recently Launched, and Recently Added get their own branches
-        # rather than falling through to the category-file check
-        # below: none of them is backed by a file under
-        # CATEGORIES_DIR, so category_members would just be empty for
-        # them and exclude everything.
+        # Recently Launched, Recently Added, and Uncategorized each
+        # get their own branch rather than falling through to the
+        # category-file check below: none of them is backed by a file
+        # under CATEGORIES_DIR, so category_members would just be
+        # empty for them and exclude everything.
         if [[ "$CURRENT_VIEW" == "Hidden" ]]; then
 
             [[ -z "${hidden_commands[$command]-}" ]] && continue
@@ -5505,6 +5590,17 @@ build_entries() {
         elif [[ "$CURRENT_VIEW" == "Recently Added" ]]; then
 
             [[ -n "${hidden_commands[$command]-}" ]] && continue
+
+        elif [[ "$CURRENT_VIEW" == "Uncategorized" ]]; then
+
+            # Also not backed by a CATEGORIES_DIR file — the inverse
+            # of every real/bundled category combined, read from the
+            # exact same categorized_commands set the "#" marker
+            # itself uses (see its own comment: real files, plus
+            # bundled default_category, Favorites-only membership
+            # deliberately not counted either way).
+            [[ -n "${hidden_commands[$command]-}" ]] && continue
+            [[ -n "${categorized_commands[$command]-}" ]] && continue
 
         else
 
@@ -7384,7 +7480,7 @@ pick_category_name() {
     # those names. Refuse to create the trap in the first place.
     if [[ "$category_name" == "All" || "$category_name" == "Hidden" \
           || "$category_name" == "Most Used" || "$category_name" == "Recently Added" \
-          || "$category_name" == "Recently Launched" ]]; then
+          || "$category_name" == "Recently Launched" || "$category_name" == "Uncategorized" ]]; then
         printf '\n'
         printf '"%s" is a built-in view name.\n' "$category_name"
         printf 'Pick a different category name.\n'
