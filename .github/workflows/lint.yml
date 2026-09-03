@@ -791,6 +791,22 @@ jobs:
       - name: Startup Screen test
         run: zsh test/startup-screen-fixtures.sh
 
+  details-pinned-f3-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf and tmux
+        run: brew install fzf tmux
+
+      # Source-text for both F3 handlers' DETAILS_PINNED guard, plus a
+      # real launch in tmux — turn Details on via Settings, return to
+      # the main list, confirm the pane is already open, then confirm
+      # a stray F3 press no longer closes it.
+      - name: Details pinned + F3 no-op test
+        run: zsh test/details-pinned-f3-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -946,6 +962,9 @@ jobs:
 
       - name: Startup Screen test
         run: zsh test/startup-screen-fixtures.sh
+
+      - name: Details pinned + F3 no-op test
+        run: zsh test/details-pinned-f3-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would

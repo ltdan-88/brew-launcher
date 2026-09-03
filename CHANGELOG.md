@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.76.0] — 2026-09-03
+
+### Fixed
+
+- **F3 no longer clears a Details preference turned on via Settings.**
+  Raised live, two remarks together: "the Details toggle in Settings is not
+  always persistent" and "wouldn't it make sense to disable F3 whenever
+  Details is enabled in Settings?" Root cause: turning Details on via
+  Actions → Settings → Details sets `DETAILS_PINNED=true` (a standing
+  "always on" choice, not a peek), but every F3 handler (main list, F2's
+  view picker) flipped the pane and unconditionally cleared
+  `DETAILS_PINNED` right after regardless of how it got turned on — a
+  single stray F3 press anywhere silently downgraded the Settings choice
+  back into an ordinary peek, with nothing on screen to say that had just
+  happened. F3 now checks `DETAILS_PINNED` first: while pinned, it has
+  nothing left to do, and Settings is the only way back off. Confirmed
+  live in a real tmux session: turn Details on via Settings, return to the
+  main list (already open, no F3 needed), press F3, pane stays open.
+
 ## [0.75.0] — 2026-09-03
 
 ### Changed
