@@ -90,44 +90,24 @@ EOF
     printf 'tool2\n' > "$UV_CONFIG_DIR/categories/Morning"
     printf 'tool5\n' > "$UV_CONFIG_DIR/categories/Favorites"
 
-    # Sanity check the fixture itself before ever launching anything
-    # against it — raised live after a CI-only failure (Morning and
-    # Favorites missing from the picker, on Linux specifically,
-    # reproducible on rerun but not reproducible in an isolated Docker
-    # container matching the same OS/Homebrew/fzf/tmux versions) that
-    # this diagnostic exists specifically to narrow down: is the
-    # fixture itself ever incomplete on disk (a mkdir/printf that
-    # silently failed — this file has no `set -e`, so that would
-    # otherwise go unnoticed), or is a complete, correct fixture being
-    # misread by the app itself.
-    if [[ ! -f "$UV_CONFIG_DIR/categories/Morning" || ! -f "$UV_CONFIG_DIR/categories/Favorites" ]]; then
-        fail "fixture setup itself is incomplete before any session even launched — ls -la \"$UV_CONFIG_DIR/categories\": $(ls -la "$UV_CONFIG_DIR/categories" 2>&1)"
-    fi
-
-    # A second, independent check of the same fixture — a plain,
-    # synchronous CLI call, no tmux/fzf/pick_view() involved at all —
-    # to narrow down *which* layer misreads it if the live checks
-    # below fail again: this and pick_view()'s own F3 preview both go
-    # through --internal-preview-category, so if this also can't find
-    # Morning, the bug is in reading CATEGORIES_DIR itself, not
-    # anything specific to the interactive picker — and it was: this
-    # direct call also came back Empty on CI. Leading theory, being
-    # tested directly here rather than just assumed: CONFIG_DIR is
+    # HOME alone isn't enough to sandbox a launch, on Linux CI
+    # specifically: CONFIG_DIR is
     # "${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher", which prefers
-    # XDG_CONFIG_HOME over $HOME unconditionally if it's already set —
-    # and something in this environment (candidate: the Linux Homebrew
-    # setup action) may be setting it ambiently. Overriding just HOME
-    # (as every other live test in this suite does) would only be
-    # wrong here if that's true; the diagnostic print just below
-    # settles it either way, and XDG_CONFIG_HOME/XDG_CACHE_HOME are
-    # explicitly cleared for every invocation below regardless, since
-    # doing so is harmless if the theory is wrong and the actual fix
-    # if it's right.
-    printf 'DIAGNOSTIC: ambient XDG_CONFIG_HOME=%s XDG_CACHE_HOME=%s\n' "${XDG_CONFIG_HOME-<unset>}" "${XDG_CACHE_HOME-<unset>}" >&2
-
+    # XDG_CONFIG_HOME over $HOME unconditionally once it's set — and
+    # the Linux Homebrew setup action does set it ambiently
+    # (XDG_CONFIG_HOME=/home/runner/.config, confirmed directly while
+    # chasing down a real CI-only failure this exact gap caused:
+    # Morning/Favorites both genuinely on disk under $UV_HOME, and
+    # still invisible to the app, because it was reading category
+    # files from the runner's real home directory instead). Every
+    # live test elsewhere in this suite only overrides HOME and that's
+    # fine, since none of them happen to touch a $XDG_*_HOME-driven
+    # path — this is the first one that does. XDG_CONFIG_HOME and
+    # XDG_CACHE_HOME are both explicitly pinned to $UV_HOME below,
+    # alongside HOME, for every invocation.
     UV_DIRECT_PREVIEW="$(HOME="$UV_HOME" XDG_CONFIG_HOME="$UV_HOME/.config" XDG_CACHE_HOME="$UV_HOME/.cache" "$LAUNCHER" --internal-preview-category Morning 2>&1)"
     [[ "$UV_DIRECT_PREVIEW" == *"tool2"* ]] ||
-        fail "a direct, non-interactive --internal-preview-category call can't find Morning's member even with XDG_CONFIG_HOME/XDG_CACHE_HOME explicitly cleared too — got: $UV_DIRECT_PREVIEW"
+        fail "a direct, non-interactive --internal-preview-category call can't find Morning's member even with XDG_CONFIG_HOME/XDG_CACHE_HOME pinned to \$UV_HOME too — got: $UV_DIRECT_PREVIEW"
 
     uv_open_view_picker() {
         local session="$1"
