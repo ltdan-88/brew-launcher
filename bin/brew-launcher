@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.81.0"
+VERSION="0.82.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -557,7 +557,11 @@ Keyboard shortcuts:
             pane, the same way a preset does without having to name
             and save one. Marks clear once an action runs. The footer
             updates the instant something is marked — how many, and
-            that Enter now launches them together.
+            that Enter now launches them together. Ctrl-A marks (or,
+            pressed again, unmarks) every row the current search
+            actually matches — search or switch views first to
+            narrow it down, then Ctrl-A the whole result instead of
+            Tab-ing through each one.
 
   Shown in the footer:
   F2 / ⌥V   Switch view (All, Most Used, Recently Launched, Recently
@@ -589,7 +593,8 @@ Keyboard shortcuts:
             viewing a category, otherwise prompts for which one)
 
   There are no separate "... Multiple" rows for these three any more.
-  Marking rows with Tab and pressing F6/F7/F8 (or picking them from
+  Marking rows with Tab (or Ctrl-A, for everything a search already
+  narrowed down to) and pressing F6/F7/F8 (or picking them from
   Actions) does the same job: a marked batch is hidden/favorited in
   one direction rather than toggled per entry, so a mixed batch ends
   up all the same way instead of some on and some off. Categorize
@@ -4080,7 +4085,9 @@ show_help_keys() {
     rows+=("  them all together, one per tmux pane — a preset without")
     rows+=("  having to name and save one. The footer updates the")
     rows+=("  instant something is marked, saying how many and what")
-    rows+=("  Enter now does.")
+    rows+=("  Enter now does. Ctrl-A marks (or unmarks) everything the")
+    rows+=("  current search matches — narrow it down first, then")
+    rows+=("  Ctrl-A the whole result instead of Tab-ing through each one")
     rows+=("")
     rows+=("Markers — shown next to an entry, not things you press")
     rows+=("  +  Favorited        #  Categorized        *  Outdated")
@@ -4128,8 +4135,9 @@ show_help_actions_menu() {
     local -a rows=()
 
     rows+=("Acting on several at once — no separate rows for it")
-    rows+=("  Mark rows with Tab on the main list, then use Hide,")
-    rows+=("  Favorite or Categorize exactly as you would for one entry.")
+    rows+=("  Mark rows with Tab on the main list (or Ctrl-A for")
+    rows+=("  everything a search already narrowed down to), then use")
+    rows+=("  Hide, Favorite or Categorize exactly as you would for one entry.")
     rows+=("  A marked batch goes one direction rather than toggling each")
     rows+=("  entry, so a mixed batch ends up all the same way. Categorize")
     rows+=("  asks for a category once for the whole batch.")
@@ -8617,6 +8625,22 @@ run_fzf() {
         # already lands on the row clicked, unlike Tab/Shift-Tab moving
         # from wherever the cursor already was.
         --bind "right-click:toggle+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
+
+        # Raised live: "are there any improvements we can still make
+        # to make navigation and usability even easier?" — marking
+        # was one row (or one click) at a time; narrowing down with a
+        # search or a category first, then acting on the whole result
+        # in one press, had no way to select all of it short of
+        # Tab-ing through each row. fzf's own toggle-all only affects
+        # whatever the current filter actually matches, not literally
+        # every row ever loaded — confirmed live before relying on
+        # it — which is exactly the "select what I just searched for"
+        # behavior this is for, not a blunt "mark everything"
+        # regardless of the query. Toggle, not a one-way select-all,
+        # so the same key also clears a batch that's already fully
+        # marked. Ctrl-A wasn't bound to anything on this screen
+        # before this.
+        --bind "ctrl-a:toggle-all+transform-footer($SCRIPT_PATH --internal-marked-footer ${(q)esc_hint})"
 
         --header="$FZF_HEADER"
         --footer="$footer"

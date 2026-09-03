@@ -5,6 +5,24 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.82.0] — 2026-09-03
+
+### Added
+
+- **Ctrl-A marks (or unmarks) every row the current search matches.**
+  Raised live: "are there any improvements we can still make to make
+  navigation and usability even easier?" Marking used to be one row (or
+  one click) at a time — narrowing down with a search or a category first,
+  then acting on the whole result, had no way to select all of it short of
+  Tab-ing through each row. Bound to fzf's own `toggle-all`, confirmed live
+  before relying on either property it depends on: filter-aware (only
+  marks what the current search actually matches, not literally every row
+  ever loaded) and a real toggle (pressing it again on a fully-marked
+  batch clears it, not a one-way select-all). Same live footer feedback
+  Tab/Shift-Tab/right-click already get. Main list only — Create Preset's
+  own marking screen tracks launch order, which fzf's native multi-select
+  has no concept of, so it wasn't a drop-in fit there.
+
 ## [0.81.0] — 2026-09-03
 
 ### Added
