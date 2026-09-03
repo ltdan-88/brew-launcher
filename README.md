@@ -145,7 +145,7 @@ move. Instant, since it's written when the cache builds. Also shows an
 to (marked `(default)` if only via [bundled defaults](#bundled-defaults)),
 and closes on the first Esc rather than exiting the screen.
 
-- **Shift-Up** / **Shift-Down** scrolls it. Starts closed; **F4 → Actions → Settings → Details** makes it a standing choice instead of a peek — once on this way, F3 has nothing left to toggle, so it can't be turned off by accident; Settings is the only way back.
+- **Shift-Up** / **Shift-Down** scrolls it. Starts closed; **F4 → Actions → Settings → Details** makes it a standing choice instead of a peek — once on this way, F3 has nothing left to toggle (and drops out of the footer entirely, since there's nothing left for it to do), so it can't be turned off by accident; Settings is the only way back.
 - **F4 → Actions → Settings → Details Position** switches it to open above the list instead of below, everywhere it appears.
 
 ### Launch without leaving the launcher
