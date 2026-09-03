@@ -5,6 +5,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.79.0] — 2026-09-03
+
+### Fixed
+
+- **A bundled-hidden command with an empty description or size could go
+  uncounted as hidden everywhere.** Found while live-verifying the F2
+  preview work above: an `All` count that didn't match what F3 actually
+  listed. `load_bundled_hidden_commands()` read the cache with a zsh
+  `read` loop and placeholder variables for the fields between the
+  command name and `default_hidden` (field 11) — `IFS=$'\t' read` treats
+  a run of consecutive tabs the same way it treats a run of ordinary
+  whitespace, as a single separator, so a genuinely empty field doesn't
+  consume a placeholder of its own and the read ends up one token short
+  by the last variable. Two fields a real formula's cache row can
+  actually have empty — description (no `desc` from `brew info`) and
+  size (no entry in `brew info --sizes`) — used to make this silently
+  read empty instead of the real field 11 value, regardless of what it
+  actually held, so the command never registered as hidden anywhere
+  (a count, a filter, the F3 preview). Fixed by reading field 11 with
+  awk instead, the same technique `--internal-preview-category`'s own
+  equivalent lookup already uses for the same field.
+
 ## [0.78.0] — 2026-09-03
 
 ### Changed
