@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.75.0"
+VERSION="0.76.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -611,7 +611,8 @@ Keyboard shortcuts:
   under "Bundled defaults" above, Startup Screen, Sort by name or
   size (each with its own ascending/descending direction — Space
   cycles through all four), toggle the details pane (same toggle as
-  F3 itself, mirrored here so its state is visible before opening it),
+  F3 itself, mirrored here so its state is visible before opening it —
+  turning it on here makes F3 a no-op until it's turned off here too),
   toggle Alt Keybinds (see above). Its own always-on details pane
   explains each one. Esc from Settings returns to Actions, not out to
   the main list.
@@ -1650,7 +1651,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Compact View\n\nOff (default): every row shows its version, size, and\n+/#/* markers. On: drops all of that, leaving just the\nname and description. Applies everywhere a row shows up\n— the main list, category/preset pickers, and so on.\n'
             ;;
         toggle_details)
-            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice (it stays on until you turn it off again, here or\nwith F3); pressing F3 directly instead is just a quick\npeek, and Esc there closes it first before doing anything\nelse. The preset picker (F9) has its own details pane that'"'"'s\nalways on, no toggle needed.\n'
+            printf 'Details\n\nShow or hide the F3 preview pane — on the main list and\nthe view picker (F2). Toggling it here makes it a standing\nchoice: it stays on until you turn it off again here — F3\nhas nothing left to do while this is on, so it can'"'"'t be\nundone by accident. Pressing F3 directly instead (while\nthis is off) is just a quick peek, and Esc there closes it\nfirst before doing anything else. The preset picker (F9)\nhas its own details pane that'"'"'s always on, no toggle needed.\n'
             ;;
         toggle_details_position)
             printf 'Details Position\n\nBottom (default): the details/preview pane opens below the\nlist. Top: it opens above instead. Applies everywhere one\nshows up — the main list, F2, F9, and Actions/Settings'"'"'\nown always-on panes — not just wherever you toggle it from.\n'
@@ -3934,7 +3935,9 @@ show_help_settings_reference() {
     rows+=("                    On: drops version/size and the +/#/* marks,")
     rows+=("                    leaving just name and description")
     rows+=("            Details  Same toggle as F3 itself, mirrored here so its")
-    rows+=("                    state shows before you even open the pane")
+    rows+=("                    state shows before you even open the pane —")
+    rows+=("                    turning it on here makes F3 a no-op until")
+    rows+=("                    it's turned off here too")
     rows+=("  Details Position  Bottom (default, below the list) or Top —")
     rows+=("                    applies to every details/preview pane, not")
     rows+=("                    just this one")
@@ -4859,10 +4862,19 @@ pick_view() {
     # uses one on the main list: so Esc could eventually learn to close
     # this first too, the way it already does there.
     if [[ "$pick_action" == "f3" ]]; then
-        [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
-        # F3 is always a peek, never a standing choice — see
-        # DETAILS_PINNED's own comment.
-        DETAILS_PINNED=false
+        # Raised live: "the Details toggle in Settings is not always
+        # persistent." Root cause was here — a single F3 press anywhere
+        # would flip DETAILS_VISIBLE off and unconditionally clear
+        # DETAILS_PINNED right after, silently downgrading a Settings
+        # "always on" choice back into an ordinary peek with no
+        # indication that's what just happened. While pinned, F3 has
+        # nothing left to toggle; Settings is the only way back off.
+        if [[ "$DETAILS_PINNED" == false ]]; then
+            [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+            # F3 is always a peek, never a standing choice — see
+            # DETAILS_PINNED's own comment.
+            DETAILS_PINNED=false
+        fi
         pick_view
         return $?
     fi
@@ -8740,10 +8752,15 @@ while true; do
 
     if [[ "$action" == "f3" || "$action" == "alt-d" ]]; then
 
-        [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
-        # F3 is always a peek, never a standing choice — see
-        # DETAILS_PINNED's own comment.
-        DETAILS_PINNED=false
+        # See pick_view()'s own matching comment — pinned via Settings
+        # means F3 has nothing left to toggle until Settings turns it
+        # back off.
+        if [[ "$DETAILS_PINNED" == false ]]; then
+            [[ "$DETAILS_VISIBLE" == true ]] && DETAILS_VISIBLE=false || DETAILS_VISIBLE=true
+            # F3 is always a peek, never a standing choice — see
+            # DETAILS_PINNED's own comment.
+            DETAILS_PINNED=false
+        fi
         restore_position="$(find_entry_position "${selection%%$'\t'*}")"
         continue
     fi
