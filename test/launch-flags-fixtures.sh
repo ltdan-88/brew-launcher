@@ -311,7 +311,22 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     LF_SESSION="blf-launch-flags-esc-$$"
     tmux kill-session -t "$LF_SESSION" 2>/dev/null
 
-    tmux new-session -d -s "$LF_SESSION" -x 100 -y 30 "HOME='$LF_HOME' zsh '$LAUNCHER'"
+    # XDG_CONFIG_HOME/XDG_CACHE_HOME pinned to $LF_HOME alongside HOME
+    # — needed for two separate reasons here: section 4 above already
+    # exported XDG_CONFIG_HOME="$PRESET_TEST_HOME/config" for its own
+    # --preset run, and that export is still in effect (exports don't
+    # expire on their own), so without overriding it again here this
+    # section would inherit a stale value pointing at an unrelated
+    # directory instead of $LF_HOME; separately, Linux CI's own
+    # Homebrew setup action sets XDG_CONFIG_HOME ambiently too, which
+    # CONFIG_DIR prefers over $HOME unconditionally either way. This
+    # section's own checks don't depend on config content, so neither
+    # gap has caused a visible failure here, but relying on that
+    # coincidence is fragile; see uncategorized-view-fixtures.sh's own
+    # comment for how this class of gap was actually confirmed on a
+    # real CI runner.
+    tmux new-session -d -s "$LF_SESSION" -x 100 -y 30 \
+        "HOME='$LF_HOME' XDG_CONFIG_HOME='$LF_HOME/.config' XDG_CACHE_HOME='$LF_HOME/.cache' zsh '$LAUNCHER'"
 
     lf_ready=false
     for _ in {1..30}; do
