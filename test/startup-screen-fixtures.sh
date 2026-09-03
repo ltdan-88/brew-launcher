@@ -144,12 +144,28 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         : > "$cache_dir/outdated"
     }
 
+    # HOME alone doesn't isolate a launch on Linux CI: CONFIG_DIR is
+    # "${XDG_CONFIG_HOME:-$HOME/.config}/brew-launcher", and the Linux
+    # Homebrew setup action sets XDG_CONFIG_HOME ambiently
+    # (=/home/runner/.config), which wins over $HOME unconditionally.
+    # Every sub-test below writes its own STARTUP_SCREEN=... config
+    # externally before launching — without pinning XDG_CONFIG_HOME/
+    # XDG_CACHE_HOME too, the app would read the real runner's config
+    # instead and never see it, and every "did it become interactive
+    # as X" check would silently degrade to a SKIP (not become a
+    # visible FAIL) rather than actually verifying anything, on real
+    # Linux CI specifically — this went unnoticed until
+    # uncategorized-view-fixtures.sh hit the same gap in a way that
+    # couldn't silently skip instead. See that file's own comment for
+    # how this was actually confirmed rather than assumed.
+
     # 5a. No config at all: still starts on All, same as always.
     SS_HOME_A="$(mktemp -d)"
     seed_cache "$SS_HOME_A"
     SS_SESSION_A="blss-all-$$"
     tmux kill-session -t "$SS_SESSION_A" 2>/dev/null
-    tmux new-session -d -s "$SS_SESSION_A" -x 100 -y 30 "HOME='$SS_HOME_A' zsh '$LAUNCHER'"
+    tmux new-session -d -s "$SS_SESSION_A" -x 100 -y 30 \
+        "HOME='$SS_HOME_A' XDG_CONFIG_HOME='$SS_HOME_A/.config' XDG_CACHE_HOME='$SS_HOME_A/.cache' zsh '$LAUNCHER'"
     if wait_for "$SS_SESSION_A" "Tab  Mark"; then
         tmux capture-pane -t "$SS_SESSION_A" -p 2>/dev/null | grep -q "brew-launcher v" ||
             fail "expected the main list on a fresh config with no STARTUP_SCREEN set"
@@ -173,7 +189,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     printf 'STARTUP_SCREEN=views\n' > "$SS_HOME_B/.config/brew-launcher/config"
     SS_SESSION_B="blss-views-$$"
     tmux kill-session -t "$SS_SESSION_B" 2>/dev/null
-    tmux new-session -d -s "$SS_SESSION_B" -x 100 -y 30 "HOME='$SS_HOME_B' zsh '$LAUNCHER'"
+    tmux new-session -d -s "$SS_SESSION_B" -x 100 -y 30 \
+        "HOME='$SS_HOME_B' XDG_CONFIG_HOME='$SS_HOME_B/.config' XDG_CACHE_HOME='$SS_HOME_B/.cache' zsh '$LAUNCHER'"
     wait_for "$SS_SESSION_B" "· View " ||
         printf 'SKIP: launcher never became interactive as the view picker (STARTUP_SCREEN=views), skipping this live check\n' >&2
     tmux kill-session -t "$SS_SESSION_B" 2>/dev/null
@@ -188,7 +205,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     printf 'cat\n' > "$SS_HOME_C/.config/brew-launcher/presets/startup-screen-test"
     SS_SESSION_C="blss-presets-$$"
     tmux kill-session -t "$SS_SESSION_C" 2>/dev/null
-    tmux new-session -d -s "$SS_SESSION_C" -x 100 -y 30 "HOME='$SS_HOME_C' zsh '$LAUNCHER'"
+    tmux new-session -d -s "$SS_SESSION_C" -x 100 -y 30 \
+        "HOME='$SS_HOME_C' XDG_CONFIG_HOME='$SS_HOME_C/.config' XDG_CACHE_HOME='$SS_HOME_C/.cache' zsh '$LAUNCHER'"
     wait_for "$SS_SESSION_C" "startup-screen-test" ||
         printf 'SKIP: launcher never became interactive as the preset picker (STARTUP_SCREEN=presets), skipping this live check\n' >&2
     tmux send-keys -t "$SS_SESSION_C" Escape
@@ -203,7 +221,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     printf 'STARTUP_SCREEN=presets\n' > "$SS_HOME_D/.config/brew-launcher/config"
     SS_SESSION_D="blss-nopresets-$$"
     tmux kill-session -t "$SS_SESSION_D" 2>/dev/null
-    tmux new-session -d -s "$SS_SESSION_D" -x 100 -y 30 "HOME='$SS_HOME_D' zsh '$LAUNCHER'"
+    tmux new-session -d -s "$SS_SESSION_D" -x 100 -y 30 \
+        "HOME='$SS_HOME_D' XDG_CONFIG_HOME='$SS_HOME_D/.config' XDG_CACHE_HOME='$SS_HOME_D/.cache' zsh '$LAUNCHER'"
     if wait_for "$SS_SESSION_D" "Tab  Mark"; then
         tmux capture-pane -t "$SS_SESSION_D" -p 2>/dev/null | grep -q "brew-launcher v" ||
             fail "expected the main list once the 'no presets yet' message clears"
@@ -222,7 +241,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     printf 'OPEN_TO_CATEGORIES=on\n' > "$SS_HOME_E/.config/brew-launcher/config"
     SS_SESSION_E="blss-migrate-$$"
     tmux kill-session -t "$SS_SESSION_E" 2>/dev/null
-    tmux new-session -d -s "$SS_SESSION_E" -x 100 -y 30 "HOME='$SS_HOME_E' zsh '$LAUNCHER'"
+    tmux new-session -d -s "$SS_SESSION_E" -x 100 -y 30 \
+        "HOME='$SS_HOME_E' XDG_CONFIG_HOME='$SS_HOME_E/.config' XDG_CACHE_HOME='$SS_HOME_E/.cache' zsh '$LAUNCHER'"
     wait_for "$SS_SESSION_E" "· View " ||
         printf 'SKIP: launcher never became interactive as the view picker (OPEN_TO_CATEGORIES=on migration), skipping this live check\n' >&2
     tmux kill-session -t "$SS_SESSION_E" 2>/dev/null

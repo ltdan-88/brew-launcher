@@ -219,7 +219,16 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     RWA_SESSION="blf-run-with-args-esc-$$"
     tmux kill-session -t "$RWA_SESSION" 2>/dev/null
 
-    tmux new-session -d -s "$RWA_SESSION" -x 100 -y 30 "HOME='$RWA_HOME' zsh '$LAUNCHER'"
+    # XDG_CONFIG_HOME/XDG_CACHE_HOME pinned to $RWA_HOME alongside
+    # HOME — on Linux CI, the Homebrew setup action sets
+    # XDG_CONFIG_HOME ambiently, which CONFIG_DIR prefers over $HOME
+    # unconditionally. This section's own checks don't depend on any
+    # config content, so this has never caused a visible failure here,
+    # but relying on that coincidence is fragile; see
+    # uncategorized-view-fixtures.sh's own comment for how this gap
+    # was actually confirmed on a real CI runner.
+    tmux new-session -d -s "$RWA_SESSION" -x 100 -y 30 \
+        "HOME='$RWA_HOME' XDG_CONFIG_HOME='$RWA_HOME/.config' XDG_CACHE_HOME='$RWA_HOME/.cache' zsh '$LAUNCHER'"
 
     rwa_ready=false
     for _ in {1..30}; do

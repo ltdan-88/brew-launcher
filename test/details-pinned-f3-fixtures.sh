@@ -159,6 +159,19 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
     DP_CACHE_FORMAT_VERSION="$(sed -n 's/^CACHE_FORMAT_VERSION=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
     [[ -n "$DP_CACHE_FORMAT_VERSION" ]] || fail "could not read CACHE_FORMAT_VERSION from $LAUNCHER"
 
+    # XDG_CONFIG_HOME/XDG_CACHE_HOME are pinned to $DP_HOME alongside
+    # HOME in every tmux new-session below, not left to the $HOME
+    # fallback — the Linux Homebrew setup action sets XDG_CONFIG_HOME
+    # ambiently in CI, which CONFIG_DIR's own
+    # "${XDG_CONFIG_HOME:-$HOME/.config}" prefers unconditionally over
+    # $HOME once it's set. This file's own persistence checks (Details
+    # surviving a relaunch) still passed without this, since both the
+    # write (via Settings) and the read happened to land on the same
+    # wrong, shared location — self-consistent, but not actually
+    # exercising $DP_HOME's isolation the way the test intends, and
+    # fragile against leftover state from another test in the same CI
+    # job. See uncategorized-view-fixtures.sh's own comment for how
+    # this was confirmed rather than assumed.
     DP_HOME="$(mktemp -d)"
     DP_CACHE_DIR="$DP_HOME/.cache/brew-launcher"
     mkdir -p "$DP_CACHE_DIR"
@@ -168,7 +181,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
 
     DP_SESSION="blf-details-pin-$$"
     tmux kill-session -t "$DP_SESSION" 2>/dev/null
-    tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 "HOME='$DP_HOME' zsh '$LAUNCHER'"
+    tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 \
+        "HOME='$DP_HOME' XDG_CONFIG_HOME='$DP_HOME/.config' XDG_CACHE_HOME='$DP_HOME/.cache' zsh '$LAUNCHER'"
 
     if wait_for "$DP_SESSION" "Tab  Mark"; then
 
@@ -256,7 +270,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         # checking CONFIG_DETAILS got written to disk. Details should
         # already be pinned on before a single key is pressed.
         tmux kill-session -t "$DP_SESSION" 2>/dev/null
-        tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 "HOME='$DP_HOME' zsh '$LAUNCHER'"
+        tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 \
+            "HOME='$DP_HOME' XDG_CONFIG_HOME='$DP_HOME/.config' XDG_CACHE_HOME='$DP_HOME/.cache' zsh '$LAUNCHER'"
         wait_for "$DP_SESSION" "Tab  Mark" ||
             fail "the relaunched session never became interactive"
         tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q "no details cached" ||
@@ -299,7 +314,8 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         # "on" some other way, it should genuinely land back on Off
         # after a real relaunch.
         tmux kill-session -t "$DP_SESSION" 2>/dev/null
-        tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 "HOME='$DP_HOME' zsh '$LAUNCHER'"
+        tmux new-session -d -s "$DP_SESSION" -x 100 -y 30 \
+            "HOME='$DP_HOME' XDG_CONFIG_HOME='$DP_HOME/.config' XDG_CACHE_HOME='$DP_HOME/.cache' zsh '$LAUNCHER'"
         wait_for "$DP_SESSION" "Tab  Mark" ||
             fail "the second relaunched session never became interactive"
         tmux capture-pane -t "$DP_SESSION" -p 2>/dev/null | grep -q "no details cached" &&
