@@ -774,6 +774,23 @@ jobs:
       - name: Factory Reset test
         run: zsh test/factory-reset-fixtures.sh
 
+  startup-screen-fixtures:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fzf and tmux
+        run: brew install fzf tmux
+
+      # Source-text for the config/dispatch/settings wiring, plus a
+      # handful of real launches in tmux (each in a fresh $HOME) to
+      # confirm the actual on-screen result, especially the
+      # OPEN_TO_CATEGORIES migration — exactly the kind of thing that
+      # can look right in a diff while quietly never firing for real.
+      - name: Startup Screen test
+        run: zsh test/startup-screen-fixtures.sh
+
   linux:
     runs-on: ubuntu-latest
     steps:
@@ -926,6 +943,9 @@ jobs:
 
       - name: Factory Reset test
         run: zsh test/factory-reset-fixtures.sh
+
+      - name: Startup Screen test
+        run: zsh test/startup-screen-fixtures.sh
 
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would

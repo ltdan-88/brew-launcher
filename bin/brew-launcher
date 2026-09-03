@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.74.0"
+VERSION="0.75.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -123,6 +123,11 @@ CONFIG_THEME=""
 CONFIG_CUSTOM_COLORS=""
 CONFIG_DEFAULT_CATEGORIES=""
 CONFIG_DEFAULT_HIDDEN=""
+CONFIG_STARTUP_SCREEN=""
+# Read for one reason only: migrating anyone who already had the old
+# boolean set — see CONFIG_STARTUP_SCREEN's own fallback below. Not
+# otherwise acted on, and never written to again once a real
+# CONFIG_STARTUP_SCREEN value exists.
 CONFIG_OPEN_TO_CATEGORIES=""
 CONFIG_SORT=""
 CONFIG_ALT_KEYBINDS=""
@@ -147,6 +152,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
             CUSTOM_COLORS)       CONFIG_CUSTOM_COLORS="$config_value" ;;
             DEFAULT_CATEGORIES)  CONFIG_DEFAULT_CATEGORIES="$config_value" ;;
             DEFAULT_HIDDEN)      CONFIG_DEFAULT_HIDDEN="$config_value" ;;
+            STARTUP_SCREEN)      CONFIG_STARTUP_SCREEN="$config_value" ;;
             OPEN_TO_CATEGORIES)  CONFIG_OPEN_TO_CATEGORIES="$config_value" ;;
             SORT)                CONFIG_SORT="$config_value" ;;
             ALT_KEYBINDS)        CONFIG_ALT_KEYBINDS="$config_value" ;;
@@ -155,6 +161,25 @@ if [[ -f "$CONFIG_FILE" ]]; then
         esac
 
     done < "$CONFIG_FILE"
+fi
+
+# Replaces the old on/off "Open to Categories" toggle with a three-way
+# choice — raised live: "categories" never covered the whole picture
+# (F2 also holds Favorites, Most Used, Recently Launched, Recently
+# Added, and Hidden — every screen and doc already called the whole
+# thing "the view picker"), and a second, independent "open to
+# presets" toggle would let both somehow end up "on" at once, which
+# means nothing when only one screen can actually be the first one you
+# see. One three-way setting instead: all (default) -> views ->
+# presets -> back to all, same cycling shape Sort already uses.
+#
+# Falls back to the old OPEN_TO_CATEGORIES=on for anyone who already
+# had it set, rather than silently dropping their choice — but only
+# once: the moment STARTUP_SCREEN is ever written (Actions -> Settings
+# -> Startup Screen), that takes over for good, and this fallback
+# never runs again.
+if [[ -z "$CONFIG_STARTUP_SCREEN" && "$CONFIG_OPEN_TO_CATEGORIES" == on ]]; then
+    CONFIG_STARTUP_SCREEN="views"
 fi
 
 # One file per category, one command per line — same convention as
@@ -458,12 +483,14 @@ Theme:
   on), toggled from Actions → Settings → Default Categories / Default
   Hidden — see "Bundled defaults" below.
 
-  OPEN_TO_CATEGORIES=on (default off, toggled from Actions → Settings
-  → Open to Categories) opens straight to the view picker on launch
-  instead of All — worth turning on once your categories are actually
-  populated (bundled, manual, or both), since an empty category list
-  has nothing useful to open to. Esc from that first screen falls back
-  to All, same as pressing it from F2 any other time.
+  STARTUP_SCREEN=views|presets (default unset — starts on All, toggled
+  from Actions → Settings → Startup Screen) opens straight to the view
+  picker or the preset picker on launch instead of All. Views is worth
+  picking once your categories are actually populated (bundled,
+  manual, or both); presets, once you've actually created one — an
+  empty picker either way has nothing useful to open to. Esc from that
+  first screen falls back to All, same as pressing Esc from F2/F9 any
+  other time.
 
   ALT_KEYBINDS=off (default on, toggled from Actions → Settings → Alt
   Keybinds) stops the footer from ever showing a key's ⌥ alias (e.g.
@@ -581,7 +608,7 @@ Keyboard shortcuts:
 
   Actions → Settings holds everything that's a standing preference
   rather than a one-off action: switch color theme, the two toggles
-  under "Bundled defaults" above, Open to Categories, Sort by name or
+  under "Bundled defaults" above, Startup Screen, Sort by name or
   size (each with its own ascending/descending direction — Space
   cycles through all four), toggle the details pane (same toggle as
   F3 itself, mirrored here so its state is visible before opening it),
@@ -1613,8 +1640,8 @@ if [[ "$1" == "--internal-preview-action" ]]; then
         toggle_default_hidden)
             printf 'Default Hidden\n\nOn: a bundled list of minor/auxiliary commands (support\ntools bundled alongside something else, not meant to be\nlaunched on their own) starts hidden automatically. Off:\nnothing starts hidden unless you hide it yourself with F6.\nAn entry you have explicitly shown or hidden yourself\nalways overrides this.\n'
             ;;
-        toggle_open_to_categories)
-            printf 'Open to Categories\n\nOn: brew-launcher opens straight to the view picker (F2)\ninstead of All. Off (default): starts on All, the familiar\nfull list. Worth turning on once you actually have\ncategories to jump between.\n'
+        toggle_startup_screen)
+            printf 'Startup Screen\n\nAll (default): starts on the familiar full list. Views:\nopens straight to the view picker (F2) instead — worth it\nonce you actually have categories to jump between.\nPresets: opens straight to the preset picker (F9) instead —\nworth it once you actually have one saved. Either way, Esc\nfrom that first screen falls back to All.\n'
             ;;
         toggle_sort)
             printf 'Sort\n\nCycles Name ↑ -> Name ↓ -> Size ↑ -> Size ↓. Name ↑ is the\ndefault — alphabetical, same order the cache is already\nwritten in. Size ↓ is largest install first. Doesn'"'"'t affect\nMost Used, Recently Launched, or Recently Added, which\nalready have their own meaningful order.\n\nClicking NAME or SIZE in the main list'"'"'s own header does the\nsame thing directly: picks that column, and clicking it again\nflips the direction — without opening Settings.\n'
@@ -2480,8 +2507,9 @@ SORT_ORDER="${CONFIG_SORT:-name}"
 # builds its own --preview-window value.
 DETAILS_POSITION="${CONFIG_DETAILS_POSITION:-bottom}"
 
-# Opt-in (default off, same reasoning as OPEN_TO_CATEGORIES above).
-# Controls the main list's own VERSION/SIZE columns specifically:
+# Opt-in (default off, same reasoning as CONFIG_STARTUP_SCREEN's own
+# default of "All" above). Controls the main list's own VERSION/SIZE
+# columns specifically:
 # off (default)
 # shows everything build_entries() already computes; on drops those
 # two columns, leaving just the marker, name, and description. Read
@@ -3491,9 +3519,9 @@ launcher_update_marker() {
 # same " brew-launcher vX · <label> " format the main list already uses
 # for a filtered view, just without the disk-usage figures (those only
 # fit comfortably on the one screen that has the room and reason to
-# carry them). Consistency matters more now that Open to Categories can
-# make View the very first thing a launch shows — every screen should
-# still read as brew-launcher, not just the main list.
+# carry them). Consistency matters more now that Startup Screen can
+# make View or Presets the very first thing a launch shows — every
+# screen should still read as brew-launcher, not just the main list.
 #
 # Says "brew-launcher", not "Homebrew CLI" — raised live: paired with a
 # version number, "Homebrew CLI vX.Y.Z" reads exactly like an app's own
@@ -3863,7 +3891,7 @@ show_help_actions_menu() {
     rows+=("                    already up to date just says so")
     rows+=("        Update All  brew upgrade for everything outdated, in a")
     rows+=("                    real terminal. Asks first; shows the count")
-    rows+=("          Settings  Theme, bundled defaults, Open to Categories,")
+    rows+=("          Settings  Theme, bundled defaults, Startup Screen,")
     rows+=("                    Sort, Compact View, Details, Alt Keybinds —")
     rows+=("                    see Settings Reference")
     rows+=("            Backup  Brewfile + categories/presets/theme in one")
@@ -3893,7 +3921,8 @@ show_help_settings_reference() {
     rows+=("                    via config only — see the Theme screen itself")
     rows+=("Default Categories  Auto-file uncategorized formulae (bundled list)")
     rows+=("    Default Hidden  Auto-hide bundled minor/auxiliary commands")
-    rows+=("Open to Categories  Start on the view picker instead of All")
+    rows+=("    Startup Screen  All (default), Views (F2), or Presets (F9) —")
+    rows+=("                    Esc from that first screen falls back to All")
     rows+=("               Sort  Name (alphabetical, default) or Size (largest")
     rows+=("                    first), each with its own ascending/")
     rows+=("                    descending direction — not Most Used/Recently")
@@ -4224,7 +4253,7 @@ open_more_menu() {
 # row: things you DO to the highlighted entry or to build something
 # new (Hide, Favorite, Categorize, Create Preset, Create Shortcut,
 # Backup), and standing preferences that change ongoing behavior
-# (Theme, the bundled-defaults toggles, Open to Categories, Sort,
+# (Theme, the bundled-defaults toggles, Startup Screen, Sort,
 # Details, Alt Keybinds). Splitting them mirrors how most apps
 # separate "things to do" from "Preferences" — reached one level down
 # via a single "Settings" row rather than a new key, since every F1-F9
@@ -4267,12 +4296,20 @@ pick_settings_action() {
     # Opt-in, unlike the two above — this changes the very first thing
     # you see on launch, so it defaults to the familiar "All" list
     # rather than switching everyone's startup screen out from under
-    # them. Only worth turning on once categories are actually
-    # populated (bundled, manual, or both); an empty category list
-    # would just show a picker with nothing useful in it.
-    local open_to_categories_state='Off'
-    [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && open_to_categories_state='On'
-    rows+=("toggle_open_to_categories"$'\t'"$(printf '%-20s%s' 'Open to Categories' "$open_to_categories_state")")
+    # them. Views is only worth picking once categories are actually
+    # populated (bundled, manual, or both); Presets only once you've
+    # actually created one — an empty picker either way would just
+    # show nothing useful. Three-way cycle rather than a plain on/off
+    # toggle, same shape as Sort below: only one screen can actually be
+    # the first one you see, so two independent toggles (one for Views,
+    # one for Presets) could contradict each other by both being "on"
+    # at once, which means nothing.
+    local startup_screen_state='All'
+    case "$CONFIG_STARTUP_SCREEN" in
+        views)   startup_screen_state='Views' ;;
+        presets) startup_screen_state='Presets' ;;
+    esac
+    rows+=("toggle_startup_screen"$'\t'"$(printf '%-20s%s' 'Startup Screen' "$startup_screen_state")")
 
     # A four-way cycle rather than a plain on/off toggle, unlike the
     # three above — Name and Size each have their own ascending/
@@ -4290,7 +4327,7 @@ pick_settings_action() {
     rows+=("toggle_sort"$'\t'"$(printf '%-20s%s' 'Sort' "$sort_state")")
 
     # Controls the main list's VERSION/SIZE columns specifically.
-    # Opt-in (default off), same reasoning as Open to Categories above — this changes
+    # Opt-in (default off), same reasoning as Startup Screen above — this changes
     # what every row looks like, so it defaults to the familiar full
     # layout rather than switching it out from under anyone. Read by
     # build_entries() and the column header, the only two places that
@@ -4392,14 +4429,15 @@ open_settings_menu() {
                 CONFIG_DEFAULT_HIDDEN="$new_value"
                 continue
                 ;;
-            toggle_open_to_categories)
-                # Opt-in (default off), so the flip direction here is
-                # the reverse of the two toggles above — starts by
-                # turning on, not off.
-                new_value='on'
-                [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]] && new_value='off'
-                set_config_value OPEN_TO_CATEGORIES "$new_value"
-                CONFIG_OPEN_TO_CATEGORIES="$new_value"
+            toggle_startup_screen)
+                # All -> Views -> Presets -> back to All.
+                case "$CONFIG_STARTUP_SCREEN" in
+                    views)   new_value='presets' ;;
+                    presets) new_value='' ;;
+                    *)       new_value='views' ;;
+                esac
+                set_config_value STARTUP_SCREEN "$new_value"
+                CONFIG_STARTUP_SCREEN="$new_value"
                 continue
                 ;;
             toggle_sort)
@@ -8307,14 +8345,17 @@ run_fzf() {
 FREE_SPACE="$(df -h "$(brew --prefix)" 2>/dev/null | awk 'NR==2 {print $4}' | sed -E 's/([0-9])([KMGT])i?$/\1\2/')"
 HOMEBREW_USAGE="$(cat "$HOMEBREW_USAGE_FILE" 2>/dev/null)"
 
-# Opt-in (Actions → Open to Categories) — shows the view picker as the
-# very first screen instead of "All", so a launch lands you straight
-# in your categories rather than a long flat list. Only makes sense
-# once categories are actually populated (bundled, manual, or both);
-# reuses pick_view() as-is rather than a separate startup path, so
-# every behavior it already has — typing to search, Esc falling back
-# to "All", counts reflecting hidden/bundled state — comes for free
-# and can never drift out of sync with the F2 screen itself.
+# Opt-in (Actions → Settings → Startup Screen) — shows the view picker
+# or the preset picker as the very first screen instead of "All". The
+# views option only makes sense once categories are actually populated
+# (bundled, manual, or both); the presets one only once you've actually
+# created one — pick_view()/launch_preset() are reused as-is rather
+# than separate startup paths, so every behavior either already has —
+# typing to search, Esc falling back to "All", launch_preset()'s own
+# "no presets yet" message — comes for free and can never drift out of
+# sync with the F2/F9 screens themselves. launch_preset() execs away
+# entirely on an actual launch (never returns); a cancel, or nothing to
+# pick from yet, falls through to "All" below same as pick_view() does.
 #
 # Deliberately placed here — after every function in the script has
 # been defined, immediately before the loop that will (eventually)
@@ -8324,20 +8365,27 @@ HOMEBREW_USAGE="$(cat "$HOMEBREW_USAGE_FILE" 2>/dev/null)"
 # reached that function's "name() {" line. pick_view() reaches deep
 # into the rest of the app (F4's whole Actions menu — Create Preset,
 # Backup, every settings toggle, Launch Preset...), and this used to
-# run from up there, near CONFIG_OPEN_TO_CATEGORIES's own declaration —
-# fine for whichever of those happened to already be defined by that
-# point, silently broken for whichever weren't: the footer went
-# missing when launching straight into the view screen with this
-# toggle on — build_picker_footer() was one of the not-yet-defined
-# ones, so the footer variable came back empty. Confirmed live (a real
-# tmux session, the previously-released binary, this exact toggle) and
-# fixed generally rather than one function at a time: see
-# test/function-order-fixtures.sh, which checks that no top-level call
-# anywhere in the script can reach a not-yet-defined function, so a
-# future addition to Actions can't reintroduce this by accident.
-if [[ "$CONFIG_OPEN_TO_CATEGORIES" == on ]]; then
-    pick_view
-fi
+# run from up there, near where CONFIG_* is parsed — fine for whichever
+# of those happened to already be defined by that point, silently
+# broken for whichever weren't: the footer went missing when launching
+# straight into the view screen with this setting on — build_picker_
+# footer() was one of the not-yet-defined ones, so the footer variable
+# came back empty. Confirmed live (a real tmux session, the previously-
+# released binary, this exact toggle) and fixed generally rather than
+# one function at a time: see test/function-order-fixtures.sh, which
+# checks that no top-level call anywhere in the script can reach a
+# not-yet-defined function, so a future addition to Actions can't
+# reintroduce this by accident. launch_preset() reaches just as deep
+# (run_preset(), confirm_delete_preset(), rename/create flows...), so
+# it needs this exact same placement for the exact same reason.
+case "$CONFIG_STARTUP_SCREEN" in
+    views)
+        pick_view
+        ;;
+    presets)
+        launch_preset
+        ;;
+esac
 
 build_entries
 

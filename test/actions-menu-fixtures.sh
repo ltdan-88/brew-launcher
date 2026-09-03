@@ -41,7 +41,7 @@
 # Extended a fourth time: "it seems Actions menu mixes up actual
 # Actions and System Settings, how do we solve this (e.g. create a
 # separate Settings menu)?" Every settings-shaped row (Theme, Default
-# Categories, Default Hidden, Open to Categories, Sort, Details, Alt
+# Categories, Default Hidden, Startup Screen, Sort, Details, Alt
 # Keybinds) moved out of pick_more_action()/open_more_menu() into a
 # new pick_settings_action()/open_settings_menu() pair, reached via a
 # single "Settings" row in Actions. Checked the same way as everything
@@ -138,14 +138,14 @@ open_settings_block="$(sed -n '/^open_settings_menu() {/,/^}/p' "$LAUNCHER")"
 # Checked against the actual row-producing line, not a blanket
 # substring search — comments in pick_more_action legitimately mention
 # these settings by name now (explaining where they moved to).
-for row_id in toggle_default_categories toggle_default_hidden toggle_open_to_categories toggle_sort toggle_details toggle_alt_keybinds theme; do
+for row_id in toggle_default_categories toggle_default_hidden toggle_startup_screen toggle_sort toggle_details toggle_alt_keybinds theme; do
     [[ "$more_action_block" != *"rows+=(\"$row_id\""* ]] ||
         fail "pick_more_action should no longer offer a $row_id row directly — it belongs in Settings now"
     [[ "$settings_action_block" == *"rows+=(\"$row_id\""* ]] ||
         fail "pick_settings_action should offer a $row_id row"
 done
 
-for case_label in 'toggle_default_categories)' 'toggle_default_hidden)' 'toggle_open_to_categories)' 'toggle_sort)' 'toggle_details)' 'toggle_alt_keybinds)' 'theme)'; do
+for case_label in 'toggle_default_categories)' 'toggle_default_hidden)' 'toggle_startup_screen)' 'toggle_sort)' 'toggle_details)' 'toggle_alt_keybinds)' 'theme)'; do
     [[ "$open_menu_block" != *"            $case_label"* ]] ||
         fail "open_more_menu should no longer dispatch $case_label directly — see open_settings_menu"
     [[ "$open_settings_block" == *"            $case_label"* ]] ||
@@ -356,4 +356,4 @@ view_footer_call="$(sed -n '/view_footer="\$(/,/)"/p' "$LAUNCHER")"
 [[ "$pick_view_block" != *"'[Refresh]'"* ]] ||
     fail "pick_view's click-word mapping should no longer recognize a [Refresh] click"
 
-printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Settings holds every setting (Theme, bundled defaults, Open to Categories, Sort, Details, Alt Keybinds) behind one Actions row, DETAILS_PINNED keeps Esc from undoing a Details choice made via Settings, Alt Keybinds is wired end to end, Actions and Settings each have their own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize, F9 has its own unconditional details pane, and Refresh moved out of both footers into Actions (has_entry-independent) while F5/⌥R keep working directly\n'
+printf 'PASS: F1/[Help] is in the footer and clickable, F9 works from the view picker, Settings holds every setting (Theme, bundled defaults, Startup Screen, Sort, Details, Alt Keybinds) behind one Actions row, DETAILS_PINNED keeps Esc from undoing a Details choice made via Settings, Alt Keybinds is wired end to end, Actions and Settings each have their own always-on details pane, Launch Preset is gone from Actions, Create Preset/Create Shortcut sit right under Categorize, F9 has its own unconditional details pane, and Refresh moved out of both footers into Actions (has_entry-independent) while F5/⌥R keep working directly\n'

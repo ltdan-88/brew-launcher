@@ -5,6 +5,23 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.75.0] — 2026-09-03
+
+### Changed
+
+- **"Open to Categories" is now "Startup Screen", a single three-way setting
+  (All / Views / Presets) instead of an on/off toggle.** Raised live, two
+  remarks together: the old name never matched what it actually did — F2 is
+  "the view picker" everywhere else, holding Favorites, Most Used, Recently
+  Launched, Recently Added, and Hidden too, not just categories — and
+  whether an option to start on Presets as well should exist. A second,
+  independent toggle for Presets would let both somehow end up "on" at
+  once, which means nothing when only one screen can actually be the first
+  thing you see, so this replaces the toggle with one setting that cycles
+  All → Views → Presets → back to All, the same shape Sort already uses.
+  Anyone with the old `OPEN_TO_CATEGORIES=on` already set is migrated to
+  Views automatically — nothing to redo.
+
 ## [0.74.0] — 2026-09-03
 
 ### Changed
