@@ -104,6 +104,18 @@ EOF
         fail "fixture setup itself is incomplete before any session even launched — ls -la \"$UV_CONFIG_DIR/categories\": $(ls -la "$UV_CONFIG_DIR/categories" 2>&1)"
     fi
 
+    # A second, independent check of the same fixture — a plain,
+    # synchronous CLI call, no tmux/fzf/pick_view() involved at all —
+    # to narrow down *which* layer misreads it if the live checks
+    # below fail again: this and pick_view()'s own F3 preview both go
+    # through --internal-preview-category, so if this also can't find
+    # Morning, the bug is in reading CATEGORIES_DIR itself, not
+    # anything specific to the interactive picker.
+    UV_DIRECT_PREVIEW="$(HOME="$UV_HOME" "$LAUNCHER" --internal-preview-category Morning 2>&1)"
+    printf 'DIAGNOSTIC: --internal-preview-category Morning (direct CLI, no tmux) got: %s\n' "$UV_DIRECT_PREVIEW" >&2
+    [[ "$UV_DIRECT_PREVIEW" == *"tool2"* ]] ||
+        fail "even a direct, non-interactive --internal-preview-category call can't find Morning's member — the bug is in reading CATEGORIES_DIR itself, not the interactive picker. Full output above."
+
     uv_open_view_picker() {
         local session="$1"
         tmux kill-session -t "$session" 2>/dev/null
