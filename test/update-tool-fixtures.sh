@@ -35,6 +35,13 @@ trap 'rm -rf "$TEST_HOME"' EXIT
 CACHE_DIR="$TEST_HOME/cache"
 mkdir -p "$CACHE_DIR"
 
+# update_tool() checks $BACKEND now (pacman needs root to upgrade
+# anything, unlike brew, so it refuses early with a plain message
+# instead of trying) — real launches always have this set by the time
+# any function runs; this isolated function-body test needs it set by
+# hand.
+BACKEND="homebrew"
+
 source <(sed -n '/^update_tool() {/,/^}/p' "$LAUNCHER")
 
 # Recorder, not the real launch_in_current_terminal() — see this
