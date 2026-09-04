@@ -349,4 +349,11 @@ run_with_args_block="$(sed -n '/^run_with_args() {/,/^}/p' "$LAUNCHER")"
 [[ "$run_with_args_block" == *'f3,alt-d:toggle-preview'* ]] ||
     fail "run_with_args() should bind F3/⌥D to toggle-preview"
 
-printf 'PASS: run_with_args() cancels cleanly on Esc (nothing launched, nothing logged, launch_counts untouched), builds a wrapper with exactly the typed arguments as separate words and launches that on Enter, launches the bare tool path directly (no wrapper) when nothing was typed, prefills from the current Launch Flags value as a starting point, logs every real run the same as an ordinary launch, Actions/the main loop wire it end to end, and its F3/⌥D usage preview shows a real --help, kills a tool that ignores it and hangs instead of blocking, falls back cleanly for a missing path, and stays hidden until asked\n'
+# Raised live: F3 already worked here (it's mentioned in the header
+# text above), but the footer — the one thing actually visible without
+# reading the header — never said so, unlike every other F3-capable
+# screen. Text-only; the preview itself is already proven live above.
+[[ "$run_with_args_block" == *"footer='"*'F3/⌥D  [Preview]'* ]] ||
+    fail "run_with_args()'s footer should mention F3/⌥D, not just its header text"
+
+printf 'PASS: run_with_args() cancels cleanly on Esc (nothing launched, nothing logged, launch_counts untouched), builds a wrapper with exactly the typed arguments as separate words and launches that on Enter, launches the bare tool path directly (no wrapper) when nothing was typed, prefills from the current Launch Flags value as a starting point, logs every real run the same as an ordinary launch, Actions/the main loop wire it end to end, and its F3/⌥D usage preview shows a real --help, kills a tool that ignores it and hangs instead of blocking, falls back cleanly for a missing path, stays hidden until asked, and is now mentioned in the footer, not just the header\n'

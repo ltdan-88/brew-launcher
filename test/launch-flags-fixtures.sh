@@ -303,10 +303,56 @@ launch_flags_branch="$(printf '%s\n' "$f4_block" | sed -n '/MORE_MENU_FALLTHROUG
 [[ "$launch_flags_branch" == *'continue 2'* ]] ||
     fail "a real save from pick_launch_flags should still return to the main list (continue 2, the outer loop)"
 
+# ------------------------------------------------------------
+# 8. Raised live: why doesn't Launch Flags offer the same F3/⌥D
+#    --help preview as Run With Args? There was no real reason it
+#    didn't — same checks as run-with-args-fixtures.sh's own section 9
+#    for the same wiring, plus confirming this screen now resolves and
+#    threads a real path through to it the same way that one already
+#    does (see the launch_flags branch just above, which derives
+#    $lf_command_path from $selection before calling pick_launch_flags
+#    at all).
+# ------------------------------------------------------------
+
+[[ "$pick_launch_flags_block" == *'--internal-preview-usage'* ]] ||
+    fail "pick_launch_flags() should wire its fzf call to --internal-preview-usage"
+[[ "$pick_launch_flags_block" == *'f3,alt-d:toggle-preview'* ]] ||
+    fail "pick_launch_flags() should bind F3/⌥D to toggle-preview"
+[[ "$pick_launch_flags_block" == *"preview-window='hidden,"* ]] ||
+    fail "pick_launch_flags()'s preview should stay hidden until F3/⌥D asks for it, same as run_with_args()"
+
+[[ "$launch_flags_branch" == *'lf_command_path'* ]] ||
+    fail "the launch_flags branch should derive a resolved command path before calling pick_launch_flags"
+[[ "$launch_flags_branch" == *'pick_launch_flags "${selection%%$'"'"'\t'"'"'*}" "$lf_command_path"'* ]] ||
+    fail "pick_launch_flags should be called with the resolved path as its second argument"
+
 if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
 
     LF_HOME="$TEST_HOME/lf-live"
-    mkdir -p "$LF_HOME"
+    LF_CACHE_DIR="$LF_HOME/.cache/brew-launcher"
+    mkdir -p "$LF_CACHE_DIR"
+
+    # A seeded, one-tool fixture cache rather than a real rebuild
+    # (which this section used to wait on, watching for "Tab  Mark" to
+    # appear) — needed now that F3's own preview content is checked
+    # below, not just that Esc returns to Actions: real installed
+    # formulae vary by machine and don't all print anything as
+    # predictable as this fixture's own --help output does. Same
+    # fixture shape run-with-args-fixtures.sh's own HELPFUL_TOOL uses.
+    LF_HELPFUL_TOOL="$LF_HOME/helpful-tool"
+    cat > "$LF_HELPFUL_TOOL" <<'EOF'
+#!/bin/zsh
+printf 'USAGE: helpful-tool [--flag]\n'
+EOF
+    chmod +x "$LF_HELPFUL_TOOL"
+
+    LF_CACHE_FORMAT_VERSION="$(sed -n 's/^CACHE_FORMAT_VERSION=\([0-9]*\)/\1/p' "$LAUNCHER" | head -1)"
+    [[ -n "$LF_CACHE_FORMAT_VERSION" ]] || fail "could not read CACHE_FORMAT_VERSION from $LAUNCHER"
+
+    printf 'helpful-tool\tA helpful tool\thelpful-tool\t1.0\t1MB\t0\thelpful-tool\t%s\t100\t-\t0\n' \
+        "$LF_HELPFUL_TOOL" > "$LF_CACHE_DIR/entries"
+    printf '%s\nfixture-state-snapshot\n' "$LF_CACHE_FORMAT_VERSION" > "$LF_CACHE_DIR/state"
+    : > "$LF_CACHE_DIR/outdated"
 
     LF_SESSION="blf-launch-flags-esc-$$"
     tmux kill-session -t "$LF_SESSION" 2>/dev/null
@@ -330,7 +376,7 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
 
     lf_ready=false
     for _ in {1..30}; do
-        tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Tab  Mark" && { lf_ready=true; break; }
+        tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "helpful-tool" && { lf_ready=true; break; }
         sleep 0.5
     done
 
@@ -357,6 +403,18 @@ if command -v tmux >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
         tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Launch flags —" ||
             fail "expected to reach the Launch flags prompt via F4 -> Launch Flags"
 
+        # F3 toggles the same on-demand --help preview Run With Args
+        # already has, confirmed for real here rather than only as
+        # source text above — hidden until asked, same as there.
+        tmux send-keys -t "$LF_SESSION" F3
+        for _ in {1..20}; do
+            tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "USAGE: helpful-tool" && break
+            sleep 0.3
+        done
+        tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "USAGE: helpful-tool" ||
+            fail "F3 in Launch Flags should show the highlighted tool's own --help preview"
+        tmux send-keys -t "$LF_SESSION" F3
+
         tmux send-keys -t "$LF_SESSION" Escape
         for _ in {1..20}; do
             tmux capture-pane -t "$LF_SESSION" -p 2>/dev/null | grep -q "Actions on" && break
@@ -374,4 +432,4 @@ else
     printf 'SKIP: tmux or fzf not available, skipping the live Esc check\n' >&2
 fi
 
-printf 'PASS: resolve_launch_path() passes an unflagged command through unchanged and, when flags are configured, returns a self-deleting wrapper that actually runs the target with them; set_launch_flags() adds/updates/clears correctly (both on disk and in the in-memory table); a real --preset run actually launches a configured member with its flags applied; pick_launch_flags() correctly distinguishes Esc from an empty-but-confirmed answer; Actions/the main loop wire it end to end; and Esc from Launch Flags returns to Actions rather than skipping past it to the main list\n'
+printf 'PASS: resolve_launch_path() passes an unflagged command through unchanged and, when flags are configured, returns a self-deleting wrapper that actually runs the target with them; set_launch_flags() adds/updates/clears correctly (both on disk and in the in-memory table); a real --preset run actually launches a configured member with its flags applied; pick_launch_flags() correctly distinguishes Esc from an empty-but-confirmed answer; Actions/the main loop wire it end to end; Esc from Launch Flags returns to Actions rather than skipping past it to the main list; and F3/⌥D shows the same on-demand --help preview Run With Args already has, wired to a real resolved path and confirmed live\n'

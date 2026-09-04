@@ -5,6 +5,20 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.84.0] — 2026-09-04
+
+### Changed
+
+- **Launch Flags now offers the same F3/⌥D on-demand `--help` preview
+  Run With Args already had, and Run With Args' own footer now says
+  so too.** Raised live: two separate remarks about the same
+  inconsistency — Run With Args' F3 preview was only mentioned in its
+  header text, not its footer (the one thing actually visible without
+  reading the rest of the screen), and Launch Flags didn't offer the
+  preview at all despite being Run With Args' closest sibling. Both
+  screens now wire up `--internal-preview-usage` and bind F3/⌥D to
+  `toggle-preview` identically, and both footers say `F3/⌥D [Preview]`.
+
 ## [0.83.0] — 2026-09-03
 
 ### Added

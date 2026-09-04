@@ -34,7 +34,7 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.83.0"
+VERSION="0.84.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -723,7 +723,8 @@ Launch Flags:
   command, the same key every other per-entry marker uses, so it
   applies wherever that command actually launches — the main list's
   own Enter, and any preset it's a member of — from one setting, not
-  two.
+  two. F3 / ⌥D here previews the tool's own --help output too, same
+  on-demand terms as Run With Args below.
 
 Run With Args:
   F4 → Actions → Run With Args on a highlighted entry launches it right
@@ -732,11 +733,11 @@ Run With Args:
   blank and Enter here just runs it plain (there's nothing stored to
   clear the way there is in Launch Flags). Esc cancels without
   launching. Still counted toward Most Used and Recently Launched,
-  same as any other launch. F3 / ⌥D from that prompt shows the tool's
-  own --help output, on demand only — not automatically, since some
-  installed tools (games, animations) may not recognize --help and
-  would otherwise launch straight into their own full-screen mode. A
-  tool like that is killed after a second instead of left running.
+  same as any other launch. F3 / ⌥D from either prompt shows the
+  tool's own --help output, on demand only — not automatically, since
+  some installed tools (games, animations) may not recognize --help
+  and would otherwise launch straight into their own full-screen mode.
+  A tool like that is killed after a second instead of left running.
 
 Update All:
   Actions → Update All runs 'brew upgrade' for everything outdated, in
@@ -1915,7 +1916,7 @@ if [[ "$1" == "--internal-preview-action" ]]; then
             printf 'Create Shortcut\n\nCreate a double-clickable launcher for the highlighted\nentry (macOS: an Automator app; Linux: a .desktop file).\n'
             ;;
         launch_flags)
-            printf 'Launch Flags\n\nExtra arguments to always pass when launching the\nhighlighted entry. Applies everywhere it launches from,\nincluding presets it'"'"'s part of. Blank clears it.\n'
+            printf 'Launch Flags\n\nExtra arguments to always pass when launching the\nhighlighted entry. Applies everywhere it launches from,\nincluding presets it'"'"'s part of. Blank clears it. F3 / ⌥D\nthere previews its own --help, on demand.\n'
             ;;
         run_with_args)
             printf 'Run With Args\n\nLaunch the highlighted entry right now with extra\narguments, just this once — nothing is saved. Prefilled\nwith its Launch Flags, if any, as a starting point. Blank\nruns it plain, same as Enter. F3 / ⌥D there previews its\nown --help, on demand.\n'
@@ -4176,6 +4177,7 @@ show_help_actions_menu() {
     fi
     rows+=("      Launch Flags  Extra arguments to always pass this entry —")
     rows+=("                    applies to presets it's in too. Blank clears")
+    rows+=("                    it. F3 / ⌥D previews its own --help, on demand")
     rows+=("     Run With Args  Launch this entry now with extra arguments,")
     rows+=("                    just once. Prefilled with its Launch Flags.")
     rows+=("                    F3 / ⌥D there previews its own --help, on demand")
@@ -6820,21 +6822,31 @@ set_launch_flags() {
 # empty-Enter both just mean cancel) — this one can't, so it reads the
 # pressed key explicitly via --expect instead of inferring it from
 # whether the result string is empty.
+#
+# Same F3/⌥D --help preview as run_with_args() below, on the same
+# on-demand terms (see --internal-preview-usage's own comment for why
+# it isn't automatic). The two screens only ever differed in what they
+# do with the typed value, not in what's useful to see while typing
+# it, so there was no real reason this one lacked it.
 # ------------------------------------------------------------
 
 pick_launch_flags() {
 
     local command="$1"
+    # See run_with_args()'s own matching parameter — same preview,
+    # same reason it needs a real, resolved, executable path rather
+    # than just the command name.
+    local resolved_path="$2"
     # How many rows were marked, when several were. Launch Flags is
     # one stored value for one command, so a marked set has nothing
     # coherent to mean here — but silently acting on one row while
     # marks are visibly set looks like a bug, so it says so instead.
-    local marked_count="${2:-0}"
+    local marked_count="${3:-0}"
     local current="${launch_flags[$command]-}"
     local fzf_result typed pick_action
     local -a result_lines
 
-    local flags_header="Extra arguments to always pass when launching $command. Blank clears it."
+    local flags_header="Extra arguments to always pass when launching $command. Blank clears it. F3 / ⌥D previews its own --help."
     (( marked_count > 1 )) &&
         flags_header+=" Applies to $command only, not the $marked_count marked rows."
 
@@ -6854,8 +6866,11 @@ pick_launch_flags() {
             --border-label-pos=2 \
             --prompt=' Flags: ' \
             --header="$flags_header" \
-            --footer='  Type  Flags    Enter  [Save]    Esc  [Cancel]' \
+            --footer='  Type  Flags    F3/⌥D  [Preview]    Enter  [Save]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
+            --preview "${(q)SCRIPT_PATH} --internal-preview-usage ${(q)resolved_path}" \
+            --preview-window='hidden,70%,border-rounded' \
+            --bind 'f3,alt-d:toggle-preview' \
             --pointer='▌' \
             --color="$FZF_COLORS"
     )"
@@ -6912,6 +6927,11 @@ pick_launch_flags() {
 # update_all()'s identical duplication: three small, independent
 # copies are lower-risk than reshaping the one Enter-handling block
 # every ordinary launch already goes through correctly today.
+#
+# F3/⌥D toggles the same on-demand --help preview pick_launch_flags()
+# now also has — this screen already had it, but only mentioned it in
+# the header text, not the footer, unlike every other F3-capable
+# screen. The footer says so now too.
 # ------------------------------------------------------------
 
 run_with_args() {
@@ -6945,7 +6965,7 @@ run_with_args() {
             --border-label-pos=2 \
             --prompt=' Args: ' \
             --header="$args_header" \
-            --footer='  Type  Args    Enter  [Run]    Esc  [Cancel]' \
+            --footer='  Type  Args    F3/⌥D  [Preview]    Enter  [Run]    Esc  [Cancel]' \
             --bind "click-footer:transform:$SCRIPT_PATH --internal-footer-click" \
             --preview "${(q)SCRIPT_PATH} --internal-preview-usage ${(q)resolved_path}" \
             --preview-window='hidden,70%,border-rounded' \
@@ -9052,11 +9072,31 @@ while true; do
 
             if [[ "$MORE_MENU_FALLTHROUGH_ACTION" == "launch_flags" ]]; then
 
+                # Same resolved-path derivation as the run_with_args
+                # branch just below — needed here too now that Launch
+                # Flags offers the same F3/⌥D --help preview. Unlike
+                # there, an unresolvable path isn't fatal: saving flags
+                # doesn't need one, so a blank/non-executable path just
+                # means the preview itself has nothing to show
+                # (--internal-preview-usage already says so on its
+                # own) rather than the whole screen refusing to open.
+                local lf_remaining lf_resolved_path lf_command_path
+                lf_remaining="${selection#*$'\t'}"
+                lf_remaining="${lf_remaining#*$'\t'}"
+                lf_remaining="${lf_remaining#*$'\t'}"
+                lf_resolved_path="${lf_remaining#*$'\t'}"
+
+                if [[ -n "$lf_resolved_path" && -x "$lf_resolved_path" ]]; then
+                    lf_command_path="$lf_resolved_path"
+                else
+                    lf_command_path="$(command -v "${selection%%$'\t'*}" 2>/dev/null)"
+                fi
+
                 # A "no" (Esc, or an unchanged value — see
                 # pick_launch_flags()'s own comment) loops back to
                 # Actions instead of falling through; a real save
                 # heads back to the main list, same as today.
-                if ! pick_launch_flags "${selection%%$'\t'*}" "${#marked_commands[@]}"; then
+                if ! pick_launch_flags "${selection%%$'\t'*}" "$lf_command_path" "${#marked_commands[@]}"; then
                     continue
                 fi
 
