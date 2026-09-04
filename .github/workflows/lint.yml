@@ -1009,7 +1009,17 @@ jobs:
       - name: Sync pacman and install dependencies
         run: |
           pacman -Sy --noconfirm
-          pacman -S --noconfirm zsh fzf python3 which
+          pacman -S --noconfirm zsh fzf python3 which btop
+
+      # TEMPORARY diagnostic: local testing on Apple Silicon (amd64
+      # under QEMU emulation) hit "operation not permitted" launching
+      # btop specifically, while tmux/fzf/which all launched fine in
+      # that same container — checking whether that's a real problem
+      # or another emulation-only artifact, same pattern the pacman
+      # sandbox/seccomp issue earlier turned out to be. Remove this
+      # step once answered either way.
+      - name: DIAGNOSTIC — does btop actually execute here?
+        run: btop --version
 
       - name: zsh -n bin/brew-launcher
         run: zsh -n bin/brew-launcher
