@@ -73,7 +73,16 @@ else
     BACKEND="homebrew"
 fi
 
-VERSION="0.85.0"
+VERSION="0.85.1"
+
+# Every "here's how to get tmux" message in this file used to hardcode
+# "brew install tmux" — correct for the original, only backend, but
+# actively wrong advice on a machine where brew isn't even installed.
+if [[ "$BACKEND" == "pacman" ]]; then
+    TMUX_INSTALL_HINT="sudo pacman -S tmux"
+else
+    TMUX_INSTALL_HINT="brew install tmux"
+fi
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -898,7 +907,7 @@ if [[ "$1" == "--diagnose" ]]; then
     if command -v tmux >/dev/null 2>&1; then
         diagnose_ok "tmux — $(command -v tmux) (tmux terminal backend and Presets available)"
     else
-        diagnose_warn "tmux — not found ('brew install tmux' enables the tmux terminal backend and Presets)"
+        diagnose_warn "tmux — not found ('$TMUX_INSTALL_HINT' enables the tmux terminal backend and Presets)"
     fi
 
     if [[ "$(uname -s)" == "Darwin" ]]; then
@@ -2452,7 +2461,7 @@ run_preset() {
         printf '\n'
         if [[ "$preset_adhoc" == true ]]; then
             printf 'Error: tmux is required to launch several tools at once.\n'
-            printf 'Install it with: brew install tmux\n'
+            printf 'Install it with: %s\n' "$TMUX_INSTALL_HINT"
             printf 'Without tmux, Enter still launches one tool at a time.\n'
         else
             printf 'Error: tmux is required to use presets.\n'
@@ -4279,7 +4288,7 @@ show_help_keys() {
         rows+=("            current members — can add/remove too, not just")
         rows+=("            reorder), Ctrl-R renames it, Ctrl-D deletes it")
     else
-        rows+=("  F9 / ⌥P   Launch a preset — needs tmux: brew install tmux")
+        rows+=("  F9 / ⌥P   Launch a preset — needs tmux: $TMUX_INSTALL_HINT")
     fi
     rows+=("")
     rows+=("Second tier — F4, or press directly at any time")
@@ -4318,7 +4327,7 @@ show_help_actions_menu() {
         rows+=("                    Tab shows the launch order as a number;")
         rows+=("                    Tab again unmarks and renumbers the rest")
     else
-        rows+=("     Create Preset  needs tmux: brew install tmux")
+        rows+=("     Create Preset  needs tmux: $TMUX_INSTALL_HINT")
     fi
     if [[ "$(uname -s)" == "Darwin" || "$(uname -s)" == "Linux" ]]; then
         rows+=("  Create Shortcut  macOS .command or Linux .desktop file")
@@ -5331,7 +5340,7 @@ pick_view() {
     if [[ "$pick_action" == "f9" ]]; then
         if [[ "$TMUX_AVAILABLE" == false ]]; then
             printf '\n'
-            printf 'Presets need tmux: brew install tmux\n'
+            printf 'Presets need tmux: %s\n' "$TMUX_INSTALL_HINT"
             sleep 2
         else
             launch_preset
@@ -8005,7 +8014,7 @@ create_preset() {
     # instead, same message as the F9/Launch Preset fallback.
     if [[ "$TMUX_AVAILABLE" == false ]]; then
         printf '\n'
-        printf 'Presets need tmux: brew install tmux\n'
+        printf 'Presets need tmux: %s\n' "$TMUX_INSTALL_HINT"
         sleep 2
         return 1
     fi
@@ -8257,7 +8266,7 @@ edit_preset() {
 
     if [[ "$TMUX_AVAILABLE" == false ]]; then
         printf '\n'
-        printf 'Presets need tmux: brew install tmux\n'
+        printf 'Presets need tmux: %s\n' "$TMUX_INSTALL_HINT"
         sleep 2
         return 1
     fi
@@ -9350,7 +9359,7 @@ while true; do
         # actually selected.
         if [[ "$TMUX_AVAILABLE" == false ]]; then
             printf '\n'
-            printf 'Presets need tmux: brew install tmux\n'
+            printf 'Presets need tmux: %s\n' "$TMUX_INSTALL_HINT"
             sleep 2
         else
             launch_preset
