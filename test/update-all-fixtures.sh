@@ -37,6 +37,13 @@ trap 'rm -rf "$TEST_HOME"' EXIT
 
 typeset -A outdated_formulas=()
 
+# update_all() checks $BACKEND now (pacman needs root to upgrade
+# anything, unlike brew, so it refuses early with a plain message
+# instead of trying) — real launches always have this set by the time
+# any function runs; this isolated function-body test needs it set by
+# hand.
+BACKEND="homebrew"
+
 source <(sed -n '/^update_all() {/,/^}/p' "$LAUNCHER")
 
 confirm_update_all() {

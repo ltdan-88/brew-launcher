@@ -34,7 +34,46 @@ SCRIPT_PATH="${0:A}"
 # path expression covers both without knowing which one it's in.
 CACHE_WRITER_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer.py"
 
-VERSION="0.84.0"
+# Same idea, for the pacman-backed sibling writer — see its own
+# docstring for how it differs from cache_writer.py.
+CACHE_WRITER_PACMAN_PY="${SCRIPT_PATH:h:h}/lib/brew-launcher/cache_writer_pacman.py"
+
+# ------------------------------------------------------------
+# Which package manager this launch actually talks to — every command
+# in this file that used to unconditionally mean "the brew command"
+# now means "whichever backend BACKEND names" instead. "auto" (the
+# only value most people will ever need) prefers Homebrew whenever
+# it's on PATH, since that's this project's original and still primary
+# audience, and falls back to pacman only when brew genuinely isn't
+# there — never the reverse, so a Homebrew-on-Linux machine that
+# happens to also have pacman (unusual, but possible) still gets the
+# Homebrew experience it's always had. An explicit
+# BREW_LAUNCHER_BACKEND=pacman/homebrew skips detection entirely, the
+# same override shape BREW_LAUNCHER_TERMINAL/BREW_LAUNCHER_THEME
+# already use — mainly useful for testing, since a real machine only
+# ever has a reason to run one of these package managers at all.
+#
+# Deliberately resolved this early (nothing after this point may
+# assume "brew" the way the whole file used to) — see the dependency
+# check further down, and get_state()/fetch_outdated_formulae()/
+# rebuild_cache() for where the actual branching lives.
+# ------------------------------------------------------------
+
+if [[ -n "$BREW_LAUNCHER_BACKEND" ]]; then
+    BACKEND="$BREW_LAUNCHER_BACKEND"
+elif command -v brew >/dev/null 2>&1; then
+    BACKEND="homebrew"
+elif command -v pacman >/dev/null 2>&1; then
+    BACKEND="pacman"
+else
+    # Neither found — stays "homebrew" so the dependency check below
+    # fails with its existing, already-familiar "'brew' is required"
+    # message rather than a new, different one for this genuinely
+    # first-encountered case.
+    BACKEND="homebrew"
+fi
+
+VERSION="0.85.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -392,10 +431,18 @@ Usage:
   brew-launcher --help       Show this help
 
 Requirements:
-  Homebrew
+  Homebrew   (or pacman on Arch Linux without it — see BREW_LAUNCHER_BACKEND below)
   fzf
   python3
   tmux    Optional — only for the tmux terminal backend and Presets
+
+Backend (Homebrew users can ignore this):
+  BREW_LAUNCHER_BACKEND=auto      Default — prefers Homebrew, falls back
+                                  to pacman only when brew isn't on PATH
+  BREW_LAUNCHER_BACKEND=homebrew  Force Homebrew
+  BREW_LAUNCHER_BACKEND=pacman    Force pacman — Update/Update All decline
+                                  instead of running (pacman needs root,
+                                  unlike Homebrew); see README for more
 
 Terminal:
   BREW_LAUNCHER_TERMINAL=auto     Default behavior — see below for
@@ -836,7 +883,9 @@ if [[ "$1" == "--diagnose" ]]; then
 
     echo
     echo "Required"
-    for dependency in brew fzf python3; do
+    diagnose_ok "backend — $BACKEND"
+    for dependency in "$BACKEND" fzf python3; do
+        [[ "$dependency" == "homebrew" ]] && dependency="brew"
         if command -v "$dependency" >/dev/null 2>&1; then
             diagnose_ok "$dependency — $(command -v "$dependency")"
         else
@@ -2099,9 +2148,15 @@ fi
 
 # ------------------------------------------------------------
 # Requirements
+#
+# The package-manager binary itself is named after $BACKEND, resolved
+# once, up near where CACHE_WRITER_PY is — see that block's own
+# comment for why "auto" prefers Homebrew and only falls back to
+# pacman when brew genuinely isn't on PATH.
 # ------------------------------------------------------------
 
 for dependency in brew fzf python3; do
+    [[ "$dependency" == "brew" && "$BACKEND" == "pacman" ]] && dependency="pacman"
     if ! command -v "$dependency" >/dev/null 2>&1; then
         echo "Error: '$dependency' is required."
         exit 1
@@ -3000,6 +3055,14 @@ mkdir -p "$CACHE_DIR"
 # ------------------------------------------------------------
 
 get_state() {
+    if [[ "$BACKEND" == "pacman" ]]; then
+        # `pacman -Qe` already prints "name version" per line — the
+        # same two facts (what's explicitly installed, and at what
+        # version) the two separate brew calls below exist to combine,
+        # in one call instead of two.
+        pacman -Qe 2>/dev/null | LC_ALL=C sort
+        return
+    fi
     {
         brew leaves --installed-on-request 2>/dev/null
         brew list --formula --versions 2>/dev/null
@@ -3042,6 +3105,28 @@ ensure_current_state() {
 fetch_outdated_formulae() {
 
     local target_file="$1"
+
+    if [[ "$BACKEND" == "pacman" ]]; then
+
+        # `pacman -Qu` only knows about versions already present in the
+        # last-synced local package database (`pacman -Sy`) — unlike
+        # `brew outdated`, which refreshes Homebrew's own metadata
+        # itself without needing elevated privileges. Syncing that
+        # database generally needs root, which this script has no
+        # business asking for on its own, so this is honestly
+        # best-effort: accurate as of whenever the system was last
+        # synced (by the user, a package-manager GUI, a timer — however
+        # that normally happens), not guaranteed fresh the way
+        # Homebrew's own check is.
+        #
+        # Output format: "name oldver -> newver", sometimes with a
+        # trailing "[ignored]" for held-back packages — only the name
+        # and the version after "->" matter here.
+        pacman -Qu 2>/dev/null |
+            awk '$3 == "->" { print $1 "\t" $4 }' \
+            > "$target_file" || : > "$target_file"
+        return
+    fi
 
     brew outdated --formula --json=v2 2>/dev/null | python3 -c '
 import json, sys
@@ -3124,10 +3209,73 @@ prune_stale_category_members() {
 }
 
 # ------------------------------------------------------------
+# Build cache — pacman backend
+#
+# Sibling of the Homebrew path below, sharing its own ending (move the
+# entries into place, prune stale category members, write STATE_FILE)
+# but not its beginning: cache_writer_pacman.py gathers everything
+# itself directly from pacman (including its own outdated snapshot —
+# see that file's own comment for why it doesn't need a pre-fetched
+# one the way cache_writer.py does), so there's no Homebrew-style
+# multi-step staging of separate JSON/sizes files first.
+# ------------------------------------------------------------
+
+rebuild_cache_pacman() {
+
+    local tmp_outdated tmp_entries
+
+    tmp_outdated="$(mktemp "$CACHE_DIR/outdated.XXXXXX")" || return 1
+    tmp_entries="$(mktemp "$CACHE_DIR/entries.XXXXXX")" || return 1
+
+    if [[ ! -f "$CACHE_WRITER_PACMAN_PY" ]]; then
+        echo "Error: cache writer not found: $CACHE_WRITER_PACMAN_PY" >&2
+        echo "This usually means a broken/incomplete install." >&2
+        rm -f "$tmp_outdated" "$tmp_entries"
+        return 1
+    fi
+
+    python3 "$CACHE_WRITER_PACMAN_PY" \
+        "$tmp_outdated" \
+        "$tmp_entries" \
+        "$PREVIEW_DIR" \
+        "$PREVIEW_CATEGORY_MARKER" \
+        "$PREVIEW_PRESET_MARKER"
+
+    if [[ -s "$tmp_entries" ]]; then
+
+        mv "$tmp_entries" "$CACHE_FILE"
+        prune_stale_category_members
+
+        ensure_current_state
+        printf '%s\n%s\n' "$CACHE_FORMAT_VERSION" "$CURRENT_STATE" > "$STATE_FILE"
+
+        mv "$tmp_outdated" "$OUTDATED_FILE" 2>/dev/null
+
+        # No pacman-native equivalent computed here yet (see
+        # FREE_SPACE's own comment further down for the border label's
+        # graceful handling of an empty HOMEBREW_USAGE_FILE) — left
+        # unwritten deliberately rather than guessed at.
+
+    else
+
+        rm -f "$tmp_outdated" "$tmp_entries"
+        return 1
+    fi
+
+    rm -f "$tmp_outdated" "$tmp_entries"
+    return 0
+}
+
+# ------------------------------------------------------------
 # Build cache
 # ------------------------------------------------------------
 
 rebuild_cache() {
+
+    if [[ "$BACKEND" == "pacman" ]]; then
+        rebuild_cache_pacman
+        return $?
+    fi
 
     local tmp_json tmp_sizes tmp_outdated tmp_entries
 
@@ -7186,6 +7334,19 @@ confirm_update_all() {
 
 update_all() {
 
+    # A real `pacman -Syu` needs root, unlike `brew upgrade` — not
+    # something this script should ever silently ask for on its own.
+    # Said plainly here rather than left to fail as a confusing
+    # "brew: command not found" inside the launched terminal.
+    if [[ "$BACKEND" == "pacman" ]]; then
+        printf '\n'
+        printf 'Update All needs root on this backend (pacman -Syu) —\n'
+        printf 'not something brew-launcher asks for on its own. Run it\n'
+        printf 'yourself: sudo pacman -Syu\n'
+        sleep 2
+        return 1
+    fi
+
     local outdated_count=${#outdated_formulas}
 
     if (( outdated_count == 0 )); then
@@ -7257,6 +7418,17 @@ EOF
 update_tool() {
 
     local command="$1" formula="$2"
+
+    # See update_all()'s own comment — same reasoning, pacman always
+    # needs root to install/upgrade anything, per-package or not.
+    if [[ "$BACKEND" == "pacman" ]]; then
+        printf '\n'
+        printf 'Update needs root on this backend (pacman -S) — not\n'
+        printf 'something brew-launcher asks for on its own. Run it\n'
+        printf 'yourself: sudo pacman -S %s\n' "$formula"
+        sleep 2
+        return 1
+    fi
 
     if [[ -z "${outdated_formulas[$formula]-}" ]]; then
         printf '\n'
@@ -8754,9 +8926,22 @@ run_fzf() {
 # check at all; Homebrew's own usage is the value rebuild_cache()
 # cached, read fresh here so it reflects the cache this launch is
 # actually using).
+#
+# Free space is checked against $HOME rather than a package-manager
+# prefix for the pacman backend — there's no single "pacman root" the
+# way `brew --prefix` names one, and $HOME is a reasonable stand-in
+# for "the filesystem this machine actually cares about running out
+# of room on" either way. HOMEBREW_USAGE has no pacman-native
+# equivalent yet (see rebuild_cache_pacman()'s own comment) — left
+# empty, which the border label below already treats as "say nothing"
+# rather than a missing value to guess at.
 # ------------------------------------------------------------
 
-FREE_SPACE="$(df -h "$(brew --prefix)" 2>/dev/null | awk 'NR==2 {print $4}' | sed -E 's/([0-9])([KMGT])i?$/\1\2/')"
+if [[ "$BACKEND" == "pacman" ]]; then
+    FREE_SPACE="$(df -h "$HOME" 2>/dev/null | awk 'NR==2 {print $4}' | sed -E 's/([0-9])([KMGT])i?$/\1\2/')"
+else
+    FREE_SPACE="$(df -h "$(brew --prefix)" 2>/dev/null | awk 'NR==2 {print $4}' | sed -E 's/([0-9])([KMGT])i?$/\1\2/')"
+fi
 HOMEBREW_USAGE="$(cat "$HOMEBREW_USAGE_FILE" 2>/dev/null)"
 
 # Opt-in (Actions → Settings → Startup Screen) — shows the view picker
