@@ -1006,8 +1006,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Container sanity check
+      - name: Sync pacman and install dependencies
         run: |
-          uname -m
-          cat /etc/os-release
-          pacman --version
+          pacman -Sy --noconfirm
+          pacman -S --noconfirm zsh fzf python3 which
+
+      - name: zsh -n bin/brew-launcher
+        run: zsh -n bin/brew-launcher
+
+      - name: pacman backend test
+        run: zsh test/pacman-backend-fixtures.sh
