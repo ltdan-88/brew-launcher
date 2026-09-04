@@ -556,7 +556,7 @@ skips that detection entirely. Everything above — search, marking,
 categories, favorites, presets, themes — works exactly the same either way;
 only where the tool list itself comes from changes.
 
-Two real differences on the pacman backend, not bugs:
+Three real differences on the pacman backend, not bugs:
 
 - **Update / Update All decline instead of running** — installing or
   upgrading anything through pacman needs root, unlike Homebrew, and this
@@ -567,9 +567,13 @@ Two real differences on the pacman backend, not bugs:
   version, nothing after it. Everything else in the details pane (homepage,
   license, size, install date) comes from pacman's own package metadata
   same as it does from Homebrew's.
+- **Backup declines** — it's built around `brew bundle dump`, which has no
+  pacman equivalent yet, so it says so and does nothing rather than writing
+  a partial archive. Factory Reset is unaffected either way — it only ever
+  touches this launcher's own config, never package data.
 
-Not yet packaged for Arch (no AUR entry) — for now, clone the repo and run
-`bin/brew-launcher` directly.
+Not on the AUR yet — for now, clone the repo and run `bin/brew-launcher`
+directly.
 
 </details>
 
@@ -639,10 +643,10 @@ that from inside an existing tmux session (`$TMUX` set); otherwise it falls
 back to launching in place, same as `current`.
 
 **Presets/Create Preset say "needs tmux."** Install it with
-`brew install tmux`; the moment it's on `$PATH` both work normally, no
-restart required beyond the next launch. `--preset` from a terminal says so
-explicitly too, since typing that flag already implies you know what it
-needs.
+`brew install tmux` (`sudo pacman -S tmux` on the pacman backend); the
+moment it's on `$PATH` both work normally, no restart required beyond the
+next launch. `--preset` from a terminal says so explicitly too, since
+typing that flag already implies you know what it needs.
 
 **Versions look out of date.** The update check runs on a timer, not every
 launch. `brew-launcher --refresh` forces it.
