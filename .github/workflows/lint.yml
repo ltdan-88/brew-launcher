@@ -289,6 +289,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   syntax:
@@ -988,3 +989,25 @@ jobs:
       # Not cache-roundtrip.sh here: it needs real installed formulae,
       # and a fresh Linuxbrew has none installed on request — it would
       # just skip every run, so it isn't worth the added job time.
+
+  pacman:
+    # SPIKE: proving out CI mechanics for the pacman backend
+    # (feature/pacman-backend) before it's a real, merged feature.
+    # GitHub has no native Arch runner, unlike ubuntu-latest for the
+    # Homebrew-on-Linux job above — this runs the whole job inside a
+    # real Arch container instead. ubuntu-latest's own host is genuine
+    # x86_64 hardware, the same architecture Arch itself only ever
+    # officially targets, so this needs no cross-architecture emulation
+    # the way testing it locally on Apple Silicon does.
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Container sanity check
+        run: |
+          uname -m
+          cat /etc/os-release
+          pacman --version
