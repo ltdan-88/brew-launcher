@@ -5,6 +5,27 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.85.0] — 2026-09-04
+
+### Added
+
+- **A real, working pacman backend for Arch Linux, alongside Homebrew —
+  the launcher now works without Homebrew installed at all.**
+  `BREW_LAUNCHER_BACKEND` (`auto`/`homebrew`/`pacman`) picks which
+  package manager it talks to; `auto` — the default — prefers Homebrew
+  whenever it's on `PATH` and only falls back to pacman when it
+  genuinely isn't, so this changes nothing for any existing Homebrew
+  user. Every screen — search, marking, categories, favorites,
+  presets, themes, the details pane — works identically either way;
+  only where the tool list itself comes from differs. Update and
+  Update All decline with a plain explanation on the pacman backend
+  rather than attempting `pacman -S`/`-Syu`, since those need root and
+  this script isn't going to ask for that on its own. Not yet packaged
+  for Arch (no AUR entry) — for now this means cloning the repo and
+  running `bin/brew-launcher` directly. See the README's
+  "Other package managers" section (tucked inside Configuration —
+  nothing to read here if you're on Homebrew).
+
 ## [0.84.0] — 2026-09-04
 
 ### Changed

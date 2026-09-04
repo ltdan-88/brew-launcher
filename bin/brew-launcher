@@ -73,7 +73,7 @@ else
     BACKEND="homebrew"
 fi
 
-VERSION="0.84.0"
+VERSION="0.85.0"
 
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/brew-launcher"
 CACHE_FILE="$CACHE_DIR/entries"
@@ -431,10 +431,18 @@ Usage:
   brew-launcher --help       Show this help
 
 Requirements:
-  Homebrew
+  Homebrew   (or pacman on Arch Linux without it — see BREW_LAUNCHER_BACKEND below)
   fzf
   python3
   tmux    Optional — only for the tmux terminal backend and Presets
+
+Backend (Homebrew users can ignore this):
+  BREW_LAUNCHER_BACKEND=auto      Default — prefers Homebrew, falls back
+                                  to pacman only when brew isn't on PATH
+  BREW_LAUNCHER_BACKEND=homebrew  Force Homebrew
+  BREW_LAUNCHER_BACKEND=pacman    Force pacman — Update/Update All decline
+                                  instead of running (pacman needs root,
+                                  unlike Homebrew); see README for more
 
 Terminal:
   BREW_LAUNCHER_TERMINAL=auto     Default behavior — see below for

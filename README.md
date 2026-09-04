@@ -53,6 +53,8 @@ That's it — nothing to configure. Type to search, **Enter** to launch, **Esc**
 Optional: [tmux](https://github.com/tmux/tmux), only if you use the tmux terminal
 backend or Presets — see [Configuration](#configuration). Full platform/backend
 matrix, including what's macOS-only vs. Linux-only: [COMPATIBILITY.md](COMPATIBILITY.md).
+On Arch Linux without Homebrew, this also runs against pacman instead — see
+[Configuration](#configuration) if that's you, otherwise nothing below changes.
 
 ## What you get
 
@@ -374,7 +376,8 @@ brew-launcher --help
 
 Nothing here is required reading — everything in the launcher works with zero
 configuration. Expand this if you want to change the terminal backend, theme,
-bundled-defaults behavior, or preset file format.
+bundled-defaults behavior, preset file format, or (Arch Linux only) which
+package manager it talks to.
 
 <details>
 <summary><strong>Show configuration details</strong></summary>
@@ -540,6 +543,33 @@ already open, whenever there's somewhere to put one:
 Detecting "connected over SSH" uses the standard `SSH_TTY` / `SSH_CONNECTION`
 / `SSH_CLIENT` environment variables — the same signal most SSH-aware tools
 check.
+
+### Other package managers
+
+Homebrew users can stop reading here — this only matters on Arch Linux
+without Homebrew installed.
+
+`BREW_LAUNCHER_BACKEND` picks which package manager the launcher talks to:
+`auto` (the default) prefers Homebrew whenever it's on `PATH`, and only falls
+back to `pacman` when it genuinely isn't — an explicit `homebrew`/`pacman`
+skips that detection entirely. Everything above — search, marking,
+categories, favorites, presets, themes — works exactly the same either way;
+only where the tool list itself comes from changes.
+
+Two real differences on the pacman backend, not bugs:
+
+- **Update / Update All decline instead of running** — installing or
+  upgrading anything through pacman needs root, unlike Homebrew, and this
+  script isn't going to ask for that on its own. Both tell you the exact
+  command to run yourself.
+- **No disk-usage figure in the border** — Homebrew's own "X used · Y free"
+  has no pacman-native equivalent computed yet, so the border just shows the
+  version, nothing after it. Everything else in the details pane (homepage,
+  license, size, install date) comes from pacman's own package metadata
+  same as it does from Homebrew's.
+
+Not yet packaged for Arch (no AUR entry) — for now, clone the repo and run
+`bin/brew-launcher` directly.
 
 </details>
 
