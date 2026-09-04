@@ -204,7 +204,7 @@ with extra arguments, just this once — a one-off, distinct from the standing
 [Launch Flags](#custom-launch-flags) setting. Prefilled with the current
 Launch Flags value as a starting point; blank + Enter just runs it plain.
 
-**F3 / ⌥D** from that prompt previews the tool's own `--help` output, on
+**F3 / ⌥D** from either prompt previews the tool's own `--help` output, on
 demand only — not automatically, since some installed tools (games,
 animations) might launch straight into their own full-screen mode instead.
 
@@ -317,7 +317,7 @@ one long scrolling list.
 | — | Create a desktop shortcut (macOS or Linux) — one per marked entry | Actions only |
 | — | Set custom launch flags for the highlighted entry | Actions only |
 | — | Run the highlighted entry with one-off extra arguments | Actions only |
-| **F3** / **⌥D** | Preview that entry's own `--help` output | Run With Args only |
+| **F3** / **⌥D** | Preview that entry's own `--help` output | Launch Flags, Run With Args |
 | — | Update the highlighted entry, or every marked one, in a single brew run | Actions only |
 | — | Update All — run brew upgrade for everything outdated | Actions only |
 | — | Open Settings | Actions only |
