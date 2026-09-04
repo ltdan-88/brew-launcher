@@ -991,14 +991,13 @@ jobs:
       # just skip every run, so it isn't worth the added job time.
 
   pacman:
-    # SPIKE: proving out CI mechanics for the pacman backend
-    # (feature/pacman-backend) before it's a real, merged feature.
-    # GitHub has no native Arch runner, unlike ubuntu-latest for the
-    # Homebrew-on-Linux job above — this runs the whole job inside a
-    # real Arch container instead. ubuntu-latest's own host is genuine
-    # x86_64 hardware, the same architecture Arch itself only ever
-    # officially targets, so this needs no cross-architecture emulation
-    # the way testing it locally on Apple Silicon does.
+    # Validates the pacman backend (feature/pacman-backend). GitHub has no
+    # native Arch runner, unlike ubuntu-latest for the Homebrew-on-Linux job
+    # above — this runs the whole job inside a real Arch container instead.
+    # ubuntu-latest's own host is genuine x86_64 hardware, the same
+    # architecture Arch itself only ever officially targets, so this needs
+    # no cross-architecture emulation the way testing it locally on Apple
+    # Silicon does.
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
@@ -1009,17 +1008,7 @@ jobs:
       - name: Sync pacman and install dependencies
         run: |
           pacman -Sy --noconfirm
-          pacman -S --noconfirm zsh fzf python3 which btop
-
-      # TEMPORARY diagnostic: local testing on Apple Silicon (amd64
-      # under QEMU emulation) hit "operation not permitted" launching
-      # btop specifically, while tmux/fzf/which all launched fine in
-      # that same container — checking whether that's a real problem
-      # or another emulation-only artifact, same pattern the pacman
-      # sandbox/seccomp issue earlier turned out to be. Remove this
-      # step once answered either way.
-      - name: DIAGNOSTIC — does btop actually execute here?
-        run: btop --version
+          pacman -S --noconfirm zsh fzf python3 which
 
       - name: zsh -n bin/brew-launcher
         run: zsh -n bin/brew-launcher
